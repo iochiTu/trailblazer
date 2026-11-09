@@ -126,6 +126,28 @@ export async function admitQuestion(
   return { ok: true, release };
 }
 
+/** Image uploads allowed per hour: per visitor (abuse) and per business (storage and AI cost). */
+export const IMAGE_LIMITS = { visitorPerHour: 20, tenantPerHour: 500 } as const;
+
+/**
+ * Counts a visitor's images against the hourly upload limits. Checked before the question itself,
+ * so a refused upload never uses up the monthly question allowance.
+ */
+export async function admitImages(
+  limiter: Limiter,
+  input: { tenantId: string; visitorId: string; count: number },
+  limits: { visitorPerHour: number; tenantPerHour: number } = IMAGE_LIMITS,
+): Promise<boolean> {
+  for (let i = 0; i < input.count; i++) {
+    if (
+      !(await limiter.hit(`images-visitor:${input.tenantId}:${input.visitorId}`, limits.visitorPerHour, 3600))
+    )
+      return false;
+    if (!(await limiter.hit(`images-tenant:${input.tenantId}`, limits.tenantPerHour, 3600))) return false;
+  }
+  return true;
+}
+
 /** Current month's counters for a business (zeros when nothing was asked yet). */
 export async function currentUsage(db: Db, tenantId: string) {
   const [row] = await withTenant(db, tenantId, (tx) =>

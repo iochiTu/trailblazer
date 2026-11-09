@@ -218,6 +218,7 @@ describe("noisy neighbours", () => {
   it("shows a busy message when every AI provider is rate-limited", async () => {
     const overloaded: LLMProvider = {
       id: "overloaded",
+      supportsImages: () => false,
       // biome-ignore lint/correctness/useYield: always fails before producing text
       async *stream() {
         throw Object.assign(new Error("rate limited"), { status: 429 });

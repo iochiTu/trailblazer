@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { ChatEvent, ChatRequest, LLMProvider, StopReason } from "../types.js";
+import type { ChatEvent, ChatMessage, ChatRequest, LLMProvider, StopReason } from "../types.js";
 
 /** Models that accept the server-side refusal fallback (`fallbacks: "default"`). */
 const FALLBACK_MODELS = new Set([
@@ -11,6 +11,22 @@ const FALLBACK_MODELS = new Set([
 ]);
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
+/** Maps a provider-neutral message to the Messages API shape (images as base64 image blocks). */
+export function toAnthropicMessage(message: ChatMessage): Anthropic.Beta.BetaMessageParam {
+  if (typeof message.content === "string") return { role: message.role, content: message.content };
+  return {
+    role: message.role,
+    content: message.content.map((block) =>
+      block.type === "text"
+        ? { type: "text" as const, text: block.text }
+        : {
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: block.mediaType, data: block.data },
+          },
+    ),
+  };
+}
+
 /** Claude through the official Anthropic SDK. */
 export class AnthropicProvider implements LLMProvider {
   readonly id = "anthropic";
@@ -18,6 +34,11 @@ export class AnthropicProvider implements LLMProvider {
 
   constructor(options: { apiKey?: string; baseURL?: string } = {}) {
     this.client = new Anthropic({ apiKey: options.apiKey, baseURL: options.baseURL });
+  }
+
+  /** Every current Claude model accepts images. */
+  supportsImages(): boolean {
+    return true;
   }
 
   async *stream(model: string, request: ChatRequest): AsyncIterable<ChatEvent> {
@@ -34,7 +55,7 @@ export class AnthropicProvider implements LLMProvider {
         model,
         max_tokens: request.maxTokens ?? 16000,
         system,
-        messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+        messages: request.messages.map(toAnthropicMessage),
         // Thinking stays adaptive (the default); effort controls depth and cost.
         output_config: { effort: request.effort ?? "low" },
         ...(useFallbacks ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),

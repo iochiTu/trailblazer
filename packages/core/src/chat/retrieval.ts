@@ -137,3 +137,51 @@ export async function retrievePassages(
 
   return [...scores.values()].sort((a, b) => b.score - a.score).slice(0, limit);
 }
+
+/** A business photo that matches the visitor's question (from the knowledge base). */
+export interface PhotoPassage {
+  id: string;
+  assetId: string;
+  title: string;
+  description: string;
+  score: number;
+}
+
+/**
+ * Photos whose owner-written title or description matches the queries (full text, then fuzzy).
+ * Must run inside withTenant().
+ */
+export async function retrievePhotos(
+  tx: Tx,
+  input: { botId: string; queries: string[]; limit?: number },
+): Promise<PhotoPassage[]> {
+  const orQuery = toOrQuery(input.queries);
+  const fuzzyText = input.queries.join(" ").slice(0, 500);
+  if (!orQuery && !fuzzyText) return [];
+  const q = sql`(to_tsquery('simple', coalesce(${orQuery}, '')) || to_tsquery('english', coalesce(${orQuery}, '')) || to_tsquery('french', coalesce(${orQuery}, '')))`;
+  const rows = await tx.execute<{
+    id: string;
+    asset_id: string;
+    title: string;
+    description: string;
+    score: number;
+  }>(sql`
+    select id, asset_id, title, description,
+      greatest(
+        case when ${orQuery}::text is not null and tsv @@ ${q} then 0.3 + ts_rank_cd(tsv, ${q}) else 0 end,
+        word_similarity(${fuzzyText}, title || ' ' || description)
+      ) as score
+    from knowledge_images
+    where bot_id = ${input.botId} and enabled
+    order by score desc
+    limit ${input.limit ?? 3}`);
+  return rows
+    .filter((r) => Number(r.score) >= 0.3)
+    .map((r) => ({
+      id: r.id,
+      assetId: r.asset_id,
+      title: r.title,
+      description: r.description,
+      score: Number(r.score),
+    }));
+}

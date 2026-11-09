@@ -1,5 +1,13 @@
 import { costMicros } from "./pricing.js";
-import type { ChatEvent, ChatRequest, LLMProvider, ModelRoute, StopReason, Usage } from "./types.js";
+import {
+  type ChatEvent,
+  type ChatRequest,
+  hasImages,
+  type LLMProvider,
+  type ModelRoute,
+  type StopReason,
+  type Usage,
+} from "./types.js";
 
 export type Purpose = "chat" | "aux";
 
@@ -44,8 +52,22 @@ export class LLMGateway {
     return this.options.routes[purpose];
   }
 
+  /** Routes whose model can look at images (in fallback order). */
+  visionRoutes(purpose: Purpose): ModelRoute[] {
+    return this.options.routes[purpose].filter((r) =>
+      this.providers.get(r.provider)!.supportsImages(r.model),
+    );
+  }
+
+  /** True when at least one route for this purpose accepts images. */
+  supportsImages(purpose: Purpose): boolean {
+    return this.visionRoutes(purpose).length > 0;
+  }
+
   async *stream(purpose: Purpose, request: ChatRequest): AsyncIterable<GatewayEvent> {
-    const routes = this.options.routes[purpose];
+    // Requests with images only go to models that can see them.
+    const routes = hasImages(request.messages) ? this.visionRoutes(purpose) : this.options.routes[purpose];
+    if (!routes.length) throw new NoVisionRouteError(purpose);
     let lastError: unknown;
 
     for (const [index, route] of routes.entries()) {
@@ -88,6 +110,14 @@ export class LLMGateway {
     }
     if (!meta) throw new Error("LLM gateway: stream ended without a result");
     return { text, ...meta };
+  }
+}
+
+/** No configured route can look at the images in a request. */
+export class NoVisionRouteError extends Error {
+  constructor(purpose: Purpose) {
+    super(`LLM gateway: no "${purpose}" route accepts images`);
+    this.name = "NoVisionRouteError";
   }
 }
 

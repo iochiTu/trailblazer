@@ -2,13 +2,24 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { claimNextJob, completeJob, syncSource } from "@traiblazer/core";
-import { createDb, type DbHandle, jobs, runMigrations, tenants, users } from "@traiblazer/db";
+import {
+  createDb,
+  type DbHandle,
+  jobs,
+  messageAttachments,
+  messages,
+  plans,
+  runMigrations,
+  tenants,
+  users,
+} from "@traiblazer/db";
 import { createGatewayFromEnv } from "@traiblazer/llm";
 import { eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { PlatformConfig } from "./lib/platform.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
@@ -22,6 +33,7 @@ let tenantId: string;
 let botId: string;
 let publicKey: string;
 let email: string;
+let platformConfig: PlatformConfig;
 
 const sse = (body: string) =>
   body
@@ -46,6 +58,7 @@ beforeAll(async () => {
   await runMigrations(ownerUrl);
   ownerDb = createDb(ownerUrl, { max: 1 });
   appDb = createDb(appUrl, { max: 5 });
+  platformConfig = new PlatformConfig(appDb.db, 30_000);
 
   // A fake built chat page so /c/:key can be served without running Vite in tests.
   const dist = await mkdtemp(path.join(tmpdir(), "tb-chat-"));
@@ -66,6 +79,7 @@ beforeAll(async () => {
     config,
     gateway: createGatewayFromEnv({}).gateway,
     chatDistDir: dist,
+    platform: platformConfig,
   });
 
   email = `owner-${crypto.randomUUID().slice(0, 8)}@test.local`;
@@ -235,6 +249,205 @@ describe("public chat", () => {
     expect((await chat("hi", {}, { origin: "https://evil.example" })).statusCode).toBe(403);
     expect((await chat("hi", { publicKey: "pk_test_doesnotexist123" })).statusCode).toBe(404);
     expect((await chat("", {})).statusCode).toBe(400);
+  });
+});
+
+describe("chat images", () => {
+  const PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  // The same PNG with a text chunk (e.g. author or location) before IEND.
+  const tagged = (() => {
+    const text = Buffer.from("Author\0Jane Visitor", "latin1");
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(text.length);
+    head.write("tEXt", 4, "latin1");
+    const iend = PNG.length - 12;
+    return Buffer.concat([PNG.subarray(0, iend), head, text, Buffer.alloc(4), PNG.subarray(iend)]);
+  })();
+  const image = (name: string, bytes: Buffer = tagged) => ({ name, data: bytes.toString("base64") });
+
+  it("stores the image behind a reference and replies gracefully without a vision model", async () => {
+    const res = await chat("", { images: [image("../../photo.png")], visitorId: "visitor-img1" });
+    expect(res.statusCode).toBe(200);
+    const events = sse(res.body);
+    const text = events
+      .filter((e) => e.type === "text")
+      .map((e) => e.text)
+      .join("");
+    expect(text).toContain("can't look at images");
+    expect((events.at(-1) as { flags: { imagesUnseen?: boolean } }).flags.imagesUnseen).toBe(true);
+
+    const conversationId = events[0]!.conversationId as string;
+    const stored = await ownerDb.db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId));
+    const user = stored.find((m) => m.role === "user")!;
+    // The transcript stays clean: no image data, just a reference with the file name.
+    expect(user.content).toBe("");
+    expect(user.attachments).toEqual([
+      { id: expect.any(String), name: "photo.png", contentType: "image/png", sizeBytes: PNG.length },
+    ]);
+    const [row] = await ownerDb.db
+      .select()
+      .from(messageAttachments)
+      .where(eq(messageAttachments.id, user.attachments[0]!.id));
+    expect(row).toMatchObject({ conversationId, messageId: user.id, botId, name: "photo.png" });
+    // Stored as base64, with the text metadata removed.
+    expect(Buffer.from(row!.dataBase64, "base64")).toEqual(PNG);
+
+    // The visitor's restored transcript lists the name only.
+    const history = await app.inject({
+      method: "GET",
+      url: `/v1/public/conversations/${conversationId}?key=${publicKey}&visitorId=visitor-img1`,
+    });
+    const restored = history.json().messages[0];
+    expect(restored.attachments.map((a: { name: string }) => a.name)).toEqual(["photo.png"]);
+    expect(history.body).not.toContain(row!.dataBase64);
+
+    // The owner can view the image from the admin; nobody else can.
+    const url = `/v1/tenants/${tenantId}/bots/${botId}/conversations/${conversationId}/attachments/${row!.id}`;
+    const viewed = await app.inject({ method: "GET", url, headers: { cookie } });
+    expect(viewed.statusCode).toBe(200);
+    expect(viewed.headers["content-type"]).toBe("image/png");
+    expect(viewed.headers["cache-control"]).toContain("private");
+    expect(viewed.rawPayload).toEqual(PNG);
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+  });
+
+  it("answers the text of a message even when its image can't be viewed", async () => {
+    const res = await chat("What time is check-in?", {
+      images: [image("door.png")],
+      visitorId: "visitor-img2",
+    });
+    const text = sse(res.body)
+      .filter((e) => e.type === "text")
+      .map((e) => e.text)
+      .join("");
+    expect(text).toContain("can't look at images");
+    expect(text).toContain("Check-in starts at 3 pm");
+  });
+
+  it("checks images by content, size and count", async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    const asSvg = await chat("", { images: [image("cat.png", svg)] });
+    expect(asSvg.statusCode).toBe(400);
+    expect(asSvg.json().error).toBe("image_type");
+
+    const notBase64 = await chat("", { images: [{ name: "x.png", data: "not base64!!" }] });
+    expect(notBase64.statusCode).toBe(400);
+
+    const four = await chat("hi", { images: [1, 2, 3, 4].map((i) => image(`${i}.png`)) });
+    expect(four.statusCode).toBe(400);
+
+    const huge = await chat("", {
+      images: [{ name: "big.png", data: Buffer.alloc(2_200_000).toString("base64") }],
+    });
+    expect(huge.statusCode).toBe(400);
+  });
+});
+
+describe("business photos", () => {
+  const PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const photos = () => `/v1/tenants/${tenantId}/bots/${botId}/images`;
+  const upload = (title: string, description: string, data = PNG.toString("base64")) =>
+    app.inject({ method: "POST", url: photos(), headers: { cookie }, payload: { title, description, data } });
+
+  it("adds, lists, publishes and shows a photo in answers", async () => {
+    const created = await upload("Lobby", "Our cozy lobby with a fireplace and free coffee");
+    expect(created.statusCode).toBe(201);
+    const image = created.json().image;
+    expect(image.url).toBe(`${PUBLIC}/v1/public/assets/${image.assetId}`);
+
+    const list = await app.inject({ method: "GET", url: photos(), headers: { cookie } });
+    expect(list.json().images.map((i: { title: string }) => i.title)).toContain("Lobby");
+    expect(list.json().limit).toBeGreaterThan(0);
+
+    // Public, like the business's website.
+    const served = await app.inject({ method: "GET", url: `/v1/public/assets/${image.assetId}` });
+    expect(served.statusCode).toBe(200);
+    expect(served.rawPayload).toEqual(PNG);
+
+    // The offline model shows it when the question matches; the chat gets its public URL.
+    const res = await chat("Do you have a fireplace in the lobby?", { visitorId: "visitor-photo" });
+    const events = sse(res.body);
+    expect(events.filter((e) => e.type === "image")).toEqual([
+      { type: "image", image: { url: image.url, alt: "Lobby" } },
+    ]);
+    const text = events
+      .filter((e) => e.type === "text")
+      .map((e) => e.text)
+      .join("");
+    expect(text).not.toContain("[[photo");
+
+    // Restored conversations show it too.
+    const conversationId = events[0]!.conversationId as string;
+    const history = await app.inject({
+      method: "GET",
+      url: `/v1/public/conversations/${conversationId}?key=${publicKey}&visitorId=visitor-photo`,
+    });
+    expect(history.json().messages[1].images).toEqual([{ url: image.url, alt: "Lobby" }]);
+
+    // Hidden photos are not shown; deleted photos stop being public.
+    await app.inject({
+      method: "PATCH",
+      url: `${photos()}/${image.id}`,
+      headers: { cookie },
+      payload: { enabled: false },
+    });
+    const hidden = sse(
+      (await chat("Do you have a fireplace in the lobby?", { visitorId: "visitor-photo2" })).body,
+    );
+    expect(hidden.filter((e) => e.type === "image")).toHaveLength(0);
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `${photos()}/${image.id}`,
+      headers: { cookie },
+    });
+    expect(deleted.statusCode).toBe(204);
+    expect((await app.inject({ method: "GET", url: `/v1/public/assets/${image.assetId}` })).statusCode).toBe(
+      404,
+    );
+  });
+
+  it("validates photos and enforces the plan's limit", async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString("base64");
+    expect((await upload("Logo", "Our logo", svg)).statusCode).toBe(400);
+    expect((await upload("", "No title")).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: photos() })).statusCode).toBe(401);
+
+    // A one-photo plan for this business only.
+    const planId = `photos_${crypto.randomUUID().slice(0, 8)}`;
+    await ownerDb.db.insert(plans).values({
+      id: planId,
+      nameEn: "Photos test",
+      nameFr: "Test photos",
+      monthlyQuestions: 1000,
+      concurrent: 5,
+      perMinute: 100,
+      knowledgeImages: 1,
+    });
+    const [before] = await ownerDb.db
+      .select({ plan: tenants.plan })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    await ownerDb.db.update(tenants).set({ plan: planId }).where(eq(tenants.id, tenantId));
+    platformConfig.invalidate();
+    try {
+      expect((await upload("One", "First photo")).statusCode).toBe(201);
+      const over = await upload("Two", "Second photo");
+      expect(over.statusCode).toBe(409);
+      expect(over.json().error).toBe("photo_limit");
+    } finally {
+      await ownerDb.db.update(tenants).set({ plan: before!.plan }).where(eq(tenants.id, tenantId));
+      await ownerDb.db.delete(plans).where(eq(plans.id, planId));
+      platformConfig.invalidate();
+    }
   });
 });
 

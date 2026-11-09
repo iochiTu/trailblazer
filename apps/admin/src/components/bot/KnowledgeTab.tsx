@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api, type QaPair, type Source } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { PhotosSection } from "./PhotosSection";
 import { SourceDetail } from "./SourceDetail";
 
 const statusColor: Record<Source["status"], string> = {
@@ -244,6 +245,8 @@ export function KnowledgeTab({ base }: { base: string }) {
           </button>
         </form>
       </section>
+
+      <PhotosSection base={base} />
     </div>
   );
 }

@@ -106,10 +106,32 @@ export interface Conversation {
   lastMessageAt: string;
 }
 
+/** An image a visitor sent; the data is fetched separately (see ConversationsTab). */
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/** A business photo in the knowledge base (public; the assistant can show it to visitors). */
+export interface KnowledgePhoto {
+  id: string;
+  assetId: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+  url: string;
+  createdAt: string;
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachments?: MessageAttachment[];
+  /** Business photos the assistant showed with this reply. */
+  images?: { id: string; title: string; url: string }[];
   createdAt: string;
   model: string | null;
   costMicros: number | null;

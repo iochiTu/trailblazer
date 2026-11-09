@@ -1,19 +1,27 @@
-import type { ChatEvent, ChatRequest, LLMProvider } from "../types.js";
+import { type ChatEvent, type ChatRequest, type LLMProvider, textOf } from "../types.js";
 
 /**
  * Offline provider for development and tests (no API key, no network, no cost).
  *
  * It does not understand language. For chat it echoes the most relevant sentences found in the
- * prompt's <knowledge> section, so the whole pipeline (retrieval, streaming, citations, logging)
- * can be exercised end to end. For auxiliary calls it returns the last user message unchanged.
+ * prompt's <knowledge> section, and shows the best-matching photo from <photos> (with the same
+ * marker a real model writes), so the whole pipeline (retrieval, streaming, citations, photos,
+ * logging) can be exercised end to end. For auxiliary calls it returns the last user message unchanged.
  */
 export class OfflineProvider implements LLMProvider {
   readonly id = "offline";
 
+  /** It can't see images; the chat engine replies with a polite notice instead. */
+  supportsImages(): boolean {
+    return false;
+  }
+
   async *stream(model: string, request: ChatRequest): AsyncIterable<ChatEvent> {
-    const question = request.messages.at(-1)?.content ?? "";
+    const last = request.messages.at(-1);
+    const question = last ? textOf(last.content) : "";
     const system = request.system.map((b) => b.text).join("\n");
-    const text = model === "echo" ? question : answerFromKnowledge(system, question);
+    const text =
+      model === "echo" ? question : withPhoto(answerFromKnowledge(system, question), system, question);
 
     // Stream word by word, like a real model.
     for (const piece of text.match(/\S+\s*/g) ?? []) {
@@ -43,6 +51,19 @@ function terms(text: string): string[] {
   return (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter(
     (w) => w.length > 1 && !STOP_WORDS.has(w),
   );
+}
+
+/** Adds the marker of the photo whose title and description best match the question. */
+function withPhoto(answer: string, system: string, question: string): string {
+  const start = system.lastIndexOf("<photos>");
+  if (start < 0) return answer;
+  const wanted = new Set(terms(question));
+  let best: { id: string; score: number } | null = null;
+  for (const match of system.slice(start).matchAll(/<photo id="([^"]+)" title="([^"]*)">([^<]*)<\/photo>/g)) {
+    const score = terms(`${match[2]} ${match[3]}`).filter((t) => wanted.has(t)).length;
+    if (score > 0 && (!best || score > best.score)) best = { id: match[1]!, score };
+  }
+  return best ? `${answer}\n\n[[photo:${best.id}]]` : answer;
 }
 
 function answerFromKnowledge(system: string, question: string): string {

@@ -5,6 +5,12 @@ import { OfflineProvider } from "./providers/offline.js";
 import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
 import type { LLMProvider } from "./types.js";
 
+const list = (value: string | undefined) =>
+  (value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 /**
  * Builds the gateway from environment variables.
  *
@@ -13,6 +19,8 @@ import type { LLMProvider } from "./types.js";
  *   OPENAI_COMPATIBLE_BASE_URL   enables provider "openai-compatible" (+ OPENAI_COMPATIBLE_API_KEY)
  *   LLM_CHAT_ROUTES              e.g. "anthropic:claude-opus-5-5,openrouter:<model>"
  *   LLM_AUX_ROUTES               e.g. "anthropic:claude-haiku-5-5"
+ *   OPENROUTER_VISION_MODELS     models on that provider that accept images ("*" for all);
+ *   OPENAI_COMPATIBLE_VISION_MODELS  Claude models always do, the offline provider never does
  *
  * Without keys, everything routes to the offline provider so development and tests work.
  */
@@ -28,6 +36,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
         apiKey: env.OPENROUTER_API_KEY,
         baseURL: "https://openrouter.ai/api/v1",
         headers: { "X-Title": "Traiblazer" },
+        visionModels: list(env.OPENROUTER_VISION_MODELS),
       }),
     );
   }
@@ -36,6 +45,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
       new OpenAICompatibleProvider("openai-compatible", {
         apiKey: env.OPENAI_COMPATIBLE_API_KEY ?? "none",
         baseURL: env.OPENAI_COMPATIBLE_BASE_URL,
+        visionModels: list(env.OPENAI_COMPATIBLE_VISION_MODELS),
       }),
     );
   }

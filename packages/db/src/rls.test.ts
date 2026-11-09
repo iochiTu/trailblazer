@@ -2,7 +2,18 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type DbHandle, resolveBotKey, withTenant } from "./client.js";
 import { runMigrations } from "./migrator.js";
-import { botKeys, bots, businessProfiles, rlsTables, tenants } from "./schema.js";
+import {
+  assets,
+  botKeys,
+  bots,
+  businessProfiles,
+  conversations,
+  knowledgeImages,
+  messageAttachments,
+  messages,
+  rlsTables,
+  tenants,
+} from "./schema.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
@@ -110,6 +121,123 @@ describe("row-level security", () => {
     const resolved = await resolveBotKey(app.db, keys[0]!.publicKey);
     expect(resolved).toEqual({ tenantId: tenantB, botId: botB, allowedOrigins: ["https://b.example"] });
     expect(await resolveBotKey(app.db, "pk_test_missing")).toBeNull();
+  });
+
+  it("keeps visitors' chat images within their business", async () => {
+    const image = await withTenant(app.db, tenantB, async (tx) => {
+      const [conversation] = await tx
+        .insert(conversations)
+        .values({ tenantId: tenantB, botId: botB, channel: "hosted", visitorId: "visitor-rls" })
+        .returning();
+      const [message] = await tx
+        .insert(messages)
+        .values({ tenantId: tenantB, conversationId: conversation!.id, role: "user", content: "" })
+        .returning();
+      const [row] = await tx
+        .insert(messageAttachments)
+        .values({
+          tenantId: tenantB,
+          botId: botB,
+          conversationId: conversation!.id,
+          messageId: message!.id,
+          name: "photo.jpg",
+          contentType: "image/jpeg",
+          sizeBytes: 3,
+          sha256: "x",
+          dataBase64: "AAAA",
+        })
+        .returning();
+      return { ...row!, conversationId: conversation!.id, messageId: message!.id };
+    });
+
+    expect(await app.db.select().from(messageAttachments)).toHaveLength(0);
+    expect(await withTenant(app.db, tenantA, (tx) => tx.select().from(messageAttachments))).toHaveLength(0);
+    const own = await withTenant(app.db, tenantB, (tx) => tx.select().from(messageAttachments));
+    expect(own.map((r) => r.id)).toEqual([image.id]);
+
+    // Another business can't change or delete it, or attach an image to B's conversation.
+    const updated = await withTenant(app.db, tenantA, (tx) =>
+      tx
+        .update(messageAttachments)
+        .set({ dataBase64: "BBBB" })
+        .where(eq(messageAttachments.id, image.id))
+        .returning(),
+    );
+    expect(updated).toHaveLength(0);
+    const deleted = await withTenant(app.db, tenantA, (tx) =>
+      tx.delete(messageAttachments).where(eq(messageAttachments.id, image.id)).returning(),
+    );
+    expect(deleted).toHaveLength(0);
+    await expect(
+      withTenant(app.db, tenantA, (tx) =>
+        tx.insert(messageAttachments).values({
+          tenantId: tenantA,
+          botId: botB,
+          conversationId: image.conversationId,
+          messageId: image.messageId,
+          name: "x.png",
+          contentType: "image/png",
+          sizeBytes: 1,
+          sha256: "x",
+          dataBase64: "AA==",
+        }),
+      ),
+    ).rejects.toThrow();
+
+    // Deleting the message removes its images.
+    await withTenant(app.db, tenantB, (tx) => tx.delete(messages).where(eq(messages.id, image.messageId)));
+    expect(await withTenant(app.db, tenantB, (tx) => tx.select().from(messageAttachments))).toHaveLength(0);
+  });
+
+  it("keeps business photos within their business and serves only published kinds publicly", async () => {
+    const photo = await withTenant(app.db, tenantB, async (tx) => {
+      const [asset] = await tx
+        .insert(assets)
+        .values({
+          tenantId: tenantB,
+          kind: "knowledge_image",
+          contentType: "image/png",
+          bytes: Buffer.from("png"),
+          sizeBytes: 3,
+          sha256: "x",
+        })
+        .returning();
+      const [row] = await tx
+        .insert(knowledgeImages)
+        .values({
+          tenantId: tenantB,
+          botId: botB,
+          assetId: asset!.id,
+          title: "Patio",
+          description: "Summer patio",
+          tsv: sql`to_tsvector('simple', 'patio')` as unknown as string,
+        })
+        .returning();
+      return { id: row!.id, assetId: asset!.id };
+    });
+    expect(await app.db.select().from(knowledgeImages)).toHaveLength(0);
+    expect(await withTenant(app.db, tenantA, (tx) => tx.select().from(knowledgeImages))).toHaveLength(0);
+    const changed = await withTenant(app.db, tenantA, (tx) =>
+      tx.update(knowledgeImages).set({ title: "x" }).where(eq(knowledgeImages.id, photo.id)).returning(),
+    );
+    expect(changed).toHaveLength(0);
+    await expect(
+      withTenant(app.db, tenantA, (tx) =>
+        tx.insert(knowledgeImages).values({
+          tenantId: tenantA,
+          botId: botB,
+          assetId: photo.assetId,
+          title: "x",
+          description: "x",
+          tsv: sql`to_tsvector('simple', 'x')` as unknown as string,
+        }),
+      ),
+    ).rejects.toThrow();
+    // Shown to visitors, so readable through the public-asset function without tenant context.
+    const rows = await app.db.execute<{ content_type: string }>(
+      sql`select content_type from app_get_public_asset(${photo.assetId}::uuid)`,
+    );
+    expect(rows.map((r) => r.content_type)).toEqual(["image/png"]);
   });
 
   it("rejects a non-UUID tenant id", async () => {

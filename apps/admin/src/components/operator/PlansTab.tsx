@@ -14,6 +14,7 @@ const NUMBER_FIELDS = [
   },
   { key: "perMinute", label: "Questions / minute", help: "All visitors of one business together." },
   { key: "concurrent", label: "Answers at once", help: "Answers generated at the same time." },
+  { key: "knowledgeImages", label: "Photos / assistant", help: "Business photos in the knowledge base." },
   { key: "sortOrder", label: "Sort order", help: "Lower comes first." },
 ] as const;
 
@@ -28,6 +29,7 @@ function readForm(form: HTMLFormElement): Partial<PlanForm> {
     monthlyQuestions: num("monthlyQuestions"),
     perMinute: num("perMinute"),
     concurrent: num("concurrent"),
+    knowledgeImages: num("knowledgeImages"),
     sortOrder: num("sortOrder"),
     priceMonthlyCents: price === "" ? null : Math.round(Number(price) * 100),
   };
@@ -78,8 +80,10 @@ function PlanFields({ plan, isNew }: { plan?: OperatorPlan; isNew?: boolean }) {
             name={f.key}
             type="number"
             required
-            min={f.key === "sortOrder" ? 0 : 1}
-            defaultValue={plan ? plan[f.key] : f.key === "sortOrder" ? 50 : undefined}
+            min={f.key === "sortOrder" || f.key === "knowledgeImages" ? 0 : 1}
+            defaultValue={
+              plan ? plan[f.key] : f.key === "sortOrder" ? 50 : f.key === "knowledgeImages" ? 50 : undefined
+            }
           />
           <span className="muted text-xs">{f.help}</span>
         </label>
@@ -236,7 +240,8 @@ export function PlansTab() {
               <div className="muted mt-1 text-sm">
                 {fmtCad(plan.priceMonthlyCents)}/mo · {fmtNumber(plan.monthlyQuestions)} questions/mo ·{" "}
                 {fmtNumber(plan.perMinute)}/min · {fmtNumber(plan.concurrent)} at once ·{" "}
-                {fmtNumber(plan.businesses)} business{plan.businesses === 1 ? "" : "es"}
+                {fmtNumber(plan.knowledgeImages)} photos · {fmtNumber(plan.businesses)} business
+                {plan.businesses === 1 ? "" : "es"}
               </div>
             </div>
             <div className="flex gap-2">

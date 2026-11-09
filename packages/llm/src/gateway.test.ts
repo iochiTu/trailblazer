@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 import { createGatewayFromEnv } from "./config.js";
 import { LLMGateway, parseRoutes } from "./gateway.js";
 import { costMicros } from "./pricing.js";
+import { toAnthropicMessage } from "./providers/anthropic.js";
 import { OfflineProvider } from "./providers/offline.js";
-import type { ChatEvent, ChatRequest, LLMProvider } from "./types.js";
+import { OpenAICompatibleProvider, toOpenAIMessage } from "./providers/openai-compatible.js";
+import { type ChatEvent, type ChatMessage, type ChatRequest, type LLMProvider, textOf } from "./types.js";
 
 class FailingProvider implements LLMProvider {
   readonly id = "failing";
   calls = 0;
   constructor(private readonly afterText = false) {}
+  supportsImages() {
+    return false;
+  }
   async *stream(): AsyncIterable<ChatEvent> {
     this.calls++;
     if (this.afterText) yield { type: "text", text: "partial " };
@@ -100,6 +105,134 @@ describe("LLM gateway", () => {
     expect(offline).toBe(false);
     expect(gateway.routes("chat")).toEqual([{ provider: "anthropic", model: "claude-opus-5-5" }]);
     expect(gateway.routes("aux")).toEqual([{ provider: "anthropic", model: "claude-haiku-5-5" }]);
+  });
+});
+
+/** Records the last request; can see images. */
+class VisionProvider implements LLMProvider {
+  readonly id = "vision";
+  last: ChatRequest | null = null;
+  supportsImages() {
+    return true;
+  }
+  async *stream(model: string, req: ChatRequest): AsyncIterable<ChatEvent> {
+    this.last = req;
+    yield { type: "text", text: "a red bicycle" };
+    yield {
+      type: "done",
+      model,
+      stopReason: "end",
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    };
+  }
+}
+
+const PIXEL =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+const withImage: ChatMessage = {
+  role: "user",
+  content: [
+    { type: "image", mediaType: "image/png", data: PIXEL },
+    { type: "text", text: "What is this?" },
+  ],
+};
+
+describe("image messages", () => {
+  it("maps image blocks to Anthropic base64 image blocks", () => {
+    expect(toAnthropicMessage(withImage)).toEqual({
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: "image/png", data: PIXEL } },
+        { type: "text", text: "What is this?" },
+      ],
+    });
+    expect(toAnthropicMessage({ role: "assistant", content: "Hi" })).toEqual({
+      role: "assistant",
+      content: "Hi",
+    });
+  });
+
+  it("maps image blocks to OpenAI data URLs", () => {
+    expect(toOpenAIMessage(withImage)).toEqual({
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: `data:image/png;base64,${PIXEL}` } },
+        { type: "text", text: "What is this?" },
+      ],
+    });
+    expect(toOpenAIMessage({ role: "user", content: "plain" })).toEqual({ role: "user", content: "plain" });
+  });
+
+  it("reads the text of block content", () => {
+    expect(textOf(withImage.content)).toBe("What is this?");
+    expect(textOf("plain")).toBe("plain");
+  });
+
+  it("sends image requests only to routes that accept images", async () => {
+    const vision = new VisionProvider();
+    const failing = new FailingProvider();
+    const gateway = new LLMGateway({
+      providers: [new OfflineProvider(), failing, vision],
+      routes: {
+        chat: [
+          { provider: "offline", model: "knowledge" },
+          { provider: "failing", model: "x" },
+          { provider: "vision", model: "v1" },
+        ],
+        aux: [{ provider: "offline", model: "echo" }],
+      },
+    });
+    expect(gateway.supportsImages("chat")).toBe(true);
+    expect(gateway.supportsImages("aux")).toBe(false);
+
+    const { text } = await collect(gateway, { system: [], messages: [withImage] });
+    expect(text).toBe("a red bicycle");
+    expect(failing.calls).toBe(0);
+    expect(vision.last?.messages[0]).toBe(withImage);
+
+    // Text-only requests keep the normal route order.
+    const plain = await collect(gateway, request("hello", "Hello and welcome to our shop today."));
+    expect(plain.text).toContain("[Offline test mode]");
+  });
+
+  it("refuses image requests when no route accepts images", async () => {
+    const { gateway } = createGatewayFromEnv({});
+    expect(gateway.supportsImages("chat")).toBe(false);
+    await expect(collect(gateway, { system: [], messages: [withImage] })).rejects.toThrow(/accepts images/);
+  });
+
+  it("marks configured OpenAI-compatible models as vision-capable", () => {
+    const provider = new OpenAICompatibleProvider("openrouter", {
+      apiKey: "x",
+      baseURL: "http://localhost",
+      visionModels: ["vendor/vision"],
+    });
+    expect(provider.supportsImages("vendor/vision")).toBe(true);
+    expect(provider.supportsImages("vendor/text")).toBe(false);
+    const { gateway } = createGatewayFromEnv({
+      OPENROUTER_API_KEY: "x",
+      OPENROUTER_VISION_MODELS: "*",
+      LLM_CHAT_ROUTES: "openrouter:any/model",
+    });
+    expect(gateway.supportsImages("chat")).toBe(true);
+  });
+});
+
+describe("offline photos", () => {
+  it("shows the photo that best matches the question", async () => {
+    const { gateway } = createGatewayFromEnv({});
+    const system = [
+      {
+        text: `<knowledge>\nThe patio is open in summer.\n</knowledge>\n\n<photos>\n<photo id="p1" title="Storefront">Our red door on Main Street</photo>\n<photo id="p2" title="Patio">Summer patio with 30 seats</photo>\n</photos>`,
+      },
+    ];
+    const { text } = await collect(gateway, {
+      system,
+      messages: [{ role: "user", content: "Is the patio open?" }],
+    });
+    expect(text).toContain("[[photo:p2]]");
+    const none = await collect(gateway, { system, messages: [{ role: "user", content: "Wifi password?" }] });
+    expect(none.text).not.toContain("[[photo:");
   });
 });
 

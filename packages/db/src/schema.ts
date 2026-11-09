@@ -71,6 +71,8 @@ export const plans = pgTable("plans", {
   concurrent: integer("concurrent").notNull(),
   /** Questions per minute for one business (all visitors together). */
   perMinute: integer("per_minute").notNull(),
+  /** Photos one assistant can keep in its knowledge base (shown to visitors in answers). */
+  knowledgeImages: integer("knowledge_images").notNull().default(50),
   /** Monthly price in CAD cents, for display. */
   priceMonthlyCents: integer("price_monthly_cents"),
   /** Archived plans keep working for existing businesses but can't be assigned anymore. */
@@ -495,6 +497,40 @@ export const qaPairs = pgTable(
 export const channels = ["hosted", "inline", "widget", "playground"] as const;
 export type Channel = (typeof channels)[number];
 
+/**
+ * Photos the business adds to its knowledge base (menu, storefront, parking map, products). The
+ * owner's title and description are what the assistant searches and reads; the image itself lives
+ * in `assets` (kind "knowledge_image") and is public, like anything on the business's website.
+ */
+export const knowledgeImages = pgTable(
+  "knowledge_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    language: text("language"),
+    enabled: boolean("enabled").notNull().default(true),
+    tsv: tsvector("tsv").notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index("knowledge_images_bot_idx").on(t.tenantId, t.botId),
+    index("knowledge_images_tsv_idx").using("gin", t.tsv),
+    foreignKey({
+      name: "knowledge_images_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const conversations = pgTable(
   "conversations",
   {
@@ -531,6 +567,14 @@ export interface Citation {
   kind: "page" | "text" | "qa";
 }
 
+/** A business photo shown in an assistant reply (from the knowledge base; public). */
+export interface ReplyImage {
+  /** knowledge_images.id */
+  id: string;
+  assetId: string;
+  title: string;
+}
+
 export interface MessageFlags {
   /** The assistant said it couldn't find the answer (knowledge gap). */
   unanswered?: boolean;
@@ -539,6 +583,16 @@ export interface MessageFlags {
   error?: boolean;
   /** Every AI provider route was at capacity; the visitor was asked to try again shortly. */
   busy?: boolean;
+  /** The visitor sent images but no available model could look at them. */
+  imagesUnseen?: boolean;
+}
+
+/** Reference from a message to an uploaded image; the image data lives in `message_attachments`. */
+export interface AttachmentRef {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
 }
 
 export const messages = pgTable(
@@ -554,6 +608,10 @@ export const messages = pgTable(
     language: text("language"),
     citations: jsonb("citations").$type<Citation[]>().notNull().default([]),
     flags: jsonb("flags").$type<MessageFlags>().notNull().default({}),
+    /** Images the visitor sent with this message (names and ids only; never the image data). */
+    attachments: jsonb("attachments").$type<AttachmentRef[]>().notNull().default([]),
+    /** Business photos the assistant showed with this reply. */
+    images: jsonb("images").$type<ReplyImage[]>().notNull().default([]),
     provider: text("provider"),
     model: text("model"),
     inputTokens: integer("input_tokens"),
@@ -568,8 +626,48 @@ export const messages = pgTable(
   (t) => [
     index("messages_conversation_idx").on(t.conversationId, t.createdAt),
     index("messages_tenant_created_idx").on(t.tenantId, t.createdAt),
+    unique("messages_id_tenant_uq").on(t.id, t.tenantId),
     foreignKey({
       name: "messages_conversation_tenant_fk",
+      columns: [t.conversationId, t.tenantId],
+      foreignColumns: [conversations.id, conversations.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Images sent by visitors in the chat (RLS enforced). Kept apart from `messages` so the stored
+ * transcript stays clean: the message holds an `AttachmentRef`, this row holds the image as base64
+ * (validated by content and stripped of metadata before it is stored). Visitor data, never public.
+ */
+export const messageAttachments = pgTable(
+  "message_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    conversationId: uuid("conversation_id").notNull(),
+    messageId: uuid("message_id").notNull(),
+    /** File name as given by the visitor's browser (display only). */
+    name: text("name").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    dataBase64: text("data_base64").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("message_attachments_message_idx").on(t.messageId),
+    index("message_attachments_conversation_idx").on(t.tenantId, t.conversationId),
+    foreignKey({
+      name: "message_attachments_message_tenant_fk",
+      columns: [t.messageId, t.tenantId],
+      foreignColumns: [messages.id, messages.tenantId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "message_attachments_conversation_tenant_fk",
       columns: [t.conversationId, t.tenantId],
       foreignColumns: [conversations.id, conversations.tenantId],
     }).onDelete("cascade"),
@@ -650,7 +748,8 @@ export const jobs = pgTable(
 // Stored in Postgres for now; behind an interface so they can move to object storage (S3/R2).
 // ---------------------------------------------------------------------------------------------
 
-export const assetKinds = ["avatar"] as const;
+/** avatar: assistant picture; knowledge_image: business photo the assistant can show visitors. */
+export const assetKinds = ["avatar", "knowledge_image"] as const;
 export type AssetKind = (typeof assetKinds)[number];
 
 export const assets = pgTable(
@@ -682,7 +781,9 @@ export const rlsTables = [
   "documents",
   "chunks",
   "qa_pairs",
+  "knowledge_images",
   "conversations",
   "messages",
+  "message_attachments",
   "usage_events",
 ] as const;

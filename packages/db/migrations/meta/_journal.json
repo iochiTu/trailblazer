@@ -106,6 +106,34 @@
       "when": 1794188074279,
       "tag": "0014_bot_guidelines_workflows",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794189313303,
+      "tag": "0015_chat_image_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794189320188,
+      "tag": "0016_chat_image_attachments_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794190635718,
+      "tag": "0017_knowledge_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794190646823,
+      "tag": "0018_knowledge_images_rls",
+      "breakpoints": true
     }
   ]
 }
