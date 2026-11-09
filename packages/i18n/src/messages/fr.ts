@@ -14,6 +14,7 @@ export const fr: Record<MessageKey, string> = {
   "auth.noAccount": "Pas encore de compte?",
   "auth.haveAccount": "Vous avez déjà un compte?",
   "auth.invalidCredentials": "Courriel ou mot de passe incorrect.",
+  "auth.tooManyAttempts": "Trop de tentatives. Veuillez patienter quelques minutes et réessayer.",
   "auth.passwordHint": "Au moins {min, number} caractères.",
   "tenants.title": "Vos entreprises",
   "tenants.create": "Ajouter une entreprise",

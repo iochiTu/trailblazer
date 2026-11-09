@@ -22,7 +22,8 @@
     "@traiblazer/llm": "workspace:*",
     "cheerio": "1.2.0",
     "drizzle-orm": "0.45.4",
-    "robots-parser": "3.0.1"
+    "robots-parser": "3.0.1",
+    "undici": "7.30.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

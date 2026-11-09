@@ -35,7 +35,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       router.push("/dashboard");
     } catch (err) {
       setError(
-        err instanceof ApiError && err.status === 401 ? t("auth.invalidCredentials") : t("common.error"),
+        err instanceof ApiError && err.status === 401
+          ? t("auth.invalidCredentials")
+          : err instanceof ApiError && err.status === 429
+            ? t("auth.tooManyAttempts")
+            : t("common.error"),
       );
     } finally {
       setBusy(false);

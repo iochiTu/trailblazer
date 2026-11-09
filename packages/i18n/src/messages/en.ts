@@ -12,6 +12,7 @@ export const en = {
   "auth.noAccount": "No account yet?",
   "auth.haveAccount": "Already have an account?",
   "auth.invalidCredentials": "Email or password is incorrect.",
+  "auth.tooManyAttempts": "Too many attempts. Please wait a few minutes and try again.",
   "auth.passwordHint": "At least {min, number} characters.",
   "tenants.title": "Your businesses",
   "tenants.create": "Add a business",

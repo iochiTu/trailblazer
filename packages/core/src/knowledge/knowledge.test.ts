@@ -5,7 +5,7 @@ import { parseSearchQueries } from "../chat/prompt.js";
 import { toOrQuery } from "../chat/retrieval.js";
 import { chunkSections } from "./chunk.js";
 import { extractPage } from "./extract.js";
-import { assertPublicUrl, isPrivateAddress, UnsafeUrlError } from "./safe-fetch.js";
+import { assertPublicUrl, isPrivateAddress, pinnedLookup, UnsafeUrlError } from "./safe-fetch.js";
 
 const html = `<!doctype html><html lang="en-CA"><head><title>Lakeside Bistro – Menu</title></head>
 <body>
@@ -80,11 +80,45 @@ describe("safe fetch", () => {
     "::1",
     "fd00::1",
     "::ffff:127.0.0.1",
+    // Forms the URL parser normalises [::ffff:127.0.0.1] and friends into.
+    "::ffff:7f00:1",
+    "::7f00:1",
+    "::ffff:a9fe:a9fe",
+    "0:0:0:0:0:ffff:10.0.0.1",
+    "64:ff9b::7f00:1",
+    "64:ff9b:1::1",
+    "2002:a00:1::",
+    "2001:0:4136:e378::1",
+    "fe80::1%eth0",
+    "100.64.0.1",
+    "0.0.0.0",
+    "255.255.255.255",
+    "not-an-ip",
   ])("treats %s as private", (ip) => expect(isPrivateAddress(ip)).toBe(true));
 
   it("accepts public addresses", () => {
     expect(isPrivateAddress("8.8.8.8")).toBe(false);
     expect(isPrivateAddress("2606:4700::1111")).toBe(false);
+    expect(isPrivateAddress("::ffff:808:808")).toBe(false);
+    expect(isPrivateAddress("64:ff9b::808:808")).toBe(false);
+    expect(isPrivateAddress("2002:808:808::1")).toBe(false);
+  });
+
+  it("refuses to connect when a hostname resolves to a private address at connect time", async () => {
+    const error = await new Promise<Error | null>((resolve) =>
+      pinnedLookup("localhost", { all: true }, (err) => resolve(err)),
+    );
+    expect(error).toBeInstanceOf(UnsafeUrlError);
+  });
+
+  it("rejects IPv6 literals that point at a private IPv4 address", async () => {
+    for (const url of [
+      "http://[::ffff:127.0.0.1]/",
+      "http://[::127.0.0.1]/",
+      "http://[::ffff:169.254.169.254]/",
+    ]) {
+      await expect(assertPublicUrl(new URL(url))).rejects.toBeInstanceOf(UnsafeUrlError);
+    }
   });
 
   it("rejects private and non-http URLs", async () => {
