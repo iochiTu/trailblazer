@@ -63,19 +63,19 @@ export function ShareTab({
       <p className="muted text-sm">{t("share.websiteIntro")}</p>
 
       <section className="flex flex-col gap-2">
-        <h3 className="font-medium">{t("share.widget")}</h3>
+        <h3 className="text-lg font-semibold">{t("share.widget")}</h3>
         <p className="muted text-sm">{t("share.widgetHint")}</p>
         <CopyField value={widgetCode} multiline label={t("share.widget")} />
       </section>
 
       <section className="flex flex-col gap-2">
-        <h3 className="font-medium">{t("share.inline")}</h3>
+        <h3 className="text-lg font-semibold">{t("share.inline")}</h3>
         <p className="muted text-sm">{t("share.inlineHint")}</p>
         <CopyField value={iframeCode} multiline label={t("share.inline")} />
       </section>
 
       <section className="flex flex-col gap-2">
-        <h3 className="font-medium">{t("share.sites")}</h3>
+        <h3 className="text-lg font-semibold">{t("share.sites")}</h3>
         <p className="muted text-sm">{t("share.sitesHint")}</p>
         <ul className="text-sm" dir="ltr">
           {key.allowedOrigins.map((o) => (

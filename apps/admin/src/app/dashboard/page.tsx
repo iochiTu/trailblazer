@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { BrandMark } from "@/components/BrandMark";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ApiError, api, type Bot, type Language, type Me, type Pack } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -43,10 +44,13 @@ export default function DashboardPage() {
   if (!me) return <p className="muted p-8">{t("common.loading")}</p>;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:py-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("app.name")}</h1>
-        <div className="flex items-center gap-4">
+        <h1 className="flex items-center gap-3 text-xl font-semibold">
+          <BrandMark />
+          {t("app.name")}
+        </h1>
+        <div className="flex flex-wrap items-center gap-3">
           <span className="muted text-sm">{me.user.name}</span>
           <LanguageSwitcher />
           <button className="btn btn-ghost" type="button" onClick={signOut}>
@@ -55,8 +59,8 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="card flex flex-col gap-4 p-5">
-        <h2 className="text-lg font-medium">{t("tenants.title")}</h2>
+      <section className="card flex flex-col gap-5 p-5 sm:p-7">
+        <h2 className="text-lg font-semibold">{t("tenants.title")}</h2>
         {me.tenants.length === 0 ? (
           <p className="muted text-sm">{t("tenants.empty")}</p>
         ) : (
@@ -146,21 +150,24 @@ function BotsSection({ tenantId }: { tenantId: string }) {
   }, [load]);
 
   return (
-    <section className="card flex flex-col gap-4 p-5">
+    <section className="card flex flex-col gap-5 p-5 sm:p-7">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">{t("bots.title")}</h2>
-        {bots && <span className="muted text-sm">{t("bots.count", { count: bots.length })}</span>}
+        <h2 className="text-lg font-semibold">{t("bots.title")}</h2>
+        {bots && <span className="badge">{t("bots.count", { count: bots.length })}</span>}
       </div>
 
       {bots === null ? (
         <p className="muted">{t("common.loading")}</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-[var(--border)]">
+        <ul className="-mx-3 flex flex-col gap-1">
           {bots.map((bot) => (
-            <li key={bot.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+            <li
+              key={bot.id}
+              className="list-tile relative flex flex-wrap items-center justify-between gap-2 px-3 py-3"
+            >
               <Link
                 href={`/t/${tenantId}/bots/${bot.id}`}
-                className="text-start font-medium underline-offset-4 hover:underline"
+                className="text-start font-medium after:absolute after:inset-0 after:rounded-[18px] after:content-['']"
               >
                 {bot.name}
               </Link>
@@ -227,8 +234,8 @@ function CreateBotForm({
     setChosen((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]));
 
   return (
-    <form className="flex flex-col gap-4 border-t border-[var(--border)] pt-4" onSubmit={onSubmit}>
-      <h3 className="font-medium">{t("bots.create")}</h3>
+    <form className="panel flex flex-col gap-4 p-4 sm:p-5" onSubmit={onSubmit}>
+      <h3 className="font-semibold">{t("bots.create")}</h3>
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">
           {t("bots.name")}
@@ -263,11 +270,7 @@ function CreateBotForm({
         <legend className="mb-1 text-sm">{t("bots.languages")}</legend>
         <div className="flex flex-wrap gap-2">
           {languages.map((lang) => (
-            <label
-              key={lang.code}
-              className="flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-sm"
-              title={lang.englishName}
-            >
+            <label key={lang.code} className="chip" title={lang.englishName}>
               <input
                 type="checkbox"
                 checked={chosen.includes(lang.code)}

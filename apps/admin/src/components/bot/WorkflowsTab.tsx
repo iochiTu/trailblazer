@@ -19,7 +19,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="font-medium">{title}</h3>
+        <h3 className="text-lg font-semibold">{title}</h3>
         {hint && <p className="muted text-sm">{hint}</p>}
       </div>
       {children}
@@ -153,7 +153,7 @@ export function WorkflowsTab({
           {drafts.map((d, i) => (
             <li
               key={d.id}
-              className={`flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4 ${d.enabled ? "" : "opacity-60"}`}
+              className={`panel flex flex-col gap-3 p-4 sm:p-5 ${d.enabled ? "" : "opacity-60"}`}
             >
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-1.5 text-sm">

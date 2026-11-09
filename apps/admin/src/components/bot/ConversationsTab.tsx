@@ -12,7 +12,7 @@ function Attachment({ src, attachment }: { src: string; attachment: MessageAttac
     <span className="mb-1 block whitespace-normal">
       <button
         type="button"
-        className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 text-xs"
+        className="inline-flex max-w-full items-center gap-1 rounded-full bg-[var(--surface-3)] px-2.5 py-0.5 text-xs hover:bg-[var(--accent-soft)]"
         aria-expanded={shown}
         aria-label={
           shown ? t("conversations.hideImage") : t("conversations.viewImage", { name: attachment.name })
@@ -61,12 +61,13 @@ export function ConversationsTab({ base }: { base: string }) {
 
   return (
     <div className="grid gap-4 md:grid-cols-[280px_1fr]">
-      <ul className="flex flex-col divide-y divide-[var(--border)]">
+      <ul className="flex flex-col gap-1">
         {list.map((c) => (
           <li key={c.id}>
             <button
               type="button"
-              className={`w-full py-2 text-start text-sm ${open?.id === c.id ? "font-semibold" : ""}`}
+              aria-current={open?.id === c.id || undefined}
+              className={`w-full rounded-2xl px-3 py-2.5 text-start text-sm ${open?.id === c.id ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-soft-text)]" : "hover:bg-[var(--surface-2)]"}`}
               onClick={() => show(c.id)}
             >
               {fmt.format(new Date(c.lastMessageAt))}
@@ -83,7 +84,7 @@ export function ConversationsTab({ base }: { base: string }) {
             <div
               key={m.id}
               dir="auto"
-              className={`rounded-lg p-3 text-sm whitespace-pre-wrap ${m.role === "user" ? "self-end bg-[var(--bg)]" : "card"}`}
+              className={`max-w-[85%] rounded-[20px] px-4 py-3 text-sm whitespace-pre-wrap ${m.role === "user" ? "self-end rounded-ee-md bg-[var(--accent-soft)] text-[var(--accent-soft-text)]" : "self-start rounded-es-md bg-[var(--surface-2)]"}`}
             >
               {m.attachments?.map((a) => (
                 <Attachment

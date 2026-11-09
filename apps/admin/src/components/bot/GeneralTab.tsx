@@ -13,7 +13,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="font-medium">{title}</h3>
+        <h3 className="text-lg font-semibold">{title}</h3>
         {hint && <p className="muted text-sm">{hint}</p>}
       </div>
       {children}
@@ -164,13 +164,7 @@ export function GeneralTab({
               <legend className="mb-1 text-sm">{t(`general.languages.tier${tier}`)}</legend>
               <div className="flex flex-wrap gap-2">
                 {list.map((lang) => (
-                  <label
-                    key={lang.code}
-                    className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm ${
-                      enabled.includes(lang.code) ? "border-[var(--accent)]" : "border-[var(--border)]"
-                    }`}
-                    title={lang.englishName}
-                  >
+                  <label key={lang.code} className="chip" title={lang.englishName}>
                     <input
                       type="checkbox"
                       checked={enabled.includes(lang.code)}

@@ -227,15 +227,9 @@ export function PlansTab() {
                   {plan.id} · {plan.nameFr}
                 </span>
                 {plan.id === defaultPlan && (
-                  <span className="rounded-full border border-[var(--accent)] px-2 py-0.5 text-xs">
-                    Default for new businesses
-                  </span>
+                  <span className="badge badge-accent">Default for new businesses</span>
                 )}
-                {!plan.active && (
-                  <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs">
-                    Archived
-                  </span>
-                )}
+                {!plan.active && <span className="badge">Archived</span>}
               </div>
               <div className="muted mt-1 text-sm">
                 {fmtCad(plan.priceMonthlyCents)}/mo · {fmtNumber(plan.monthlyQuestions)} questions/mo ·{" "}

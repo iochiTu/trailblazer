@@ -99,7 +99,7 @@ export function PhotosSection({ base }: { base: string }) {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="font-medium">{t("photos.title")}</h3>
+        <h3 className="text-lg font-semibold">{t("photos.title")}</h3>
         <p className="muted text-sm">{t("photos.hint")}</p>
       </div>
       {photos === null ? (
@@ -109,10 +109,10 @@ export function PhotosSection({ base }: { base: string }) {
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {photos.map((p) => (
-            <li key={p.id} className="card flex gap-3 p-3">
+            <li key={p.id} className="panel flex gap-3 p-3">
               <a href={p.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
                 {/* biome-ignore lint/performance/noImgElement: public asset served by the API */}
-                <img src={p.url} alt={p.title} className="h-20 w-20 rounded-md object-cover" />
+                <img src={p.url} alt={p.title} className="h-20 w-20 rounded-2xl object-cover" />
               </a>
               <div className="flex min-w-0 flex-1 flex-col gap-1" dir="auto">
                 <div className="truncate font-medium">{p.title}</div>
@@ -143,7 +143,10 @@ export function PhotosSection({ base }: { base: string }) {
       {full ? (
         <p className="muted text-sm">{t("photos.limit")}</p>
       ) : (
-        <form className="card grid gap-2 p-4 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end" onSubmit={add}>
+        <form
+          className="panel grid gap-3 p-4 sm:p-5 md:grid-cols-[1fr_1fr_2fr_auto] md:items-end"
+          onSubmit={add}
+        >
           <label className="flex flex-col gap-1 text-sm">
             {t("photos.file")}
             <input

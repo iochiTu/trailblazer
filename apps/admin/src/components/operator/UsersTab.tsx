@@ -65,11 +65,7 @@ export function UsersTab({ onOpenBusiness }: { onOpenBusiness: (tenantId: string
                   <td className="py-3 pr-4">
                     <div className="flex flex-wrap items-center gap-2 font-medium">
                       {u.name}
-                      {u.platformRole && (
-                        <span className="rounded-full border border-[var(--accent)] px-2 py-0.5 text-xs font-normal">
-                          Super admin
-                        </span>
-                      )}
+                      {u.platformRole && <span className="badge badge-accent font-normal">Super admin</span>}
                     </div>
                     <div className="muted text-xs">{u.email}</div>
                   </td>

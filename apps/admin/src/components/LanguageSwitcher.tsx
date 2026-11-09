@@ -9,7 +9,7 @@ export function LanguageSwitcher() {
     <label className="flex items-center gap-2 text-sm">
       <span className="muted">{t("common.language")}</span>
       <select
-        className="input w-auto py-1"
+        className="input w-auto py-1.5"
         value={language}
         onChange={(e) => setUiLanguage(e.target.value)}
         aria-label={t("common.language")}

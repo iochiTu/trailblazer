@@ -36,7 +36,10 @@ export function BusinessDetail({ id, onClose }: { id: string; onClose: () => voi
   }, [id]);
 
   return (
-    <section className="card flex flex-col gap-4 border-[var(--accent)] p-5" aria-label="Business details">
+    <section
+      className="card flex flex-col gap-4 p-5 ring-2 ring-[var(--accent-soft)] sm:p-7"
+      aria-label="Business details"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium">{detail?.tenant.name ?? "Business"}</h2>
