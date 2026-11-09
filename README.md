@@ -20,7 +20,7 @@ packages/
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider
   db/               Drizzle schema, migrations (incl. row-level security), withTenant()
   i18n/             Language registry (tiers, RTL), UI messages (ICU), language negotiation
-  industry-packs/   Sector → pack → variant catalog, rollout phases, pack guidance
+  industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)
   shared/           Zod request schemas shared by API and admin
 infra/postgres/     Local database init (roles, test database)
 ```

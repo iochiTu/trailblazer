@@ -1,5 +1,5 @@
 import { assets, botKeys, bots, businessProfiles, tenants, withTenant } from "@traiblazer/db";
-import { getPack, getPackGuidance, isSelectable } from "@traiblazer/industry-packs";
+import { getPack, getTemplate, isSelectable, resolveBehavior } from "@traiblazer/industry-packs";
 import {
   addAllowedOriginSchema,
   businessProfileSchema,
@@ -42,6 +42,9 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
     if (!languages.includes(defaultLanguage)) throw badRequest("defaultLanguage must be one of languages");
 
     const tenantId = request.tenant!.id;
+    // The template is a starting point: its guidelines and workflows are copied into the
+    // assistant, which the business then edits freely.
+    const template = getTemplate(input.pack, input.variant);
     const result = await withTenant(db, tenantId, async (tx) => {
       const [bot] = await tx
         .insert(bots)
@@ -50,6 +53,8 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
           name: input.name,
           pack: input.pack,
           variant: input.variant ?? null,
+          guidelines: template.guidelines,
+          workflows: template.workflows,
           languages,
           defaultLanguage,
           hostedPageEnabled: input.hostedPageEnabled ?? false,
@@ -104,8 +109,11 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
         profile: profile ?? null,
         keys,
         pack: getPack(bot.pack) ?? null,
-        // Industry defaults, shown in the admin where the owner hasn't written their own.
-        defaults: { quickReplies: getPackGuidance(bot.pack, bot.variant).quickReplies },
+        // What the assistant uses now (its own copy, or its template for older assistants).
+        behavior: resolveBehavior(bot),
+        // The industry template: suggested questions shown where the owner hasn't written their
+        // own, plus guidelines and workflows to restore or add back.
+        defaults: getTemplate(bot.pack, bot.variant),
         chatUrl: config.PUBLIC_URL,
       };
     });

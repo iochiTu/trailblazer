@@ -1,5 +1,6 @@
 import { AVATAR_ICON_IDS, type AvatarIcon, THEMES } from "@traiblazer/appearance";
 import { isSupportedLanguage, normalizeLanguageTag } from "@traiblazer/i18n";
+import { WORKFLOW_LIMITS as L } from "@traiblazer/industry-packs";
 import { z } from "zod";
 
 const avatarSchema = z.discriminatedUnion("kind", [
@@ -75,6 +76,27 @@ export const createBotSchema = z
   });
 export type CreateBotInput = z.infer<typeof createBotSchema>;
 
+/** A business's workflow: a playbook the assistant follows when a visitor's request matches `when`. */
+export const workflowSchema = z.object({
+  id: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "Use lowercase letters, numbers and dashes for workflow ids"),
+  name: z.string().trim().min(1).max(L.nameLength),
+  enabled: z.boolean(),
+  when: z.string().trim().min(1).max(L.whenLength),
+  steps: z.array(z.string().trim().min(1).max(L.stepLength)).min(1).max(L.maxSteps),
+  finish: z.string().trim().max(L.finishLength),
+  template: z.string().max(64).optional(),
+});
+export type WorkflowInput = z.infer<typeof workflowSchema>;
+
+export const workflowsSchema = z
+  .array(workflowSchema)
+  .max(L.maxWorkflows)
+  .refine((list) => new Set(list.map((w) => w.id)).size === list.length, {
+    message: "Workflow ids must be unique",
+  });
+
 export const updateBotSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -83,6 +105,9 @@ export const updateBotSchema = z
     languages: languagesList,
     defaultLanguage: languageCode,
     persona: z.string().trim().max(2000).nullable(),
+    /** How the assistant responds (starts as the industry template's guidelines). */
+    guidelines: z.string().trim().max(L.guidelinesLength),
+    workflows: workflowsSchema,
     hostedPageEnabled: z.boolean(),
     settings: z
       .object({

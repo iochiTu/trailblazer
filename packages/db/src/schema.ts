@@ -214,6 +214,22 @@ export interface BotSettings {
   answerOtherLanguages?: boolean;
 }
 
+/**
+ * A playbook the assistant follows when a visitor's request matches `when`. Copied from the
+ * industry template when the assistant is created, then owned by the business. Same shape as
+ * `Workflow` in @traiblazer/industry-packs.
+ */
+export interface BotWorkflow {
+  id: string;
+  name: string;
+  enabled: boolean;
+  when: string;
+  steps: string[];
+  finish: string;
+  /** Template workflow this one was copied from, if any. */
+  template?: string;
+}
+
 export const botStatuses = ["draft", "active", "paused"] as const;
 export type BotStatus = (typeof botStatuses)[number];
 
@@ -228,7 +244,7 @@ export const bots = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    /** Industry pack slug, e.g. "restaurant", and optional variant, e.g. "pub". */
+    /** Industry template it was created from, e.g. "restaurant", and optional variant, e.g. "pub". */
     pack: text("pack").notNull(),
     variant: text("variant"),
     packVersion: integer("pack_version").notNull().default(1),
@@ -239,6 +255,13 @@ export const bots = pgTable(
     defaultLanguage: text("default_language").notNull().default("en"),
     modelProfile: text("model_profile").notNull().default("default"),
     persona: text("persona"),
+    /**
+     * How the assistant responds, and its workflows. Copied from the industry template when the
+     * assistant is created and then edited by the business. NULL (assistants created before
+     * templates were copied) = follow the template until edited.
+     */
+    guidelines: text("guidelines"),
+    workflows: jsonb("workflows").$type<BotWorkflow[]>(),
     /**
      * "Web version": the business's own chat page at /c/<key>, reached by link or QR code — for
      * businesses (e.g. independent contractors) without a website. Off until the owner activates it;

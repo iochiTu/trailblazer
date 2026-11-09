@@ -35,3 +35,41 @@ describe("language rules in the prompt", () => {
     expect(text).toContain("reply in French");
   });
 });
+
+describe("response guidelines and workflows in the prompt", () => {
+  const workflow = {
+    id: "cake",
+    name: "Custom cake",
+    enabled: true,
+    when: "The visitor wants a custom cake.",
+    steps: ["Ask for the date.", "Ask how many guests."],
+    finish: "Share the phone number.",
+  };
+
+  it("follows the industry template for assistants without their own copy", () => {
+    const text = botBlock(bot({ guidelines: null, workflows: null }));
+    expect(text).toContain("<response_guidelines>\nYou help customers of a café or bakery");
+    expect(text).toContain("## Custom cake or catering order");
+  });
+
+  it("uses the business's own guidelines and enabled workflows", () => {
+    const text = botBlock(
+      bot({
+        guidelines: "Be cheerful.",
+        workflows: [workflow, { ...workflow, id: "off", name: "Turned off", enabled: false }],
+      }),
+    );
+    expect(text).toContain("<response_guidelines>\nBe cheerful.\n</response_guidelines>");
+    expect(text).toContain(
+      "## Custom cake\nWhen: The visitor wants a custom cake.\nSteps:\n1. Ask for the date.\n2. Ask how many guests.\nFinish: Share the phone number.",
+    );
+    expect(text).not.toContain("Turned off");
+    expect(text).not.toContain("café or bakery");
+  });
+
+  it("leaves out empty guidelines and workflows", () => {
+    const text = botBlock(bot({ guidelines: "", workflows: [] }));
+    expect(text).not.toContain("<response_guidelines>");
+    expect(text).not.toContain("<workflows>");
+  });
+});

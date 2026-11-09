@@ -29,6 +29,18 @@ export interface Me {
   tenants: { id: string; name: string; slug: string; plan: string; role: string }[];
 }
 
+/** A playbook the assistant follows when a visitor's request matches `when`. */
+export interface Workflow {
+  id: string;
+  name: string;
+  enabled: boolean;
+  when: string;
+  steps: string[];
+  finish: string;
+  /** Template workflow it was copied from, if any. */
+  template?: string;
+}
+
 export interface Bot {
   id: string;
   name: string;
@@ -38,6 +50,9 @@ export interface Bot {
   languages: string[];
   defaultLanguage: string;
   hostedPageEnabled: boolean;
+  /** The business's own copy; null = still following the industry template (older assistants). */
+  guidelines: string | null;
+  workflows: Workflow[] | null;
   settings: {
     theme?: string;
     color?: string;
@@ -58,7 +73,10 @@ export interface BotDetail {
   keys: { id: string; publicKey: string; allowedOrigins: string[] }[];
   profile: { businessName: string | null } | null;
   pack: Pack | null;
-  defaults: { quickReplies: Record<string, string[]> };
+  /** What the assistant uses now: its own guidelines and workflows, or its template's. */
+  behavior: { guidelines: string; workflows: Workflow[] };
+  /** The industry template the assistant started from. */
+  defaults: { quickReplies: Record<string, string[]>; guidelines: string; workflows: Workflow[] };
   chatUrl: string;
 }
 

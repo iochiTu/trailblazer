@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { availablePacks, isSelectable, packs } from "./index.js";
+import {
+  availablePacks,
+  getTemplate,
+  hasTemplate,
+  isSelectable,
+  packs,
+  resolveBehavior,
+  WORKFLOW_LIMITS,
+} from "./index.js";
 
 describe("industry packs", () => {
   it("has unique pack slugs and unique variant slugs per pack", () => {
@@ -43,5 +51,52 @@ describe("industry packs", () => {
     expect(isSelectable("clinic")).toBe(false); // phase 3
     expect(isSelectable("clinic", null, 3)).toBe(true);
     expect(isSelectable("nope")).toBe(false);
+  });
+});
+
+describe("industry templates", () => {
+  it("gives every released industry its own template within the workflow limits", () => {
+    for (const pack of availablePacks()) {
+      expect(hasTemplate(pack.slug), pack.slug).toBe(true);
+      for (const variant of [null, ...pack.variants.map((v) => v.slug)]) {
+        const t = getTemplate(pack.slug, variant);
+        expect(t.guidelines.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.guidelinesLength);
+        expect(t.workflows.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.maxWorkflows);
+        const ids = t.workflows.map((w) => w.id);
+        expect(new Set(ids).size, `${pack.slug}/${variant}`).toBe(ids.length);
+        for (const w of t.workflows) {
+          expect(w.name.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.nameLength);
+          expect(w.when.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.whenLength);
+          expect(w.finish.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.finishLength);
+          expect(w.steps.length).toBeGreaterThan(0);
+          expect(w.steps.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.maxSteps);
+          for (const step of w.steps) expect(step.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.stepLength);
+        }
+      }
+    }
+  });
+
+  it("adds variant-only guidelines and workflows", () => {
+    expect(getTemplate("retail").workflows.map((w) => w.id)).not.toContain("flower-delivery");
+    const florist = getTemplate("retail", "florist");
+    expect(florist.workflows.map((w) => w.id)).toContain("flower-delivery");
+    expect(florist.guidelines).toContain("cut-off");
+    expect(getTemplate("restaurant", "pub").guidelines).toContain("19");
+  });
+
+  it("returns fresh copies, so editing one assistant's workflows can't change the template", () => {
+    const a = getTemplate("restaurant");
+    a.workflows[0]!.steps.push("changed");
+    expect(getTemplate("restaurant").workflows[0]!.steps).not.toContain("changed");
+  });
+
+  it("falls back to the template for assistants without their own copy", () => {
+    const legacy = resolveBehavior({ pack: "lodging", variant: null, guidelines: null, workflows: null });
+    expect(legacy).toEqual({
+      guidelines: getTemplate("lodging").guidelines,
+      workflows: getTemplate("lodging").workflows,
+    });
+    const own = resolveBehavior({ pack: "lodging", variant: null, guidelines: "Mine", workflows: [] });
+    expect(own).toEqual({ guidelines: "Mine", workflows: [] });
   });
 });

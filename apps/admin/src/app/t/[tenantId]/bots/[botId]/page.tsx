@@ -8,13 +8,14 @@ import { ConversationsTab } from "@/components/bot/ConversationsTab";
 import { GeneralTab } from "@/components/bot/GeneralTab";
 import { KnowledgeTab } from "@/components/bot/KnowledgeTab";
 import { ShareTab } from "@/components/bot/ShareTab";
+import { WorkflowsTab } from "@/components/bot/WorkflowsTab";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SupportBanner } from "@/components/SupportBanner";
 import { ApiError, api, type BotDetail } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
-type Tab = "knowledge" | "general" | "appearance" | "test" | "share" | "conversations";
-const TABS: Tab[] = ["knowledge", "general", "appearance", "test", "share", "conversations"];
+type Tab = "knowledge" | "workflows" | "general" | "appearance" | "test" | "share" | "conversations";
+const TABS: Tab[] = ["knowledge", "workflows", "general", "appearance", "test", "share", "conversations"];
 
 export default function BotPage() {
   const { tenantId, botId } = useParams<{ tenantId: string; botId: string }>();
@@ -105,6 +106,7 @@ export default function BotPage() {
             />
           </div>
         )}
+        {tab === "workflows" && <WorkflowsTab detail={detail} base={base} onChange={load} />}
         {tab === "general" && <GeneralTab detail={detail} base={base} onChange={load} />}
         {tab === "appearance" && (
           <AppearanceTab detail={detail} base={base} tenantId={tenantId} onChange={load} />

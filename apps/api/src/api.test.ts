@@ -155,6 +155,9 @@ describe("tenants and bots", () => {
     expect(body.bot.hostedPageEnabled).toBe(false);
     expect(body.keys[0].publicKey).toMatch(/^pk_test_/);
     expect(body.keys[0].allowedOrigins).toEqual(["https://cafe-boreal.example"]);
+    // The industry template is copied into the assistant.
+    expect(body.bot.guidelines).toContain("café or bakery");
+    expect(body.bot.workflows.map((w: { id: string }) => w.id)).toContain("custom-order");
 
     const list = await app.inject({
       method: "GET",
@@ -193,6 +196,48 @@ describe("tenants and bots", () => {
     expect(audit.json().entries.map((e: { action: string }) => e.action)).toEqual(
       expect.arrayContaining(["tenant.created", "bot.created", "bot.updated"]),
     );
+  });
+
+  it("lets the business edit, add and remove workflows without touching the template", async () => {
+    const { cookie } = await signup("workflows");
+    const tenantId = await createTenant(cookie, "Northern Lodge");
+    const created = await app.inject({
+      method: "POST",
+      url: `/v1/tenants/${tenantId}/bots`,
+      headers: { cookie },
+      payload: { name: "Lodge", pack: "lodging" },
+    });
+    const botId = created.json().bot.id;
+    const url = `/v1/tenants/${tenantId}/bots/${botId}`;
+    const custom = {
+      id: "fishing-trip",
+      name: "Guided fishing trip",
+      enabled: true,
+      when: "The visitor asks about guided fishing.",
+      steps: ["Ask for dates and group size."],
+      finish: "Give the phone number.",
+    };
+
+    const patched = await app.inject({
+      method: "PATCH",
+      url,
+      headers: { cookie },
+      payload: { guidelines: "Friendly and short.", workflows: [custom] },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().bot.workflows).toEqual([custom]);
+
+    const detail = (await app.inject({ method: "GET", url, headers: { cookie } })).json();
+    expect(detail.behavior).toEqual({ guidelines: "Friendly and short.", workflows: [custom] });
+    // The template stays available to restore or add workflows back.
+    expect(detail.defaults.workflows.map((w: { id: string }) => w.id)).toContain("room-booking");
+
+    const bad = async (workflows: unknown) =>
+      (await app.inject({ method: "PATCH", url, headers: { cookie }, payload: { workflows } })).statusCode;
+    expect(await bad([custom, custom])).toBe(400); // duplicate ids
+    expect(await bad([{ ...custom, steps: [] }])).toBe(400);
+    expect(await bad([{ ...custom, id: "Not Valid!" }])).toBe(400);
+    expect(await bad(Array.from({ length: 21 }, (_, i) => ({ ...custom, id: `w${i}` })))).toBe(400);
   });
 
   it("refuses packs that are not released yet and invalid variants", async () => {

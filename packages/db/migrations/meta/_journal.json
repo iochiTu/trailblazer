@@ -99,6 +99,13 @@
       "when": 1793831591978,
       "tag": "0013_drop_is_operator",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794188074279,
+      "tag": "0014_bot_guidelines_workflows",
+      "breakpoints": true
     }
   ]
 }

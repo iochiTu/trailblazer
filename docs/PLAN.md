@@ -82,6 +82,13 @@ Sector            e.g. Food & Drink
   - lead fields + quick replies + escalation keywords + enabled modules + eval set (multi-language).
 - **Variant** inherits its pack and overrides only what differs.
 - Versioned YAML in `packages/industry-packs`, schema-validated.
+- **Templates, not fixed industries:** a pack is a *template*. Creating an assistant copies the
+  template's response guidelines and **workflows** into the assistant; the business then owns that
+  copy and can edit or turn off workflows, delete them, add suggested ones back, or write its own.
+  A workflow is a playbook: *when* (the visitor's request), ordered *steps* (what to ask or mention)
+  and how to *finish* (link, phone, later lead capture / handoff). Workflows are business text: they
+  sit below the locked platform rules and can't add facts beyond the business's information.
+  Assistants created before this keep following their template until edited.
 
 ### 4.2 Capability modules
 

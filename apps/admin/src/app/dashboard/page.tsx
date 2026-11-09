@@ -258,6 +258,7 @@ function CreateBotForm({
           </label>
         )}
       </div>
+      <p className="muted -mt-2 text-xs">{t("bots.packHint")}</p>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm">{t("bots.languages")}</legend>
         <div className="flex flex-wrap gap-2">

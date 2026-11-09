@@ -1,9 +1,7 @@
 /**
- * Industry pack catalog (metadata only).
- *
- * Phase 0 ships the sector → pack → variant structure and rollout phases from docs/PLAN.md §4.3 so
- * bots can reference a pack. Pack content (persona, guardrails, FAQ templates, modules, evals) is
- * added per pack from Phase 1 on.
+ * Industry catalog: sector → pack → variant and rollout phases (docs/PLAN.md §4.3). Each industry
+ * comes with a template (response guidelines, suggested questions, workflows; see templates.ts)
+ * that is copied into a new assistant and then belongs to the business.
  */
 
 export type ScopeLevel = "standard" | "professional";
@@ -387,4 +385,13 @@ export function isSelectable(
   return pack.variants.some((x) => x.slug === variant);
 }
 
-export { getPackGuidance, type PackGuidance } from "./guidance.js";
+export {
+  getTemplate,
+  hasTemplate,
+  type IndustryTemplate,
+  resolveBehavior,
+  type TemplateContent,
+  type TemplateWorkflow,
+  WORKFLOW_LIMITS,
+  type Workflow,
+} from "./templates.js";

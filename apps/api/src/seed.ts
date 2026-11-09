@@ -4,6 +4,7 @@
  * Runs as the owner role (DATABASE_URL). Safe to re-run: skips what already exists.
  */
 import { botKeys, bots, businessProfiles, createDb, memberships, tenants, users } from "@traiblazer/db";
+import { getTemplate } from "@traiblazer/industry-packs";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "./auth/password.js";
 import { newPublicKey, slugify } from "./lib/ids.js";
@@ -12,6 +13,7 @@ const DEMO_EMAIL = "demo@traiblazer.local";
 const DEMO_PASSWORD = "demo-password-123";
 const STAFF_EMAIL = "staff@traiblazer.local";
 const STAFF_PASSWORD = "staff-password-123";
+const DEMO_TEMPLATE = getTemplate("restaurant", "casual");
 
 const url = process.env.DATABASE_URL ?? "postgres://traiblazer:traiblazer@localhost:5433/traiblazer";
 const { db, close } = createDb(url, { max: 1 });
@@ -42,6 +44,9 @@ try {
           name: "Lakeside Bistro Assistant",
           pack: "restaurant",
           variant: "casual",
+          // Like a real assistant: starts with a copy of its industry template.
+          guidelines: DEMO_TEMPLATE.guidelines,
+          workflows: DEMO_TEMPLATE.workflows,
           languages: ["en", "fr", "zh-Hans", "pa"],
           defaultLanguage: "en",
           hostedPageEnabled: true,

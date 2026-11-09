@@ -23,7 +23,7 @@ import {
   withTenant,
 } from "@traiblazer/db";
 import { getLanguage } from "@traiblazer/i18n";
-import { getPackGuidance } from "@traiblazer/industry-packs";
+import { getTemplate } from "@traiblazer/industry-packs";
 import { publicChatSchema } from "@traiblazer/shared";
 import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
@@ -181,7 +181,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!found || found.bot.status === "paused") throw notFound("Assistant");
     const { bot, profile } = found;
     const settings: BotSettings = bot.settings ?? {};
-    const guidance = getPackGuidance(bot.pack, bot.variant);
+    const template = getTemplate(bot.pack, bot.variant);
     const businessName = profile?.businessName ?? bot.name;
     // Public, non-sensitive data; the widget loader reads it from the customer's website.
     reply.header("access-control-allow-origin", "*");
@@ -198,7 +198,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           return { code, nativeName: lang?.nativeName ?? code, dir: lang?.dir ?? "ltr" };
         }),
         greeting: settings.greeting ?? {},
-        quickReplies: { ...guidance.quickReplies, ...(settings.quickReplies ?? {}) },
+        quickReplies: { ...template.quickReplies, ...(settings.quickReplies ?? {}) },
         poweredBy: true,
       },
     };
