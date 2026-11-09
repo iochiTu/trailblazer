@@ -357,4 +357,11 @@ export const fr: Record<MessageKey, string> = {
   "portal.cta.title": "Prêt à rencontrer votre nouvel assistant?",
   "portal.cta.body": "Créez votre compte et obtenez vos premières réponses en quelques minutes.",
   "portal.footer.rights": "© {year} Traiblazer",
+  "tenants.limitReached":
+    "Vous avez atteint le nombre maximal d'entreprises pour un compte. Contactez-nous si vous en avez besoin de plus.",
+  "portal.plans.businesses":
+    "{count, plural, one {Chaque compte peut posséder # entreprise.} other {Chaque compte peut posséder jusqu'à # entreprises, chacune avec son propre forfait.}}",
+  "portal.faq.businesses.q": "Puis-je gérer plus d'une entreprise?",
+  "portal.faq.businesses.a":
+    "{count, plural, one {Chaque compte peut posséder # entreprise avec ses propres assistants. Contactez-nous si vous en avez besoin de plus.} other {Oui. Un compte peut posséder jusqu'à # entreprises, chacune avec ses propres assistants et son propre forfait. Contactez-nous si vous en avez besoin de plus.}}",
 };

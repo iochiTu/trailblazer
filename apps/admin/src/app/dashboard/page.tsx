@@ -100,12 +100,14 @@ export default function DashboardPage() {
 function CreateTenantForm({ onCreated }: { onCreated: (id: string) => Promise<void> }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const name = new FormData(form).get("name");
     setBusy(true);
+    setError(null);
     try {
       const { tenant } = await api<{ tenant: { id: string } }>("/v1/tenants", {
         method: "POST",
@@ -113,6 +115,12 @@ function CreateTenantForm({ onCreated }: { onCreated: (id: string) => Promise<vo
       });
       form.reset();
       await onCreated(tenant.id);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.code === "business_limit_reached"
+          ? t("tenants.limitReached")
+          : t("common.error"),
+      );
     } finally {
       setBusy(false);
     }
@@ -127,6 +135,11 @@ function CreateTenantForm({ onCreated }: { onCreated: (id: string) => Promise<vo
       <button className="btn" type="submit" disabled={busy}>
         {t("tenants.create")}
       </button>
+      {error && (
+        <p className="error w-full text-sm" role="alert">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

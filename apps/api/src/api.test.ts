@@ -358,6 +358,41 @@ describe("tenants and bots", () => {
   });
 });
 
+describe("business limit per account", () => {
+  it("stops an account at the operator limit and tells the portal", async () => {
+    const limit = (await app.inject({ method: "GET", url: "/v1/catalog/plans" })).json()
+      .maxBusinessesPerAccount;
+    expect(limit).toBeGreaterThanOrEqual(1);
+
+    const { cookie } = await signup("many");
+    for (let i = 0; i < limit; i++) createdTenantIds.push(await createTenant(cookie, `Shop ${i}`));
+    const over = await app.inject({
+      method: "POST",
+      url: "/v1/tenants",
+      headers: { cookie },
+      payload: { name: "One more" },
+    });
+    expect(over.statusCode).toBe(403);
+    expect(over.json().error).toBe("business_limit_reached");
+
+    // Concurrent sign-ups from one account can't slip past the count together.
+    const { cookie: racer } = await signup("racer");
+    const results = await Promise.all(
+      Array.from({ length: limit + 2 }, (_, i) =>
+        app.inject({
+          method: "POST",
+          url: "/v1/tenants",
+          headers: { cookie: racer },
+          payload: { name: `R${i}` },
+        }),
+      ),
+    );
+    for (const r of results) if (r.statusCode === 201) createdTenantIds.push(r.json().tenant.id);
+    expect(results.filter((r) => r.statusCode === 201)).toHaveLength(limit);
+    expect(results.filter((r) => r.statusCode === 403)).toHaveLength(2);
+  });
+});
+
 describe("catalog", () => {
   it("lists launch packs and languages", async () => {
     const packs = await app.inject({ method: "GET", url: "/v1/catalog/packs" });

@@ -56,6 +56,7 @@ export function PoliciesTab() {
       conversationMaxQuestions: Number(data.get("conversationMaxQuestions")),
       chatIpPerMinute: Number(data.get("chatIpPerMinute")),
       releasedPackPhase: Number(data.get("releasedPackPhase")),
+      maxBusinessesPerAccount: Number(data.get("maxBusinessesPerAccount")),
     };
     const changed = Object.fromEntries(
       Object.entries(next).filter(([k, v]) => policies[k as keyof Policies] !== v),
@@ -119,6 +120,22 @@ export function PoliciesTab() {
           </select>
           <span className="muted text-xs">
             Which industry packs businesses can choose for new assistants.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Businesses per account
+          <input
+            className="input max-w-[10rem]"
+            type="number"
+            name="maxBusinessesPerAccount"
+            required
+            min={1}
+            max={100}
+            defaultValue={policies.maxBusinessesPerAccount}
+          />
+          <span className="muted text-xs">
+            How many businesses one account can own. Each new business starts on the default plan, so this
+            stops one account from collecting free allowances. Shown on the public portal.
           </span>
         </label>
       </fieldset>

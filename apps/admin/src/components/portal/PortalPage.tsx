@@ -10,16 +10,18 @@ import { useI18n } from "@/lib/i18n";
 
 const STEPS = ["step1", "step2", "step3", "step4"] as const;
 const FEATURES = ["grounded", "languages", "web", "photos", "workflows", "insights"] as const;
-const FAQ = ["website", "sources", "limit", "languages", "test"] as const;
+const FAQ = ["website", "sources", "limit", "businesses", "languages", "test"] as const;
+
+type PlanCatalog = { plans: PublicPlan[]; defaultPlan: string; maxBusinessesPerAccount: number };
 
 /** Public landing page: what the product does, how to use it, and the subscription plans. */
 export function PortalPage({ signedIn }: { signedIn: boolean }) {
   const { t } = useI18n();
-  const [plans, setPlans] = useState<{ plans: PublicPlan[]; defaultPlan: string } | null | "error">(null);
+  const [plans, setPlans] = useState<PlanCatalog | null | "error">(null);
   const [languageCount, setLanguageCount] = useState<number | null>(null);
 
   useEffect(() => {
-    api<{ plans: PublicPlan[]; defaultPlan: string }>("/v1/catalog/plans")
+    api<PlanCatalog>("/v1/catalog/plans")
       .then(setPlans)
       .catch(() => setPlans("error"));
     api<{ languages: Language[] }>("/v1/catalog/languages")
@@ -151,7 +153,13 @@ export function PortalPage({ signedIn }: { signedIn: boolean }) {
                     +
                   </span>
                 </summary>
-                <p className="muted pb-5 text-sm">{t(`portal.faq.${q}.a`)}</p>
+                <p className="muted pb-5 text-sm">
+                  {q === "businesses"
+                    ? t("portal.faq.businesses.a", {
+                        count: typeof plans === "object" && plans ? plans.maxBusinessesPerAccount : 3,
+                      })
+                    : t(`portal.faq.${q}.a` as MessageKey)}
+                </p>
               </details>
             ))}
           </div>
@@ -210,13 +218,7 @@ function Section({
   );
 }
 
-function Plans({
-  state,
-  signedIn,
-}: {
-  state: { plans: PublicPlan[]; defaultPlan: string } | null | "error";
-  signedIn: boolean;
-}) {
+function Plans({ state, signedIn }: { state: PlanCatalog | null | "error"; signedIn: boolean }) {
   const { t, language } = useI18n();
   if (state === null) return <p className="muted text-center">{t("common.loading")}</p>;
   if (state === "error" || state.plans.length === 0) {
@@ -278,7 +280,10 @@ function Plans({
           );
         })}
       </ul>
-      <p className="muted text-center text-sm">{t("portal.plans.currency")}</p>
+      <div className="muted flex flex-col items-center gap-1 text-center text-sm">
+        <p>{t("portal.plans.businesses", { count: state.maxBusinessesPerAccount })}</p>
+        <p>{t("portal.plans.currency")}</p>
+      </div>
     </div>
   );
 }
