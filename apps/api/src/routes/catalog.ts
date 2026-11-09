@@ -23,6 +23,7 @@ export async function catalogRoutes(app: FastifyInstance, { platform }: AppConte
     const [rows, policies] = await Promise.all([platform!.plans(), platform!.policies()]);
     return {
       defaultPlan: policies.defaultPlan,
+      maxBusinessesPerAccount: policies.maxBusinessesPerAccount,
       plans: rows
         .filter((p) => p.active)
         .map((p) => ({

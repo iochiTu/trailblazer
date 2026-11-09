@@ -341,6 +341,13 @@ export const en = {
   "portal.cta.title": "Ready to meet your new assistant?",
   "portal.cta.body": "Create your account and have your first answers in a few minutes.",
   "portal.footer.rights": "© {year} Traiblazer",
+  "tenants.limitReached":
+    "You've reached the maximum number of businesses for one account. Contact us if you need more.",
+  "portal.plans.businesses":
+    "{count, plural, one {Each account can own # business.} other {Each account can own up to # businesses, each with its own plan.}}",
+  "portal.faq.businesses.q": "Can I manage more than one business?",
+  "portal.faq.businesses.a":
+    "{count, plural, one {Each account can own # business with its own assistants. Contact us if you need more.} other {Yes. One account can own up to # businesses, each with its own assistants and its own plan. Contact us if you need more.}}",
 } as const;
 
 export type MessageKey = keyof typeof en;

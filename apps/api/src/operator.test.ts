@@ -218,6 +218,7 @@ describe("operator console API", () => {
     expect(JSON.stringify(catalog.json())).toContain("grocery-market");
 
     expect((await op("PATCH", "/v1/operator/policies", { chatIpPerMinute: 0 })).statusCode).toBe(400);
+    expect((await op("PATCH", "/v1/operator/policies", { maxBusinessesPerAccount: 0 })).statusCode).toBe(400);
   });
 
   it("suspending a business takes its assistants offline", async () => {

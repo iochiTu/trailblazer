@@ -48,6 +48,7 @@ export interface Policies {
   conversationMaxQuestions: number;
   chatIpPerMinute: number;
   releasedPackPhase: number;
+  maxBusinessesPerAccount: number;
 }
 
 export interface AuditEntry {

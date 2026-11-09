@@ -1,6 +1,6 @@
 import { auditLogs, memberships, tenants, users, withTenant } from "@traiblazer/db";
 import { createTenantSchema } from "@traiblazer/shared";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
@@ -43,6 +43,20 @@ export async function tenantRoutes(app: FastifyInstance, { db, platform }: AppCo
     const plan = allPlans.find((p) => p.id === policies.defaultPlan && p.active)?.id ?? "trial";
 
     const tenant = await db.transaction(async (tx) => {
+      // One account can own a limited number of businesses (operator policy). The advisory lock
+      // serialises this account's sign-ups so two requests at once can't both pass the count.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`tenant-owner:${user.id}`}))`);
+      const [owned] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(memberships)
+        .where(and(eq(memberships.userId, user.id), eq(memberships.role, "owner")));
+      if ((owned?.count ?? 0) >= policies.maxBusinessesPerAccount) {
+        throw new HttpError(
+          403,
+          "business_limit_reached",
+          `An account can own up to ${policies.maxBusinessesPerAccount} businesses.`,
+        );
+      }
       const [created] = await tx
         .insert(tenants)
         .values({

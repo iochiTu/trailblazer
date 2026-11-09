@@ -91,6 +91,11 @@ export interface PlatformPolicies {
   chatIpPerMinute: number;
   /** Highest industry-pack rollout phase businesses can choose (1 = launch packs). */
   releasedPackPhase: number;
+  /**
+   * Businesses one account can own. Each new business starts with the default plan's free
+   * allowance, so this stops one account from collecting unlimited free quota.
+   */
+  maxBusinessesPerAccount: number;
 }
 
 export const DEFAULT_POLICIES: PlatformPolicies = {
@@ -99,6 +104,7 @@ export const DEFAULT_POLICIES: PlatformPolicies = {
   conversationMaxQuestions: MAX_CONVERSATION_QUESTIONS,
   chatIpPerMinute: 20,
   releasedPackPhase: 1,
+  maxBusinessesPerAccount: 3,
 };
 
 /** Database keys (snake_case) for each policy. */
@@ -108,6 +114,7 @@ export const POLICY_KEYS: Record<keyof PlatformPolicies, string> = {
   conversationMaxQuestions: "conversation_max_questions",
   chatIpPerMinute: "chat_ip_per_minute",
   releasedPackPhase: "released_pack_phase",
+  maxBusinessesPerAccount: "max_businesses_per_account",
 };
 
 export const updatePoliciesSchema = z
@@ -117,6 +124,7 @@ export const updatePoliciesSchema = z
     conversationMaxQuestions: z.number().int().min(2).max(500),
     chatIpPerMinute: z.number().int().min(1).max(600),
     releasedPackPhase: z.number().int().min(1).max(4),
+    maxBusinessesPerAccount: z.number().int().min(1).max(100),
   })
   .partial();
 
