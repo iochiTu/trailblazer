@@ -8,7 +8,7 @@ import type { AppContext } from "../context.js";
 import { conflict, HttpError } from "../lib/errors.js";
 import { requireUser } from "../plugins/auth.js";
 
-export async function authRoutes(app: FastifyInstance, { db, config }: AppContext) {
+export async function authRoutes(app: FastifyInstance, { db, config, limiter }: AppContext) {
   const setSessionCookie = (reply: FastifyReply, token: string, expiresAt: Date) => {
     reply.setCookie(SESSION_COOKIE, token, {
       path: "/",
@@ -53,6 +53,9 @@ export async function authRoutes(app: FastifyInstance, { db, config }: AppContex
 
   app.post("/v1/auth/login", authRateLimit, async (request, reply) => {
     const input = loginSchema.parse(request.body);
+    if (!(await limiter!.hit(`login:${input.email}`, config.LOGIN_ATTEMPTS_PER_ACCOUNT, 15 * 60))) {
+      throw new HttpError(429, "too_many_attempts", "Too many sign-in attempts. Try again in a few minutes.");
+    }
     const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
     const ok = user
       ? await verifyPassword(input.password, user.passwordHash)

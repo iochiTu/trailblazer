@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { SESSION_COOKIE } from "./auth/sessions.js";
 import type { AppContext } from "./context.js";
 import { HttpError } from "./lib/errors.js";
 import { MemoryLimiter } from "./lib/limiter.js";
@@ -34,7 +35,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
             redact: ["req.headers.cookie", 'res.headers["set-cookie"]'],
             ...(ctx.config.NODE_ENV === "development" ? { transport: { target: "pino-pretty" } } : {}),
           },
-    trustProxy: true,
+    trustProxy: ctx.config.TRUST_PROXY,
     bodyLimit: 1024 * 1024,
   });
 
@@ -47,6 +48,24 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
     timeWindow: "1 minute",
     enableDraftSpec: true,
     ...(ctx.redis ? { redis: ctx.redis, nameSpace: "tb:ip:" } : {}),
+  });
+
+  // Cross-site request check (defence in depth on top of SameSite=Lax cookies): a state-changing
+  // request that carries the session cookie, or signs in/up, must come from the admin portal or this
+  // service. Requests without browser origin headers (server-to-server, CLI) are not affected.
+  const trustedOrigins = new Set([
+    new URL(ctx.config.ADMIN_ORIGIN).origin,
+    new URL(ctx.config.PUBLIC_URL).origin,
+  ]);
+  app.addHook("onRequest", async (request) => {
+    if (request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS") return;
+    if (request.url.startsWith("/v1/public/")) return;
+    if (!request.cookies[SESSION_COOKIE] && !request.url.startsWith("/v1/auth/")) return;
+    const origin = request.headers.origin;
+    const crossSite = origin
+      ? !trustedOrigins.has(origin)
+      : request.headers["sec-fetch-site"] === "cross-site";
+    if (crossSite) throw new HttpError(403, "cross_site_request", "Cross-site requests are not allowed");
   });
 
   app.decorateRequest("user", null);

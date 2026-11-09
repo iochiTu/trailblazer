@@ -12,6 +12,8 @@ export interface PlanLimits {
   concurrent: number;
   /** Questions per minute for this business (all visitors together). */
   perMinute: number;
+  /** Photos each assistant can keep in its knowledge base. */
+  knowledgeImages: number;
 }
 
 export const PLANS = {
@@ -20,25 +22,35 @@ export const PLANS = {
     monthlyQuestions: 100,
     concurrent: 3,
     perMinute: 20,
+    knowledgeImages: 20,
   },
-  local: { name: { en: "Local", fr: "Local" }, monthlyQuestions: 1000, concurrent: 5, perMinute: 40 },
+  local: {
+    name: { en: "Local", fr: "Local" },
+    monthlyQuestions: 1000,
+    concurrent: 5,
+    perMinute: 40,
+    knowledgeImages: 50,
+  },
   local_plus: {
     name: { en: "Local Plus", fr: "Local Plus" },
     monthlyQuestions: 3000,
     concurrent: 8,
     perMinute: 60,
+    knowledgeImages: 100,
   },
   professional: {
     name: { en: "Professional", fr: "Professionnel" },
     monthlyQuestions: 5000,
     concurrent: 10,
     perMinute: 90,
+    knowledgeImages: 200,
   },
   business: {
     name: { en: "Business", fr: "Affaires" },
     monthlyQuestions: 20000,
     concurrent: 25,
     perMinute: 200,
+    knowledgeImages: 500,
   },
 } as const satisfies Record<string, PlanLimits>;
 
@@ -114,6 +126,7 @@ const planFields = {
   monthlyQuestions: z.number().int().min(1).max(10_000_000),
   concurrent: z.number().int().min(1).max(1000),
   perMinute: z.number().int().min(1).max(100_000),
+  knowledgeImages: z.number().int().min(0).max(10_000),
   priceMonthlyCents: z.number().int().min(0).max(100_000_000).nullable(),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(10_000),
@@ -125,6 +138,7 @@ export const createPlanSchema = z.object({
   priceMonthlyCents: planFields.priceMonthlyCents.optional(),
   active: planFields.active.optional(),
   sortOrder: planFields.sortOrder.optional(),
+  knowledgeImages: planFields.knowledgeImages.optional(),
 });
 export const updatePlanSchema = z.object(planFields).partial();
 

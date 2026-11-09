@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -11,26 +12,28 @@ import {
   type PublicAppearance,
   type PublicAvatar,
 } from "@traiblazer/appearance";
-import { runChat } from "@traiblazer/core";
+import { type ChatImage, runChat } from "@traiblazer/core";
 import {
   type BotSettings,
   bots,
   businessProfiles,
   conversations,
   messages,
+  type ReplyImage,
   resolveBotKey,
   tenants,
   withTenant,
 } from "@traiblazer/db";
 import { getLanguage } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
-import { publicChatSchema } from "@traiblazer/shared";
+import { MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES, publicChatSchema } from "@traiblazer/shared";
 import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppContext } from "../context.js";
-import { admitQuestion, type RefusalReason } from "../lib/chat-guard.js";
+import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guard.js";
 import { HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
+import { prepareChatImage } from "../lib/images.js";
 import { publicAssetUrl } from "./assets.js";
 
 /** English fallback text; the chat page shows its own translated message for each code. */
@@ -40,6 +43,18 @@ const REFUSAL_MESSAGES: Record<RefusalReason, string> = {
   visitor: "You've reached today's question limit for this assistant.",
   conversation: "This conversation is very long. Please start a new conversation.",
 };
+
+const IMAGE_ERRORS = {
+  type: "Please send a PNG, JPEG or WebP image",
+  size: `Images must be smaller than ${MAX_CHAT_IMAGE_BYTES / 1024 / 1024} MB`,
+} as const;
+
+/** Display name only: no paths or control characters. */
+const cleanFileName = (name: string) =>
+  (name.split(/[\\/]/).pop() ?? "")
+    .replace(/[\p{Cc}<>]/gu, "")
+    .trim()
+    .slice(0, 120) || "image";
 
 const KEY_RE = /^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/;
 
@@ -84,7 +99,8 @@ const UNAVAILABLE_PAGE = `<!doctype html><html lang="en"><head><meta charset="ut
  *   GET  /widget.js                  floating-widget loader for customer websites
  *   GET  /chat-assets/assets/:file   chat page assets
  *   GET  /v1/public/bots/:key        chat configuration (branding, languages, greeting)
- *   POST /v1/public/chat             send a message; answer streams back as server-sent events
+ *   POST /v1/public/chat             send a message (optionally with images); the answer streams
+ *                                    back as server-sent events
  *   GET  /v1/public/conversations/:id?key&visitorId   restore a visitor's conversation
  */
 export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -204,6 +220,11 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
+  const toPublicImage = (image: ReplyImage) => ({
+    url: publicAssetUrl(config.PUBLIC_URL, image.assetId),
+    alt: image.title,
+  });
+
   const assertSameOrigin = (origin: string | undefined) => {
     // The chat page and this API share an origin; browsers always send Origin on POST.
     if (origin && origin !== publicOrigin)
@@ -220,12 +241,47 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           timeWindow: "1 minute",
         },
       },
+      // Room for the allowed images as base64 plus the message.
+      bodyLimit: Math.ceil((MAX_CHAT_IMAGES * MAX_CHAT_IMAGE_BYTES * 4) / 3) + 64 * 1024,
     },
     async (request, reply: FastifyReply) => {
       assertSameOrigin(request.headers.origin);
       const input = publicChatSchema.parse(request.body);
+
+      // Images are checked by their content (never the name), and their metadata is removed.
+      const images: ChatImage[] = [];
+      for (const image of input.images) {
+        const prepared = prepareChatImage(image.data, MAX_CHAT_IMAGE_BYTES);
+        if (!prepared.ok) {
+          return reply
+            .code(400)
+            .send({ error: `image_${prepared.reason}`, message: IMAGE_ERRORS[prepared.reason] });
+        }
+        images.push({
+          name: cleanFileName(image.name),
+          contentType: prepared.contentType,
+          dataBase64: prepared.bytes.toString("base64"),
+          sizeBytes: prepared.bytes.length,
+          sha256: createHash("sha256").update(prepared.bytes).digest("hex"),
+        });
+      }
+
       const found = await loadBot(input.publicKey);
       if (!found || found.bot.status === "paused") throw notFound("Assistant");
+
+      if (
+        images.length &&
+        !(await admitImages(ctx.limiter!, {
+          tenantId: found.tenantId,
+          visitorId: input.visitorId,
+          count: images.length,
+        }))
+      ) {
+        return reply
+          .code(429)
+          .header("retry-after", "3600")
+          .send({ error: "images", message: "Too many images. Please wait a while before sending more." });
+      }
 
       // Abuse, noisy-neighbour and monthly limits, before any AI cost is incurred.
       const admission = await admitQuestion(
@@ -276,12 +332,15 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             visitorId: input.visitorId,
             channel: input.channel,
             message: input.message,
+            images,
             pageUrl: input.pageUrl ?? null,
             signal: controller.signal,
           },
         )) {
           if (controller.signal.aborted) break;
-          res.write(`data: ${JSON.stringify(event)}\n\n`);
+          // Business photos go to the chat as public URLs with the owner's title as alt text.
+          const out = event.type === "image" ? { type: "image", image: toPublicImage(event.image) } : event;
+          res.write(`data: ${JSON.stringify(out)}\n\n`);
         }
       } catch (error) {
         request.log.error(error, "chat stream failed");
@@ -319,14 +378,21 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           .limit(1);
         if (!conversation) return null;
         return tx
-          .select({ role: messages.role, content: messages.content, citations: messages.citations })
+          .select({
+            role: messages.role,
+            content: messages.content,
+            citations: messages.citations,
+            // Names only: the visitor's transcript shows a file chip, never the image itself.
+            attachments: messages.attachments,
+            images: messages.images,
+          })
           .from(messages)
           .where(eq(messages.conversationId, id))
           .orderBy(asc(messages.createdAt))
           .limit(100);
       });
       if (!rows) throw notFound("Conversation");
-      return { messages: rows };
+      return { messages: rows.map((m) => ({ ...m, images: m.images.map(toPublicImage) })) };
     },
   );
 }

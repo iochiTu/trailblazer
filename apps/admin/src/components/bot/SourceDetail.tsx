@@ -70,7 +70,7 @@ export function SourceDetail({
 
   if (source.type === "website") {
     return (
-      <div className="flex flex-col gap-2 rounded-lg bg-[var(--bg)] p-3">
+      <div className="flex flex-col gap-2 panel p-4">
         <span className="text-sm font-medium">{t("knowledge.pagesRead")}</span>
         {pages.length === 0 ? (
           <span className="muted text-sm">{t("knowledge.noPages")}</span>
@@ -103,7 +103,7 @@ export function SourceDetail({
   }
 
   return (
-    <form className="flex flex-col gap-2 rounded-lg bg-[var(--bg)] p-3" onSubmit={save}>
+    <form className="flex flex-col gap-2 panel p-4" onSubmit={save}>
       <label className="flex flex-col gap-1 text-sm">
         {t("knowledge.textTitle")}
         <input

@@ -19,13 +19,15 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h3 className="font-medium">{title}</h3>
+        <h3 className="text-lg font-semibold">{title}</h3>
         {hint && <p className="muted text-sm">{hint}</p>}
       </div>
       {children}
     </section>
   );
 }
+
+type LibraryFilter = "all" | "industry" | "common";
 
 const newId = () => `custom-${crypto.randomUUID().slice(0, 8)}`;
 
@@ -64,14 +66,23 @@ export function WorkflowsTab({
 }) {
   const { t } = useI18n();
   const template = detail.defaults;
+  const industryName = detail.pack?.name ?? detail.bot.pack;
   const [guidelines, setGuidelines] = useState(detail.behavior.guidelines);
   const [drafts, setDrafts] = useState<Draft[]>(() => detail.behavior.workflows.map(toDraft));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
+  const [query, setQuery] = useState("");
+
   const usedTemplates = new Set(drafts.map((d) => d.template).filter(Boolean));
-  const suggestions = template.workflows.filter((w) => !usedTemplates.has(w.template));
+  const needle = query.trim().toLowerCase();
+  const library = template.library.filter(
+    (w) =>
+      (libraryFilter === "all" || w.group === libraryFilter) &&
+      (!needle || `${w.name} ${w.when}`.toLowerCase().includes(needle)),
+  );
   const atLimit = drafts.length >= LIMITS.maxWorkflows;
 
   const update = (index: number, patch: Partial<Draft>) =>
@@ -92,11 +103,12 @@ export function WorkflowsTab({
     ]);
 
   const addSuggested = (templateKey: string) => {
-    const w = template.workflows.find((x) => x.template === templateKey);
+    const w = template.library.find((x) => x.template === templateKey);
     if (!w) return;
     // Keep ids unique even if the owner already wrote a workflow with the template's id.
+    const { group: _group, ...workflow } = w;
     const id = drafts.some((d) => d.id === w.id) ? newId() : w.id;
-    setDrafts((list) => [...list, toDraft({ ...w, id })]);
+    setDrafts((list) => [...list, toDraft({ ...workflow, id })]);
   };
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -123,7 +135,7 @@ export function WorkflowsTab({
     <form className="flex max-w-3xl flex-col gap-8" onSubmit={onSubmit}>
       <Section
         title={t("workflows.guidelines")}
-        hint={t("workflows.guidelinesHint", { template: detail.pack?.name ?? detail.bot.pack })}
+        hint={t("workflows.guidelinesHint", { template: industryName })}
       >
         <textarea
           className="input"
@@ -153,7 +165,7 @@ export function WorkflowsTab({
           {drafts.map((d, i) => (
             <li
               key={d.id}
-              className={`flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4 ${d.enabled ? "" : "opacity-60"}`}
+              className={`panel flex flex-col gap-3 p-4 sm:p-5 ${d.enabled ? "" : "opacity-60"}`}
             >
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-1.5 text-sm">
@@ -250,26 +262,76 @@ export function WorkflowsTab({
           <button type="button" className="btn btn-ghost" onClick={addBlank} disabled={atLimit}>
             + {t("workflows.add")}
           </button>
-          {suggestions.length > 0 && (
-            <select
-              className="input max-w-xs"
-              value=""
-              disabled={atLimit}
-              aria-label={t("workflows.addSuggested")}
-              onChange={(e) => addSuggested(e.target.value)}
-            >
-              <option value="">{t("workflows.addSuggested")}</option>
-              {suggestions.map((w) => (
-                <option key={w.template} value={w.template}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          )}
           {atLimit && (
             <span className="muted text-xs">{t("workflows.limit", { max: LIMITS.maxWorkflows })}</span>
           )}
         </div>
+      </Section>
+
+      <Section title={t("workflows.library")} hint={t("workflows.libraryHint")}>
+        <div className="flex flex-wrap items-center gap-2">
+          {(["all", "industry", "common"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              className="chip"
+              data-selected={libraryFilter === f}
+              aria-pressed={libraryFilter === f}
+              onClick={() => setLibraryFilter(f)}
+            >
+              {f === "all"
+                ? t("workflows.filter.all")
+                : f === "industry"
+                  ? t("workflows.filter.industry", { template: industryName })
+                  : t("workflows.filter.common")}
+            </button>
+          ))}
+          <input
+            className="input ml-auto max-w-xs"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("workflows.search")}
+            aria-label={t("workflows.search")}
+          />
+        </div>
+
+        {library.length === 0 ? (
+          <p className="muted text-sm">{t("workflows.libraryEmpty")}</p>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {library.map((w) => {
+              const added = usedTemplates.has(w.template);
+              return (
+                <li key={w.id} className="panel flex flex-col gap-2 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="font-medium">{w.name}</h4>
+                    <button
+                      type="button"
+                      className={added ? "btn btn-ghost shrink-0" : "btn shrink-0"}
+                      disabled={added || atLimit}
+                      onClick={() => addSuggested(w.template!)}
+                    >
+                      {added ? `✓ ${t("workflows.libraryAdded")}` : `+ ${t("workflows.libraryAdd")}`}
+                    </button>
+                  </div>
+                  <p className="muted text-sm">{w.when}</p>
+                  <details className="text-sm">
+                    <summary className="muted cursor-pointer text-xs">
+                      {t("workflows.librarySteps", { count: w.steps.length })}
+                    </summary>
+                    <ol className="mt-2 list-decimal space-y-1 pl-5">
+                      {w.steps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ol>
+                    {w.finish && <p className="muted mt-2 text-xs">{w.finish}</p>}
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Section>
 
       <div className="flex items-center gap-3">

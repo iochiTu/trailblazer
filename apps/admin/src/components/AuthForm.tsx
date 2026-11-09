@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { BrandMark } from "./BrandMark";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const MIN_PASSWORD = 10;
@@ -34,7 +35,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       router.push("/dashboard");
     } catch (err) {
       setError(
-        err instanceof ApiError && err.status === 401 ? t("auth.invalidCredentials") : t("common.error"),
+        err instanceof ApiError && err.status === 401
+          ? t("auth.invalidCredentials")
+          : err instanceof ApiError && err.status === 429
+            ? t("auth.tooManyAttempts")
+            : t("common.error"),
       );
     } finally {
       setBusy(false);
@@ -43,12 +48,15 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t("app.name")}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="flex items-center gap-3 text-2xl font-semibold">
+          <BrandMark size={40} />
+          {t("app.name")}
+        </h1>
         <LanguageSwitcher />
       </div>
-      <form className="card flex flex-col gap-4 p-6" onSubmit={onSubmit}>
-        <h2 className="text-lg font-medium">{mode === "login" ? t("auth.signIn") : t("auth.signUp")}</h2>
+      <form className="card flex flex-col gap-5 p-6 sm:p-8" onSubmit={onSubmit}>
+        <h2 className="text-xl font-semibold">{mode === "login" ? t("auth.signIn") : t("auth.signUp")}</h2>
         {mode === "signup" && (
           <label className="flex flex-col gap-1 text-sm">
             {t("auth.name")}
@@ -78,13 +86,16 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             {error}
           </p>
         )}
-        <button className="btn justify-center" type="submit" disabled={busy}>
+        <button className="btn mt-1 justify-center" type="submit" disabled={busy}>
           {busy ? t("common.loading") : mode === "login" ? t("auth.signIn") : t("auth.signUp")}
         </button>
       </form>
       <p className="muted text-center text-sm">
         {mode === "login" ? t("auth.noAccount") : t("auth.haveAccount")}{" "}
-        <Link className="underline" href={mode === "login" ? "/signup" : "/login"}>
+        <Link
+          className="font-medium text-[var(--accent)] underline-offset-4 hover:underline"
+          href={mode === "login" ? "/signup" : "/login"}
+        >
           {mode === "login" ? t("auth.signUp") : t("auth.signIn")}
         </Link>
       </p>

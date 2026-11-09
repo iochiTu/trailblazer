@@ -111,6 +111,52 @@ describe("auth", () => {
     expect(good.statusCode).toBe(200);
   });
 
+  it("blocks cross-site state changes but allows the admin portal and non-browser clients", async () => {
+    const { cookie } = await signup("csrf");
+    const create = (headers: Record<string, string>) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/tenants",
+        headers: { cookie, ...headers },
+        payload: { name: "X" },
+      });
+
+    const evil = await create({ origin: "https://evil.example" });
+    expect(evil.statusCode).toBe(403);
+    expect(evil.json().error).toBe("cross_site_request");
+    expect((await create({ "sec-fetch-site": "cross-site" })).statusCode).toBe(403);
+
+    for (const headers of [{ origin: "http://localhost:3000" }, {}]) {
+      const ok = await create(headers);
+      expect(ok.statusCode).toBe(201);
+      createdTenantIds.push(ok.json().tenant.id);
+    }
+
+    // Login CSRF: a foreign page can't sign the visitor into another account.
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      headers: { origin: "https://evil.example" },
+      payload: { email: "nobody@test.local", password: "whatever-123" },
+    });
+    expect(login.statusCode).toBe(403);
+  });
+
+  it("limits sign-in attempts per account across IPs", async () => {
+    const { email } = await signup("throttle");
+    const attempt = (i: number) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/auth/login",
+        remoteAddress: `127.0.0.${(i % 200) + 2}`,
+        payload: { email, password: "wrong-password!" },
+      });
+    for (let i = 0; i < 20; i++) expect((await attempt(i)).statusCode).toBe(401);
+    const blocked = await attempt(20);
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().error).toBe("too_many_attempts");
+  });
+
   it("rejects duplicate emails and weak input", async () => {
     const { email } = await signup("carol");
     const dup = await app.inject({
@@ -231,6 +277,9 @@ describe("tenants and bots", () => {
     expect(detail.behavior).toEqual({ guidelines: "Friendly and short.", workflows: [custom] });
     // The template stays available to restore or add workflows back.
     expect(detail.defaults.workflows.map((w: { id: string }) => w.id)).toContain("room-booking");
+    // The library offers more: the industry's other workflows and ones for any business.
+    const library = detail.defaults.library.map((w: { id: string }) => w.id);
+    expect(library).toEqual(expect.arrayContaining(["room-booking", "pets", "feedback"]));
 
     const bad = async (workflows: unknown) =>
       (await app.inject({ method: "PATCH", url, headers: { cookie }, payload: { workflows } })).statusCode;
@@ -316,5 +365,25 @@ describe("catalog", () => {
     expect(packs.json().available.map((p: { slug: string }) => p.slug)).not.toContain("clinic");
     const langs = await app.inject({ method: "GET", url: "/v1/catalog/languages" });
     expect(langs.json().languages.find((l: { code: string }) => l.code === "ar").dir).toBe("rtl");
+  });
+
+  it("lists active plans publicly with display fields only", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/catalog/plans" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.plans.length).toBeGreaterThan(0);
+    expect(body.plans.map((p: { id: string }) => p.id)).toContain(body.defaultPlan);
+    expect(Object.keys(body.plans[0]).sort()).toEqual(
+      [
+        "concurrent",
+        "id",
+        "knowledgeImages",
+        "monthlyQuestions",
+        "nameEn",
+        "nameFr",
+        "perMinute",
+        "priceMonthlyCents",
+      ].sort(),
+    );
   });
 });

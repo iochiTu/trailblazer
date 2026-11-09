@@ -76,7 +76,14 @@ export interface BotDetail {
   /** What the assistant uses now: its own guidelines and workflows, or its template's. */
   behavior: { guidelines: string; workflows: Workflow[] };
   /** The industry template the assistant started from. */
-  defaults: { quickReplies: Record<string, string[]>; guidelines: string; workflows: Workflow[] };
+  defaults: {
+    quickReplies: Record<string, string[]>;
+    guidelines: string;
+    /** Starter workflows a new assistant gets. */
+    workflows: Workflow[];
+    /** Every workflow template the business can add: for its industry, then for any business. */
+    library: (Workflow & { group: "industry" | "common" })[];
+  };
   chatUrl: string;
 }
 
@@ -106,10 +113,32 @@ export interface Conversation {
   lastMessageAt: string;
 }
 
+/** An image a visitor sent; the data is fetched separately (see ConversationsTab). */
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/** A business photo in the knowledge base (public; the assistant can show it to visitors). */
+export interface KnowledgePhoto {
+  id: string;
+  assetId: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+  url: string;
+  createdAt: string;
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachments?: MessageAttachment[];
+  /** Business photos the assistant showed with this reply. */
+  images?: { id: string; title: string; url: string }[];
   createdAt: string;
   model: string | null;
   costMicros: number | null;
@@ -127,4 +156,16 @@ export interface Language {
   nativeName: string;
   tier: 1 | 2 | 3 | "owner";
   dir: "ltr" | "rtl";
+}
+
+/** A subscription plan as shown on the public portal page. Price is monthly, in CAD cents. */
+export interface PublicPlan {
+  id: string;
+  nameEn: string;
+  nameFr: string;
+  monthlyQuestions: number;
+  perMinute: number;
+  concurrent: number;
+  knowledgeImages: number;
+  priceMonthlyCents: number | null;
 }

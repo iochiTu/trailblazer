@@ -25,15 +25,29 @@ export interface Citation {
   url: string | null;
 }
 
+/** An image the visitor sent; the transcript shows only its name. */
+export interface AttachmentName {
+  name: string;
+}
+
+/** A business photo shown with an assistant reply. */
+export interface ReplyPhoto {
+  url: string;
+  alt: string;
+}
+
 export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
   citations: Citation[];
+  attachments?: AttachmentName[];
+  images?: ReplyPhoto[];
 }
 
 export type StreamEvent =
   | { type: "start"; conversationId: string }
   | { type: "text"; text: string }
+  | { type: "image"; image: ReplyPhoto }
   | { type: "done"; messageId: string; citations: Citation[] }
   | { type: "error"; code: string; message: string };
 
@@ -60,6 +74,7 @@ export async function* streamChat(body: {
   conversationId: string | null;
   visitorId: string;
   message: string;
+  images: { name: string; data: string }[];
   channel: string;
   pageUrl: string | null;
 }): AsyncGenerator<StreamEvent> {
@@ -70,7 +85,16 @@ export async function* streamChat(body: {
   });
   if (!res.ok || !res.body) {
     const data = await res.json().catch(() => ({}));
-    const known = ["quota", "busy", "visitor", "conversation", "not_found"];
+    const known = [
+      "quota",
+      "busy",
+      "visitor",
+      "conversation",
+      "not_found",
+      "images",
+      "image_type",
+      "image_size",
+    ];
     // Any other 429 is the per-IP flood protection: the visitor is typing too fast.
     const code = known.includes(data.error) ? data.error : res.status === 429 ? "slowDown" : "failed";
     yield { type: "error", code, message: data.message ?? "Request failed" };

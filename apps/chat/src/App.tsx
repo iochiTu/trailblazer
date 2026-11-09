@@ -2,7 +2,16 @@ import { paletteFor } from "@traiblazer/appearance";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Avatar } from "./Avatar";
-import { type Citation, fetchConfig, fetchHistory, type PublicBotConfig, streamChat } from "./api";
+import {
+  type AttachmentName,
+  type Citation,
+  fetchConfig,
+  fetchHistory,
+  type PublicBotConfig,
+  type ReplyPhoto,
+  streamChat,
+} from "./api";
+import { ImageError, imageFiles, MAX_IMAGES, type PendingImage, prepareImage } from "./images";
 import { Markdown } from "./markdown";
 import { conversationStore, languageStore, visitorId } from "./storage";
 import { ui } from "./strings";
@@ -12,6 +21,10 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   citations: Citation[];
+  /** Images the visitor sent: shown by name only. */
+  attachments?: AttachmentName[];
+  /** Business photos the assistant showed. */
+  images?: ReplyPhoto[];
   pending?: boolean;
   error?: boolean;
   /** A limit or "busy" message (not an error). */
@@ -40,6 +53,12 @@ function refusalText(code: string, lang: string, config: PublicBotConfig): strin
       return ui(lang, "busy");
     case "slowDown":
       return ui(lang, "slowDown");
+    case "images":
+      return ui(lang, "imagesLimit");
+    case "image_type":
+      return ui(lang, "imageUnsupported");
+    case "image_size":
+      return ui(lang, "imageTooBig");
     default:
       return null;
   }
@@ -78,6 +97,12 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [images, setImages] = useState<PendingImage[]>([]);
+  /** Problem with a picked image, shown above the composer. */
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const fileRef = useRef<HTMLInputElement>(null);
   const conversationId = useRef<string | null>(conversationStore.get(publicKey));
   const visitor = useRef(visitorId(publicKey));
   const logRef = useRef<HTMLDivElement>(null);
@@ -97,6 +122,8 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
                 role: m.role,
                 content: m.content,
                 citations: m.citations,
+                attachments: m.attachments?.map((a) => ({ name: a.name })),
+                images: m.images,
               })),
             );
           } else {
@@ -121,15 +148,79 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
     if (config) document.title = config.businessName;
   }, [lang, dir, config]);
 
+  async function addImages(files: File[]) {
+    if (!files.length) return;
+    setImageError(null);
+    const room = MAX_IMAGES - images.length;
+    if (files.length > room) setImageError(ui(lang, "imageTooMany", { max: String(MAX_IMAGES) }));
+    for (const file of files.slice(0, Math.max(0, room))) {
+      try {
+        const image = await prepareImage(file);
+        setImages((list) => (list.length < MAX_IMAGES ? [...list, image] : list));
+      } catch (error) {
+        setImageError(ui(lang, error instanceof ImageError ? error.code : "imageUnsupported"));
+      }
+    }
+    inputRef.current?.focus();
+  }
+
+  // Drag and drop anywhere on the chat. Counting enter/leave pairs keeps the overlay steady while
+  // the pointer crosses child elements.
+  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  const dragHandlers = {
+    onDragEnter: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth.current++;
+      setDragging(true);
+    },
+    onDragOver: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    },
+    onDragLeave: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (!dragDepth.current) setDragging(false);
+    },
+    onDrop: (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      const usable = imageFiles(event.dataTransfer?.files);
+      if (files.length && !usable.length) setImageError(ui(lang, "imageUnsupported"));
+      void addImages(usable);
+    },
+  };
+
+  function onPaste(event: ClipboardEvent) {
+    const files = imageFiles(event.clipboardData?.files);
+    if (!files.length) return;
+    event.preventDefault();
+    void addImages(files);
+  }
+
   async function send(text: string) {
     const message = text.trim();
-    if (!message || busy || !config) return;
+    const attached = images;
+    if ((!message && !attached.length) || busy || !config) return;
     setInput("");
+    setImages([]);
+    setImageError(null);
     setBusy(true);
     const assistantId = nextId();
     setMessages((list) => [
       ...list,
-      { id: nextId(), role: "user", content: message, citations: [] },
+      {
+        id: nextId(),
+        role: "user",
+        content: message,
+        citations: [],
+        attachments: attached.map((image) => ({ name: image.name })),
+      },
       { id: assistantId, role: "assistant", content: "", citations: [], pending: true },
     ]);
     const update = (fn: (m: Message) => Message) =>
@@ -141,6 +232,7 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
         conversationId: conversationId.current,
         visitorId: visitor.current,
         message,
+        images: attached.map(({ name, data }) => ({ name, data })),
         channel: preview ? "playground" : mode,
         pageUrl,
       })) {
@@ -149,6 +241,8 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
           conversationStore.set(publicKey, event.conversationId);
         } else if (event.type === "text") {
           update((m) => ({ ...m, content: m.content + event.text }));
+        } else if (event.type === "image") {
+          update((m) => ({ ...m, images: [...(m.images ?? []), event.image] }));
         } else if (event.type === "done") {
           update((m) => ({ ...m, pending: false, citations: event.citations }));
         } else {
@@ -176,6 +270,8 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
     conversationId.current = null;
     conversationStore.set(publicKey, null);
     setMessages([]);
+    setImages([]);
+    setImageError(null);
     inputRef.current?.focus();
   }
 
@@ -237,7 +333,13 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
         "--tb-on-brand": palette.onBrand,
         "--tb-accent": palette.accent,
       }}
+      {...dragHandlers}
     >
+      {dragging && (
+        <div class="tb-drop" aria-hidden="true">
+          <span>{ui(lang, "dropHere")}</span>
+        </div>
+      )}
       <header class="tb-header">
         <div class="tb-title">
           <Avatar avatar={appearance.avatar} size={appearance.theme === "bold" ? 52 : 36} />
@@ -296,7 +398,12 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
           if (m.role === "user") {
             return (
               <div key={m.id} class={className} dir="auto">
-                <p>{m.content}</p>
+                {m.attachments?.map((a, i) => (
+                  <span key={i} class="tb-file" title={a.name}>
+                    <span aria-hidden="true">📎</span> <bdi>{a.name}</bdi>
+                  </span>
+                ))}
+                {m.content && <p>{m.content}</p>}
               </div>
             );
           }
@@ -312,6 +419,15 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
                   <i />
                   <i />
                 </span>
+              )}
+              {m.images && m.images.length > 0 && (
+                <div class="tb-photos">
+                  {m.images.map((photo) => (
+                    <a key={photo.url} href={photo.url} target="_blank" rel="noopener noreferrer">
+                      <img src={photo.url} alt={photo.alt} loading="lazy" />
+                    </a>
+                  ))}
+                </div>
               )}
               {!m.pending && m.citations.length > 0 && (
                 <div class="tb-sources">
@@ -339,6 +455,28 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
         )}
       </div>
 
+      {(images.length > 0 || imageError) && (
+        <div class="tb-attachments">
+          {imageError && (
+            <p class="tb-attach-error" role="alert">
+              {imageError}
+            </p>
+          )}
+          {images.map((image) => (
+            <span key={image.id} class="tb-file tb-file-pending" title={image.name}>
+              <span aria-hidden="true">📎</span> <bdi>{image.name}</bdi>
+              <button
+                type="button"
+                class="tb-file-remove"
+                aria-label={ui(lang, "removeImage", { name: image.name })}
+                onClick={() => setImages((list) => list.filter((i) => i.id !== image.id))}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <form
         class="tb-composer"
         onSubmit={(e) => {
@@ -346,6 +484,37 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
           void send(input);
         }}
       >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const target = e.target as HTMLInputElement;
+            void addImages(Array.from(target.files ?? []));
+            target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          class="tb-attach"
+          aria-label={ui(lang, "attach")}
+          title={ui(lang, "attach")}
+          disabled={busy || images.length >= MAX_IMAGES}
+          onClick={() => fileRef.current?.click()}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"
+            />
+          </svg>
+        </button>
         <textarea
           ref={inputRef}
           rows={1}
@@ -356,8 +525,14 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
           aria-label={ui(lang, "placeholder")}
           onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
-        <button type="submit" class="tb-send" disabled={busy || !input.trim()} aria-label={ui(lang, "send")}>
+        <button
+          type="submit"
+          class="tb-send"
+          disabled={busy || (!input.trim() && !images.length)}
+          aria-label={ui(lang, "send")}
+        >
           {dir === "rtl" ? "←" : "→"}
         </button>
       </form>

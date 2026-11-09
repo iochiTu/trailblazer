@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BrandMark } from "@/components/BrandMark";
 import { ActivityTab } from "@/components/operator/ActivityTab";
 import { BusinessesTab } from "@/components/operator/BusinessesTab";
 import { OverviewTab } from "@/components/operator/OverviewTab";
@@ -72,17 +73,16 @@ export default function OperatorPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6" lang="en">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:py-10" lang="en">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="flex items-center gap-2 text-xl font-semibold">
+          <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold">
+            <BrandMark />
             Operator console
-            <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-medium">
-              Staff only
-            </span>
+            <span className="badge badge-accent">Staff only</span>
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="muted text-sm">Signed in as {me?.user.email}</span>
           <button className="btn btn-ghost" type="button" onClick={signOut}>
             Sign out
@@ -90,14 +90,14 @@ export default function OperatorPage() {
         </div>
       </header>
 
-      <div role="tablist" className="flex flex-wrap gap-1 border-b border-[var(--border)]">
+      <div role="tablist" className="tabs">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             role="tab"
             type="button"
             aria-selected={tab === id}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === id ? "border-[var(--accent)] font-medium" : "muted border-transparent"}`}
+            className="tab"
             onClick={() => setTab(id)}
           >
             {label}

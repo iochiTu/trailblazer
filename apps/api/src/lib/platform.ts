@@ -63,6 +63,7 @@ export class PlatformConfig {
         monthlyQuestions: row.monthlyQuestions,
         concurrent: row.concurrent,
         perMinute: row.perMinute,
+        knowledgeImages: row.knowledgeImages,
       };
     }
     return { id: "trial", ...PLANS.trial };

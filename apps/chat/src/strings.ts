@@ -22,6 +22,13 @@ const strings = {
     slowDown: "You're sending messages very quickly. Please wait a minute, then try again.",
     phone: "Phone",
     email: "Email",
+    attach: "Attach an image",
+    dropHere: "Drop an image to send it",
+    removeImage: "Remove {name}",
+    imageUnsupported: "That file can't be sent. Please choose a photo or a PNG, JPEG or WebP image.",
+    imageTooBig: "That image is too large to send. Please choose a smaller one.",
+    imageTooMany: "You can send up to {max} images at a time.",
+    imagesLimit: "You've sent a lot of images. Please wait a while before sending more.",
   },
   fr: {
     placeholder: "Écrivez votre message…",
@@ -47,6 +54,14 @@ const strings = {
     slowDown: "Vous envoyez des messages très rapidement. Veuillez attendre une minute, puis réessayer.",
     phone: "Téléphone",
     email: "Courriel",
+    attach: "Joindre une image",
+    dropHere: "Déposez une image pour l'envoyer",
+    removeImage: "Retirer {name}",
+    imageUnsupported:
+      "Ce fichier ne peut pas être envoyé. Veuillez choisir une photo ou une image PNG, JPEG ou WebP.",
+    imageTooBig: "Cette image est trop volumineuse. Veuillez en choisir une plus petite.",
+    imageTooMany: "Vous pouvez envoyer jusqu'à {max} images à la fois.",
+    imagesLimit: "Vous avez envoyé beaucoup d'images. Veuillez attendre un peu avant d'en envoyer d'autres.",
   },
 } as const;
 

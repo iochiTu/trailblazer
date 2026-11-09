@@ -13,6 +13,20 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   /** Max sign-up/sign-in attempts per IP per minute. */
   AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
+  /**
+   * Max sign-in attempts for one account per 15 minutes, from any IP (slows down password guessing
+   * spread over many addresses).
+   */
+  LOGIN_ATTEMPTS_PER_ACCOUNT: z.coerce.number().int().positive().default(20),
+  /**
+   * Which proxies may set X-Forwarded-For (client IP for rate limits and logs): "true" (any, only
+   * when the API is unreachable except through your proxy) or a comma-separated list
+   * of addresses, CIDR ranges and the names loopback, linklocal, uniquelocal.
+   */
+  TRUST_PROXY: z
+    .string()
+    .default("loopback,uniquelocal")
+    .transform((v): boolean | string => (v === "true" ? true : v === "false" ? false : v)),
   LOG_LEVEL: z.string().default("info"),
   /** Public origin of this service: chat page links, widget script and same-origin checks. */
   PUBLIC_URL: z.url().default("http://localhost:4000"),

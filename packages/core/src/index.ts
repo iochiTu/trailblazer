@@ -1,7 +1,8 @@
 export * from "./chat/engine.js";
 export { guessLanguage } from "./chat/language.js";
+export { PhotoMarkerFilter } from "./chat/photo-markers.js";
 export { buildSystemBlocks, formatHours, PLATFORM_RULES } from "./chat/prompt.js";
-export { type Passage, retrievePassages } from "./chat/retrieval.js";
+export { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./chat/retrieval.js";
 export * from "./jobs.js";
 export { crawlSite } from "./knowledge/crawl.js";
 export { extractPage } from "./knowledge/extract.js";

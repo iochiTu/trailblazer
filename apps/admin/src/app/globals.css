@@ -1,17 +1,43 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens (Material 3 Expressive–inspired).
+ * Surfaces are layered tonally: --bg (page) < --surface (cards) < --surface-2 (filled inputs,
+ * tonal buttons, nested panels) < --surface-3 (hover). --border is a soft outline used only where a
+ * line carries meaning (dividers, table rows); cards and inputs separate by tone, not by stroke.
+ */
 :root {
-  --bg: #f7f7f5;
+  color-scheme: light;
+  --bg: #f3f5fb;
   --surface: #ffffff;
-  --text: #1c1c1a;
-  --muted: #6b6b66;
-  --border: #e3e3de;
-  --accent: #1f6f5c;
+  --surface-2: #eef1f8;
+  --surface-3: #e4e9f4;
+  --text: #1b1c22;
+  --muted: #5b5f6e;
+  --border: #e1e5ef;
+  --accent: #3b5bdb;
   --accent-text: #ffffff;
-  --danger: #b42318;
+  --accent-soft: #e3e9ff;
+  --accent-soft-text: #1f3a9e;
+  --danger: #b3261e;
+  --ring: rgb(91 99 245 / 0.35);
+  --gradient: linear-gradient(120deg, #2f62e6 0%, #5b4bd6 55%, #8e44ad 100%);
+  --on-gradient: #ffffff;
+  --gradient-soft: linear-gradient(
+    120deg,
+    rgb(66 133 244 / 0.12),
+    rgb(108 92 231 / 0.12),
+    rgb(176 106 179 / 0.1)
+  );
+  --shadow-1: 0 1px 2px rgb(23 32 68 / 0.04), 0 1px 3px rgb(23 32 68 / 0.05);
+  --shadow-2: 0 2px 6px rgb(23 32 68 / 0.06), 0 8px 24px rgb(23 32 68 / 0.07);
+  --radius-card: 28px;
+  --radius-field: 16px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 200ms;
   /* Charts: series color validated for this surface (dataviz validator), hairline grid. */
   --chart: #1baf7a;
-  --grid: #ececea;
+  --grid: #e9ecf3;
   /* Status (fixed, never reused as a series color; always with icon + label). */
   --status-good: #0ca30c;
   --status-warning: #fab219;
@@ -20,72 +46,524 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141413;
-    --surface: #1d1d1b;
-    --text: #ededea;
-    --muted: #a3a39d;
-    --border: #2e2e2b;
-    --accent: #4fb39a;
-    --accent-text: #0d1f1a;
-    --danger: #f97066;
+    color-scheme: dark;
+    --bg: #111318;
+    --surface: #1a1c22;
+    --surface-2: #23262e;
+    --surface-3: #2d313b;
+    --text: #e6e7ee;
+    --muted: #a5a9b8;
+    --border: #2c303a;
+    --accent: #a8b9ff;
+    --accent-text: #0e1a52;
+    --accent-soft: #2b3566;
+    --accent-soft-text: #dbe2ff;
+    --danger: #f2b8b5;
+    --ring: rgb(168 185 255 / 0.4);
+    --gradient: linear-gradient(120deg, #8ab4f8 0%, #b1a6f8 55%, #d9b0f0 100%);
+    --on-gradient: #12143a;
+    --gradient-soft: linear-gradient(
+      120deg,
+      rgb(90 149 245 / 0.16),
+      rgb(139 124 246 / 0.16),
+      rgb(197 138 208 / 0.12)
+    );
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-2: 0 4px 16px rgb(0 0 0 / 0.35);
     --chart: #199e70;
-    --grid: #2a2a28;
+    --grid: #2a2d35;
   }
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family:
-    system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", "Noto Sans Devanagari",
-    "Noto Sans Gurmukhi", "Noto Sans SC", "Noto Sans TC", sans-serif;
+/* Component classes live in the components layer so Tailwind utilities on an element can override them. */
+@layer components {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(1200px 480px at 10% -10%, rgb(108 92 231 / 0.07), transparent 60%),
+      radial-gradient(900px 420px at 100% -5%, rgb(66 133 244 / 0.07), transparent 60%);
+    background-repeat: no-repeat;
+    color: var(--text);
+    font-family:
+      var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic",
+      "Noto Sans Devanagari", "Noto Sans Gurmukhi", "Noto Sans SC", "Noto Sans TC", sans-serif;
+    line-height: 1.5;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--accent-soft-text);
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+  }
+
+  h1 {
+    font-weight: 600;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"] {
+    accent-color: var(--accent);
+  }
+
+  a,
+  button,
+  [role="tab"],
+  summary {
+    transition:
+      background-color var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease),
+      border-color var(--dur) var(--ease),
+      transform var(--dur) var(--ease),
+      opacity var(--dur) var(--ease);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* ---------- Surfaces ---------- */
+
+  .card {
+    background: var(--surface);
+    border: 1px solid transparent;
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* A nested, tonal panel inside a card (replaces bordered boxes). */
+  .panel {
+    background: var(--surface-2);
+    border-radius: 20px;
+  }
+
+  /* ---------- Form fields ---------- */
+
+  .input {
+    width: 100%;
+    background-color: var(--field-bg, var(--surface-2));
+    color: var(--text);
+    border: 1px solid transparent;
+    border-radius: var(--radius-field);
+    padding: 0.625rem 0.875rem;
+    transition:
+      background-color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+
+  .input::placeholder {
+    color: var(--muted);
+    opacity: 0.8;
+  }
+
+  .input:hover {
+    background-color: var(--field-bg-hover, var(--surface-3));
+  }
+
+  .input:focus,
+  .input:focus-visible {
+    outline: none;
+    background-color: var(--surface);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--ring);
+  }
+
+  select.input {
+    appearance: none;
+    padding-inline-end: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a7f90' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+  }
+
+  [dir="rtl"] select.input {
+    background-position: left 0.875rem center;
+  }
+
+  textarea.input {
+    border-radius: 20px;
+  }
+
+  fieldset legend {
+    font-weight: 500;
+  }
+
+  /* ---------- Buttons ---------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+    border-radius: 999px;
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+    color: var(--on-gradient);
+    background: var(--gradient);
+    background-size: 140% 100%;
+    background-position: 0% 0%;
+    border: 0;
+    box-shadow: 0 1px 2px rgb(59 91 219 / 0.25);
+    cursor: pointer;
+    transition:
+      background-position calc(var(--dur) * 2) var(--ease),
+      box-shadow var(--dur) var(--ease),
+      transform var(--dur) var(--ease),
+      opacity var(--dur) var(--ease);
+  }
+
+  .btn:hover:not(:disabled) {
+    background-position: 100% 0%;
+    box-shadow: 0 4px 14px rgb(108 92 231 / 0.32);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 999px;
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Tonal secondary button. */
+  .btn-ghost {
+    background: var(--field-bg, var(--surface-2));
+    color: var(--text);
+    box-shadow: var(--field-shadow, none);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--field-bg-hover, var(--surface-3));
+    box-shadow: var(--field-shadow, none);
+  }
+
+  /* Inline text button. */
+  .btn-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-weight: 500;
+    color: var(--accent);
+  }
+
+  .btn-text:hover {
+    background: var(--accent-soft);
+  }
+
+  /* ---------- Tabs (pill segmented bar) ---------- */
+
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.3125rem;
+    background: var(--surface);
+    border-radius: 999px;
+    box-shadow: var(--shadow-1);
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+    width: fit-content;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--muted);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .tab:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+
+  .tab[aria-selected="true"] {
+    color: var(--accent-soft-text);
+    background: var(--accent-soft);
+  }
+
+  .tab:focus-visible {
+    border-radius: 999px;
+    outline-offset: -2px;
+  }
+
+  /* Compact variant used inside cards. */
+  .tabs-sm {
+    padding: 0.25rem;
+    background: var(--surface-2);
+    box-shadow: none;
+    width: fit-content;
+  }
+
+  .tabs-sm .tab {
+    padding: 0.25rem 0.75rem;
+  }
+
+  .tabs-sm .tab:hover {
+    background: var(--surface-3);
+  }
+
+  .tabs-sm .tab[aria-selected="true"] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* ---------- Chips & badges ---------- */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0.3125rem 0.75rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition:
+      background-color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease);
+  }
+
+  .chip:hover {
+    background: var(--surface-2);
+  }
+
+  .chip:has(input:checked),
+  .chip[data-selected="true"] {
+    background: var(--accent-soft);
+    border-color: transparent;
+    color: var(--accent-soft-text);
+  }
+
+  .chip:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--muted);
+    padding: 0.125rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .badge-accent {
+    background: var(--accent-soft);
+    color: var(--accent-soft-text);
+  }
+
+  /* ---------- Brand ---------- */
+
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 12px;
+    background: var(--gradient);
+    color: var(--on-gradient);
+    box-shadow: 0 4px 14px rgb(108 92 231 / 0.3);
+    flex-shrink: 0;
+  }
+
+  .text-gradient {
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ---------- Text helpers ---------- */
+
+  .muted {
+    color: var(--muted);
+  }
+
+  .error {
+    color: var(--danger);
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---------- Tables & lists ---------- */
+
+  table th {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  /* Rows of a list that should feel like tappable tonal tiles. */
+  .list-tile {
+    border-radius: 18px;
+    transition: background-color var(--dur) var(--ease);
+  }
+
+  .list-tile:hover {
+    background: var(--surface-2);
+  }
+
+  /*
+   * Fields and tonal buttons step up one layer when they sit on a tonal panel, and onto a raised
+   * surface when they sit straight on the page background (page headers), so they stay visible.
+   */
+  .panel {
+    --field-bg: var(--surface);
+    --field-bg-hover: var(--surface-3);
+  }
+
+  header {
+    --field-bg: var(--surface);
+    --field-bg-hover: var(--surface-2);
+    --field-shadow: var(--shadow-1);
+  }
+
+  header .input {
+    box-shadow: var(--shadow-1);
+  }
+  /* ---------- Portal (public landing page) ---------- */
+
+  html:has(.portal) {
+    scroll-behavior: smooth;
+  }
+
+  .portal-rise {
+    animation: portal-rise calc(var(--dur) * 3.5) var(--ease) both;
+  }
+
+  .portal-rise-delay {
+    animation-delay: calc(var(--dur) * 0.75);
+  }
+
+  .portal-glow {
+    position: absolute;
+    inset: 8% -6% -6% 6%;
+    border-radius: 40px;
+    background: var(--gradient);
+    filter: blur(48px);
+    opacity: 0.35;
+  }
+
+  .portal-lift {
+    transition:
+      transform var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+
+  .portal-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-2);
+  }
+
+  .portal-featured {
+    background-image: var(--gradient-soft);
+    box-shadow:
+      0 0 0 2px var(--accent),
+      var(--shadow-2);
+  }
+
+  .portal-faq[open] {
+    box-shadow: var(--shadow-2);
+  }
+
+  .portal-faq summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .portal-cta {
+    background: var(--gradient);
+    color: var(--on-gradient);
+  }
+
+  .portal-cta::before,
+  .portal-cta::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.14);
+    pointer-events: none;
+  }
+
+  .portal-cta::before {
+    width: 320px;
+    height: 320px;
+    top: -160px;
+    left: -80px;
+  }
+
+  .portal-cta::after {
+    width: 240px;
+    height: 240px;
+    bottom: -120px;
+    right: -40px;
+  }
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+@keyframes portal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.input {
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
-}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+  }
 
-.input:focus-visible,
-.btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  font-weight: 500;
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
-.btn:disabled {
-  opacity: 0.6;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.error {
-  color: var(--danger);
+  html:has(.portal) {
+    scroll-behavior: auto;
+  }
 }

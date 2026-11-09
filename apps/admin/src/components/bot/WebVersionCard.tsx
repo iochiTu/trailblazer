@@ -66,10 +66,10 @@ export function WebVersionCard({
   }
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-[var(--border)] p-4">
+    <section className="panel flex flex-col gap-4 p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-xl">
-          <h3 className="font-medium">{t("share.web.title")}</h3>
+          <h3 className="text-lg font-semibold">{t("share.web.title")}</h3>
           <p className="muted text-sm">{t("share.web.hint")}</p>
         </div>
         <button

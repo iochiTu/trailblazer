@@ -22,7 +22,7 @@ export function SupportBanner({ tenantId }: { tenantId: string }) {
     <div
       role="note"
       lang="en"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--status-warning)] px-4 py-3 text-sm"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[color-mix(in_srgb,var(--status-warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--status-warning)_12%,var(--surface))] px-5 py-3 text-sm"
     >
       <span>
         <span aria-hidden="true">🛟 </span>

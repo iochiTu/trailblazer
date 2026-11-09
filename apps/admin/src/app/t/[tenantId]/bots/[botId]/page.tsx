@@ -48,20 +48,20 @@ export default function BotPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:py-10">
       <SupportBanner tenantId={tenantId} />
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <Link href="/dashboard" className="muted text-sm underline-offset-4 hover:underline">
+          <Link href="/dashboard" className="btn-text -ms-3 text-sm">
             ← {t("bots.back")}
           </Link>
-          <h1 className="text-xl font-semibold">{bot.name}</h1>
-          <p className="muted text-sm">
+          <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">{bot.name}</h1>
+          <p className="muted mt-1 text-sm">
             {detail.pack?.name ?? bot.pack} · {t(`bots.status.${bot.status}`)} · {bot.languages.join(", ")}
             {bot.hostedPageEnabled && ` · ${t("bots.webOn")}`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <LanguageSwitcher />
           {bot.status === "active" ? (
             <button type="button" className="btn btn-ghost" onClick={() => setStatus("paused")}>
@@ -75,14 +75,14 @@ export default function BotPage() {
         </div>
       </header>
 
-      <div role="tablist" className="flex gap-1 border-b border-[var(--border)]">
+      <div role="tablist" className="tabs">
         {TABS.map((id) => (
           <button
             key={id}
             role="tab"
             type="button"
             aria-selected={tab === id}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === id ? "border-[var(--accent)] font-medium" : "muted border-transparent"}`}
+            className="tab"
             onClick={() => {
               setTab(id);
               if (id === "test") setTestKey((k) => k + 1);
@@ -93,7 +93,7 @@ export default function BotPage() {
         ))}
       </div>
 
-      <section className="card p-5" role="tabpanel">
+      <section className="card p-5 sm:p-7" role="tabpanel">
         {tab === "knowledge" && <KnowledgeTab base={base} />}
         {tab === "test" && key && (
           <div className="flex flex-col gap-3">
@@ -102,7 +102,7 @@ export default function BotPage() {
               key={testKey}
               title={t("bots.tab.test")}
               src={`${detail.chatUrl}/c/${key}?embed=playground`}
-              className="h-[620px] w-full rounded-lg border border-[var(--border)]"
+              className="h-[620px] w-full rounded-[20px] bg-[var(--surface-2)]"
             />
           </div>
         )}

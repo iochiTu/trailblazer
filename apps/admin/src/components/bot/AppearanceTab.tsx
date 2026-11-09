@@ -115,7 +115,7 @@ function TemplateThumb({ theme, color }: { theme: ThemeId; color: string }) {
   const r = theme === "friendly" ? 10 : theme === "minimal" ? 3 : 6;
   return (
     <div
-      className="overflow-hidden rounded-md border border-[var(--border)]"
+      className="overflow-hidden rounded-xl border border-[var(--border)]"
       style={{ background: body }}
       aria-hidden="true"
     >
@@ -140,7 +140,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <section className="flex flex-col gap-2">
       <div>
-        <h3 className="font-medium">{title}</h3>
+        <h3 className="text-lg font-semibold">{title}</h3>
         {hint && <p className="muted text-sm">{hint}</p>}
       </div>
       {children}
@@ -219,10 +219,10 @@ export function AppearanceTab({
                 type="button"
                 aria-pressed={theme === info.id}
                 onClick={() => info.id !== theme && void save({ theme: info.id })}
-                className={`flex flex-col gap-2 rounded-lg border p-2 text-start ${
+                className={`flex flex-col gap-2 rounded-[20px] p-2.5 text-start ${
                   theme === info.id
-                    ? "border-[var(--accent)] ring-2 ring-[var(--accent)]"
-                    : "border-[var(--border)]"
+                    ? "bg-[var(--accent-soft)] ring-2 ring-[var(--accent)]"
+                    : "bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
                 }`}
               >
                 <TemplateThumb theme={info.id} color={color} />
@@ -257,10 +257,7 @@ export function AppearanceTab({
             <legend className="mb-1 text-sm">{t("appearance.avatar")}</legend>
             <div className="flex flex-wrap gap-2">
               {(["initials", "icon", "image"] as const).map((kind) => (
-                <label
-                  key={kind}
-                  className="flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-sm"
-                >
+                <label key={kind} className="chip">
                   <input
                     type="radio"
                     name="avatarKind"
@@ -287,10 +284,10 @@ export function AppearanceTab({
                       aria-label={icon}
                       title={icon}
                       onClick={() => void save({ avatar: { kind: "icon", icon } })}
-                      className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+                      className={`flex h-10 w-10 items-center justify-center rounded-full ${
                         selected
-                          ? "border-[var(--accent)] ring-2 ring-[var(--accent)]"
-                          : "border-[var(--border)]"
+                          ? "bg-[var(--accent-soft)] text-[var(--accent-soft-text)] ring-2 ring-[var(--accent)]"
+                          : "bg-[var(--surface-2)] hover:bg-[var(--surface-3)]"
                       }`}
                       // biome-ignore lint/security/noDangerouslySetInnerHtml: built-in icon markup, not user input
                       dangerouslySetInnerHTML={{ __html: iconSvg(icon, 20) }}
@@ -351,15 +348,15 @@ export function AppearanceTab({
       {key && (
         <aside className="flex flex-col gap-2 lg:sticky lg:top-4 lg:self-start">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium">{t("appearance.preview")}</h3>
-            <div className="flex gap-1 text-sm" role="tablist">
+            <h3 className="text-lg font-semibold">{t("appearance.preview")}</h3>
+            <div className="tabs tabs-sm" role="tablist">
               {(["widget", "inline"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   role="tab"
                   aria-selected={previewMode === mode}
-                  className={`rounded-md px-2 py-1 ${previewMode === mode ? "bg-[var(--bg)] font-medium" : "muted"}`}
+                  className="tab"
                   onClick={() => setPreviewMode(mode)}
                 >
                   {t(mode === "inline" ? "appearance.preview.web" : "appearance.preview.widget")}
@@ -371,7 +368,7 @@ export function AppearanceTab({
             key={`${previewKey}-${previewMode}`}
             title={t("appearance.preview")}
             src={`${detail.chatUrl}/c/${key}?embed=${previewMode}&preview=1`}
-            className="h-[560px] w-full rounded-xl border border-[var(--border)] shadow-sm"
+            className="h-[560px] w-full rounded-[24px] bg-[var(--surface-2)] shadow-[var(--shadow-2)]"
           />
         </aside>
       )}

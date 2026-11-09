@@ -389,6 +389,7 @@ export {
   getTemplate,
   hasTemplate,
   type IndustryTemplate,
+  type LibraryWorkflow,
   resolveBehavior,
   type TemplateContent,
   type TemplateWorkflow,

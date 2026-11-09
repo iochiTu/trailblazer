@@ -10,12 +10,19 @@ import { hasRole, requireTenantRole } from "../plugins/auth.js";
 
 type TenantParams = { Params: { tenantId: string } };
 
-/** Last `days` calendar dates (YYYY-MM-DD) in the reporting time zone, oldest first. */
-function lastDates(days: number): string[] {
-  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: REPORTING_TIME_ZONE });
+/**
+ * Last `days` calendar dates (YYYY-MM-DD) in the reporting time zone, oldest first. Steps back by
+ * calendar day from today's local date, so daylight-saving changes (23- and 25-hour days) never
+ * skip or repeat a date.
+ */
+export function lastDates(days: number, now = new Date()): string[] {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: REPORTING_TIME_ZONE }).format(now);
+  const [year, month, day] = today.split("-").map(Number) as [number, number, number];
   const out: string[] = [];
-  for (let i = days - 1; i >= 0; i--) out.push(fmt.format(new Date(Date.now() - i * 86_400_000)));
-  return [...new Set(out)];
+  for (let i = days - 1; i >= 0; i--) {
+    out.push(new Date(Date.UTC(year, month - 1, day - i)).toISOString().slice(0, 10));
+  }
+  return out;
 }
 
 /** Usage report and limit settings for one business (PLAN §16; abuse & noisy-neighbour limits). */

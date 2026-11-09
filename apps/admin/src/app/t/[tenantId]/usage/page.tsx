@@ -309,7 +309,7 @@ export default function UsagePage() {
             {t("usage.limitsReadOnly", { limit: report.limits.effectiveMonthlyLimit })}
           </p>
         )}
-        <div className="rounded-lg bg-[var(--bg)] p-3 text-sm">
+        <div className="panel p-4 text-sm">
           <p className="font-medium">{t("usage.protection")}</p>
           <p className="muted">
             {t("usage.protectionHint", {

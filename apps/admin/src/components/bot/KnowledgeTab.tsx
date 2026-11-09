@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api, type QaPair, type Source } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { PhotosSection } from "./PhotosSection";
 import { SourceDetail } from "./SourceDetail";
 
 const statusColor: Record<Source["status"], string> = {
@@ -61,7 +62,7 @@ export function KnowledgeTab({ base }: { base: string }) {
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
         <div>
-          <h3 className="font-medium">{t("knowledge.sources")}</h3>
+          <h3 className="text-lg font-semibold">{t("knowledge.sources")}</h3>
           <p className="muted text-sm">{t("knowledge.sourcesHint")}</p>
         </div>
         {sources === null ? (
@@ -123,7 +124,7 @@ export function KnowledgeTab({ base }: { base: string }) {
 
         <div className="grid gap-4 md:grid-cols-2">
           <form
-            className="card flex flex-col gap-2 p-4"
+            className="panel flex flex-col gap-3 p-4 sm:p-5"
             onSubmit={(e) =>
               submit(
                 e,
@@ -167,7 +168,7 @@ export function KnowledgeTab({ base }: { base: string }) {
           </form>
 
           <form
-            className="card flex flex-col gap-2 p-4"
+            className="panel flex flex-col gap-3 p-4 sm:p-5"
             onSubmit={(e) =>
               submit(
                 e,
@@ -201,7 +202,7 @@ export function KnowledgeTab({ base }: { base: string }) {
 
       <section className="flex flex-col gap-3">
         <div>
-          <h3 className="font-medium">{t("qa.title")}</h3>
+          <h3 className="text-lg font-semibold">{t("qa.title")}</h3>
           <p className="muted text-sm">{t("qa.hint")}</p>
         </div>
         {pairs.length === 0 ? (
@@ -226,7 +227,7 @@ export function KnowledgeTab({ base }: { base: string }) {
           </ul>
         )}
         <form
-          className="card grid gap-2 p-4 md:grid-cols-[1fr_2fr_auto] md:items-end"
+          className="panel grid gap-3 p-4 sm:p-5 md:grid-cols-[1fr_2fr_auto] md:items-end"
           onSubmit={(e) =>
             submit(e, (d) => ({ question: d.get("question"), answer: d.get("answer") }), `${base}/qa`)
           }
@@ -244,6 +245,8 @@ export function KnowledgeTab({ base }: { base: string }) {
           </button>
         </form>
       </section>
+
+      <PhotosSection base={base} />
     </div>
   );
 }

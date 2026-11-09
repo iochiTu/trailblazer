@@ -172,14 +172,47 @@ export type QaPairInput = z.infer<typeof qaPairSchema>;
 
 // ---- Public chat -----------------------------------------------------------------------------
 
-export const publicChatSchema = z.object({
-  publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
-  conversationId: z.uuid().nullish(),
-  visitorId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/),
-  message: z.string().trim().min(1).max(2000),
-  channel: z.enum(["hosted", "inline", "widget", "playground"]).default("hosted"),
-  pageUrl: z.string().max(2000).nullish(),
+/** Business photos for the knowledge base (shown to visitors in answers). */
+export const MAX_KNOWLEDGE_IMAGE_BYTES = 2 * 1024 * 1024;
+export const knowledgeImageFields = {
+  title: z.string().trim().min(1).max(120),
+  /** What the photo shows; the assistant reads this to decide when to show it. */
+  description: z.string().trim().min(3).max(1000),
+  enabled: z.boolean(),
+};
+export const createKnowledgeImageSchema = z.object({
+  title: knowledgeImageFields.title,
+  description: knowledgeImageFields.description,
+  /** Base64 without a `data:` prefix. */
+  data: z.base64().max(Math.ceil((MAX_KNOWLEDGE_IMAGE_BYTES * 4) / 3) + 4),
 });
+export const updateKnowledgeImageSchema = z.object(knowledgeImageFields).partial();
+
+/** Images a visitor can attach to one chat message, and the largest size of each (decoded). */
+export const MAX_CHAT_IMAGES = 3;
+export const MAX_CHAT_IMAGE_BYTES = 2 * 1024 * 1024;
+
+export const chatImageSchema = z.object({
+  /** File name for display; the type is detected from the content, never from the name. */
+  name: z.string().trim().min(1).max(200),
+  /** Base64 without a `data:` prefix. */
+  data: z.base64().max(Math.ceil((MAX_CHAT_IMAGE_BYTES * 4) / 3) + 4),
+});
+
+export const publicChatSchema = z
+  .object({
+    publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
+    conversationId: z.uuid().nullish(),
+    visitorId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/),
+    message: z.string().trim().max(2000).default(""),
+    images: z.array(chatImageSchema).max(MAX_CHAT_IMAGES).default([]),
+    channel: z.enum(["hosted", "inline", "widget", "playground"]).default("hosted"),
+    pageUrl: z.string().max(2000).nullish(),
+  })
+  .refine((input) => input.message.length > 0 || input.images.length > 0, {
+    path: ["message"],
+    message: "Write a message or attach an image",
+  });
 export type PublicChatInput = z.infer<typeof publicChatSchema>;
 
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24h)");

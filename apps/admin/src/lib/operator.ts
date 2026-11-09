@@ -35,6 +35,7 @@ export interface OperatorPlan {
   monthlyQuestions: number;
   concurrent: number;
   perMinute: number;
+  knowledgeImages: number;
   priceMonthlyCents: number | null;
   active: boolean;
   sortOrder: number;

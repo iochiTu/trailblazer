@@ -1,6 +1,29 @@
 import OpenAI from "openai";
-import type { ChatEvent, ChatRequest, LLMProvider, StopReason } from "../types.js";
+import type { ChatEvent, ChatMessage, ChatRequest, LLMProvider, StopReason } from "../types.js";
 import { emptyUsage } from "../types.js";
+
+/** Maps a provider-neutral message to Chat Completions (images as `data:` URLs). */
+export function toOpenAIMessage(message: ChatMessage): OpenAI.Chat.ChatCompletionMessageParam {
+  if (typeof message.content === "string") return { role: message.role, content: message.content };
+  if (message.role === "assistant") {
+    // Assistant turns are text only.
+    return {
+      role: "assistant",
+      content: message.content
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("\n"),
+    };
+  }
+  return {
+    role: "user",
+    content: message.content.map((block) =>
+      block.type === "text"
+        ? { type: "text" as const, text: block.text }
+        : { type: "image_url" as const, image_url: { url: `data:${block.mediaType};base64,${block.data}` } },
+    ),
+  };
+}
 
 /**
  * Any OpenAI-compatible Chat Completions endpoint: OpenRouter, OpenAI, Azure OpenAI (v1 endpoint),
@@ -8,16 +31,26 @@ import { emptyUsage } from "../types.js";
  */
 export class OpenAICompatibleProvider implements LLMProvider {
   private readonly client: OpenAI;
+  private readonly visionModels: Set<string>;
 
+  /**
+   * `visionModels`: models known to accept images ("*" for all). Endpoints differ, so by default
+   * none are assumed to, and image requests skip this provider.
+   */
   constructor(
     readonly id: string,
-    options: { apiKey: string; baseURL: string; headers?: Record<string, string> },
+    options: { apiKey: string; baseURL: string; headers?: Record<string, string>; visionModels?: string[] },
   ) {
+    this.visionModels = new Set(options.visionModels ?? []);
     this.client = new OpenAI({
       apiKey: options.apiKey,
       baseURL: options.baseURL,
       defaultHeaders: options.headers,
     });
+  }
+
+  supportsImages(model: string): boolean {
+    return this.visionModels.has("*") || this.visionModels.has(model);
   }
 
   async *stream(model: string, request: ChatRequest): AsyncIterable<ChatEvent> {
@@ -29,7 +62,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         max_tokens: request.maxTokens ?? 4000,
         messages: [
           { role: "system", content: request.system.map((b) => b.text).join("\n\n") },
-          ...request.messages.map((m) => ({ role: m.role, content: m.content })),
+          ...request.messages.map(toOpenAIMessage),
         ],
       },
       { signal: request.signal },

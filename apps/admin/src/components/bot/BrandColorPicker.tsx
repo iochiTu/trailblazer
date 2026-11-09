@@ -76,15 +76,12 @@ export function BrandColorPicker({ value, onChange }: { value: string; onChange:
       </div>
 
       {customOpen && (
-        <form
-          className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-3"
-          onSubmit={applyCustom}
-        >
+        <form className="panel flex flex-col gap-2 p-4" onSubmit={applyCustom}>
           <span className="muted text-xs">{t("appearance.customColorHint")}</span>
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="color"
-              className="h-9 w-12 cursor-pointer rounded border border-[var(--border)]"
+              className="h-10 w-12 cursor-pointer rounded-xl border border-[var(--border)] bg-[var(--surface)]"
               value={isHexColor(draft) ? draft : value}
               aria-label={t("appearance.customColor")}
               onChange={(e) => {
@@ -109,7 +106,7 @@ export function BrandColorPicker({ value, onChange }: { value: string; onChange:
             />
             {isHexColor(draft) && (
               <span
-                className="rounded-md px-3 py-1 text-sm font-medium"
+                className="rounded-full px-3 py-1 text-sm font-medium"
                 style={{ background: draft, color: textOn(draft) }}
                 aria-hidden="true"
               >
