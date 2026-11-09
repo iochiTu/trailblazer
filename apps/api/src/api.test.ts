@@ -317,4 +317,24 @@ describe("catalog", () => {
     const langs = await app.inject({ method: "GET", url: "/v1/catalog/languages" });
     expect(langs.json().languages.find((l: { code: string }) => l.code === "ar").dir).toBe("rtl");
   });
+
+  it("lists active plans publicly with display fields only", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/catalog/plans" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.plans.length).toBeGreaterThan(0);
+    expect(body.plans.map((p: { id: string }) => p.id)).toContain(body.defaultPlan);
+    expect(Object.keys(body.plans[0]).sort()).toEqual(
+      [
+        "concurrent",
+        "id",
+        "knowledgeImages",
+        "monthlyQuestions",
+        "nameEn",
+        "nameFr",
+        "perMinute",
+        "priceMonthlyCents",
+      ].sort(),
+    );
+  });
 });

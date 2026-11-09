@@ -255,4 +255,95 @@ export const fr: Record<MessageKey, string> = {
   "common.loading": "Chargement…",
   "common.error": "Une erreur s'est produite. Veuillez réessayer.",
   "common.language": "Langue",
+  "portal.nav.how": "Fonctionnement",
+  "portal.nav.features": "Fonctionnalités",
+  "portal.nav.plans": "Forfaits",
+  "portal.nav.faq": "Questions",
+  "portal.nav.dashboard": "Ouvrir le tableau de bord",
+  "portal.hero.eyebrow": "Assistant de clavardage IA pour les petites entreprises",
+  "portal.hero.title1": "Répondez à chaque client,",
+  "portal.hero.title2": "même quand vous êtes occupé",
+  "portal.hero.subtitle":
+    "Traiblazer donne à votre entreprise un assistant sympathique qui répond aux questions sur vos heures, votre menu, vos prix et vos réservations, dans la langue de vos clients, en utilisant seulement l'information que vous lui donnez.",
+  "portal.hero.start": "Commencer l'essai gratuit",
+  "portal.hero.seePlans": "Voir les forfaits",
+  "portal.hero.note": "Prêt en quelques minutes. Aucun site Web requis.",
+  "portal.demo.title": "Lakeside Bistro",
+  "portal.demo.online": "Répond habituellement tout de suite",
+  "portal.demo.q1": "Are you open Sunday evening?",
+  "portal.demo.a1": "Yes! We're open Sunday from 5 pm to 10 pm. Would you like to book a table?",
+  "portal.demo.q2": "Avez-vous un menu sans gluten ?",
+  "portal.demo.a2":
+    "Oui, plusieurs plats sont sans gluten. Voici notre terrasse, si vous voulez manger dehors :",
+  "portal.demo.photo": "Terrasse",
+  "portal.how.eyebrow": "Fonctionnement",
+  "portal.how.title": "De l'inscription à votre première réponse en quatre étapes",
+  "portal.how.step1.title": "Créez votre assistant",
+  "portal.how.step1.body":
+    "Choisissez le modèle de votre secteur, comme restaurant ou salon. Il inclut des consignes et des scénarios prêts à l'emploi, modifiables en tout temps.",
+  "portal.how.step2.title": "Faites-lui connaître votre entreprise",
+  "portal.how.step2.body":
+    "Ajoutez votre site Web, collez du texte comme vos heures et vos politiques, écrivez des réponses exactes et téléversez des photos qu'il pourra montrer.",
+  "portal.how.step3.title": "Personnalisez-le",
+  "portal.how.step3.body":
+    "Choisissez un design et la couleur de votre marque, sélectionnez ses langues et testez-le avant de le mettre en ligne.",
+  "portal.how.step4.title": "Partagez-le partout",
+  "portal.how.step4.body":
+    "Ajoutez un bouton de clavardage à votre site Web, ou utilisez la page Web prête à l'emploi avec un lien et un code QR pour vos affiches et vos tables.",
+  "portal.features.eyebrow": "Fonctionnalités",
+  "portal.features.title": "Tout ce qu'il faut à une petite équipe, rien de superflu",
+  "portal.features.grounded.title": "Des réponses tirées de votre information seulement",
+  "portal.features.grounded.body":
+    "Il s'en tient à vos sources et à vos réponses, et dirige les clients vers vous lorsqu'il ne sait pas.",
+  "portal.features.languages.title": "Parle la langue de vos clients",
+  "portal.features.languages.body":
+    "{count, number} langues, avec un soutien complet du français et de l'anglais. Les visiteurs choisissent celle qu'ils préfèrent.",
+  "portal.features.web.title": "Pas de site Web? Aucun problème",
+  "portal.features.web.body":
+    "Activez la version Web pour obtenir un lien à partager et un code QR à imprimer.",
+  "portal.features.photos.title": "Montre des photos dans ses réponses",
+  "portal.features.photos.body":
+    "Vos plats, vos chambres ou vos produits s'affichent directement dans la conversation lorsque c'est utile.",
+  "portal.features.workflows.title": "Des scénarios pour les demandes courantes",
+  "portal.features.workflows.body":
+    "Des marches à suivre pour les réservations, les commandes et d'autres demandes, pour que chaque client reçoive la même attention.",
+  "portal.features.insights.title": "Conversations et utilisation",
+  "portal.features.insights.body":
+    "Relisez les conversations et suivez les questions par jour par rapport à votre limite mensuelle.",
+  "portal.plans.eyebrow": "Forfaits",
+  "portal.plans.title": "Des forfaits mensuels simples qui évoluent avec vous",
+  "portal.plans.subtitle":
+    "Chaque forfait inclut toutes les fonctionnalités. Ils diffèrent par le nombre de questions auxquelles votre assistant peut répondre.",
+  "portal.plans.perMonth": "/mois",
+  "portal.plans.free": "Gratuit",
+  "portal.plans.custom": "Contactez-nous",
+  "portal.plans.startHere": "Commencez ici",
+  "portal.plans.questions": "{count, number} questions par mois",
+  "portal.plans.perMinute": "Jusqu'à {count, number} questions par minute",
+  "portal.plans.concurrent": "{count, plural, one {# réponse à la fois} other {# réponses en même temps}}",
+  "portal.plans.photos": "{count, number} photos par assistant",
+  "portal.plans.everything": "Toutes les fonctionnalités et les langues",
+  "portal.plans.choose": "Commencer",
+  "portal.plans.currency": "Prix en dollars canadiens, taxes en sus.",
+  "portal.plans.unavailable":
+    "Impossible de charger les forfaits pour le moment. Veuillez réessayer plus tard.",
+  "portal.faq.title": "Vos questions, nos réponses",
+  "portal.faq.website.q": "Ai-je besoin d'un site Web?",
+  "portal.faq.website.a":
+    "Non. Activez la version Web pour obtenir un lien et un code QR qui ouvrent votre assistant sur n'importe quel téléphone ou ordinateur.",
+  "portal.faq.sources.q": "D'où viennent les réponses?",
+  "portal.faq.sources.a":
+    "Seulement de ce que vous ajoutez : les pages de votre site Web, le texte que vous collez, vos réponses et vos photos. Vos réponses écrites ont toujours la priorité.",
+  "portal.faq.limit.q": "Que se passe-t-il quand j'atteins ma limite mensuelle?",
+  "portal.faq.limit.a":
+    "On invite les visiteurs à vous contacter directement jusqu'à la réinitialisation au début du mois suivant. Vous pouvez suivre votre utilisation dans le tableau de bord.",
+  "portal.faq.languages.q": "Quelles langues parle-t-il?",
+  "portal.faq.languages.a":
+    "Le français et l'anglais sont entièrement pris en charge, et bien d'autres langues sont offertes. Vous choisissez celles que votre assistant propose.",
+  "portal.faq.test.q": "Puis-je l'essayer avant que mes clients le voient?",
+  "portal.faq.test.a":
+    "Oui. Les nouveaux assistants sont des brouillons, et vous pouvez les tester jusqu'à ce que vous cliquiez sur Mettre en ligne.",
+  "portal.cta.title": "Prêt à rencontrer votre nouvel assistant?",
+  "portal.cta.body": "Créez votre compte et obtenez vos premières réponses en quelques minutes.",
+  "portal.footer.rights": "© {year} Traiblazer",
 };

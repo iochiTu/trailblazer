@@ -150,3 +150,15 @@ export interface Language {
   tier: 1 | 2 | 3 | "owner";
   dir: "ltr" | "rtl";
 }
+
+/** A subscription plan as shown on the public portal page. Price is monthly, in CAD cents. */
+export interface PublicPlan {
+  id: string;
+  nameEn: string;
+  nameFr: string;
+  monthlyQuestions: number;
+  perMinute: number;
+  concurrent: number;
+  knowledgeImages: number;
+  priceMonthlyCents: number | null;
+}
