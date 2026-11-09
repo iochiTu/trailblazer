@@ -277,6 +277,9 @@ describe("tenants and bots", () => {
     expect(detail.behavior).toEqual({ guidelines: "Friendly and short.", workflows: [custom] });
     // The template stays available to restore or add workflows back.
     expect(detail.defaults.workflows.map((w: { id: string }) => w.id)).toContain("room-booking");
+    // The library offers more: the industry's other workflows and ones for any business.
+    const library = detail.defaults.library.map((w: { id: string }) => w.id);
+    expect(library).toEqual(expect.arrayContaining(["room-booking", "pets", "feedback"]));
 
     const bad = async (workflows: unknown) =>
       (await app.inject({ method: "PATCH", url, headers: { cookie }, payload: { workflows } })).statusCode;

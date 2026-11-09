@@ -76,7 +76,14 @@ export interface BotDetail {
   /** What the assistant uses now: its own guidelines and workflows, or its template's. */
   behavior: { guidelines: string; workflows: Workflow[] };
   /** The industry template the assistant started from. */
-  defaults: { quickReplies: Record<string, string[]>; guidelines: string; workflows: Workflow[] };
+  defaults: {
+    quickReplies: Record<string, string[]>;
+    guidelines: string;
+    /** Starter workflows a new assistant gets. */
+    workflows: Workflow[];
+    /** Every workflow template the business can add: for its industry, then for any business. */
+    library: (Workflow & { group: "industry" | "common" })[];
+  };
   chatUrl: string;
 }
 

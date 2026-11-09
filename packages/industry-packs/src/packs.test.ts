@@ -64,7 +64,10 @@ describe("industry templates", () => {
         expect(t.workflows.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.maxWorkflows);
         const ids = t.workflows.map((w) => w.id);
         expect(new Set(ids).size, `${pack.slug}/${variant}`).toBe(ids.length);
-        for (const w of t.workflows) {
+        const libraryIds = t.library.map((w) => w.id);
+        expect(new Set(libraryIds).size, `${pack.slug}/${variant} library`).toBe(libraryIds.length);
+        for (const id of ids) expect(libraryIds).toContain(id);
+        for (const w of t.library) {
           expect(w.name.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.nameLength);
           expect(w.when.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.whenLength);
           expect(w.finish.length).toBeLessThanOrEqual(WORKFLOW_LIMITS.finishLength);
@@ -98,5 +101,29 @@ describe("industry templates", () => {
     });
     const own = resolveBehavior({ pack: "lodging", variant: null, guidelines: "Mine", workflows: [] });
     expect(own).toEqual({ guidelines: "Mine", workflows: [] });
+  });
+});
+
+describe("workflow library", () => {
+  it("offers more workflows than the starters, for the industry and for any business", () => {
+    for (const pack of availablePacks()) {
+      const t = getTemplate(pack.slug);
+      const industry = t.library.filter((w) => w.group === "industry");
+      expect(industry.length, pack.slug).toBeGreaterThan(t.workflows.length);
+      expect(t.library.some((w) => w.group === "common")).toBe(true);
+    }
+  });
+
+  it("lists the industry's workflows first and keeps variant-only ones to their variants", () => {
+    const bakery = getTemplate("cafe-bakery", "bakery").library.map((w) => w.id);
+    expect(bakery.slice(0, 2)).toEqual(["custom-order", "dietary"]);
+    expect(bakery).not.toContain("coffee-beans");
+    expect(getTemplate("cafe-bakery", "coffee-roaster").library.map((w) => w.id)).toContain("coffee-beans");
+  });
+
+  it("doesn't list a shared workflow twice when the industry already has it", () => {
+    const generic = getTemplate("generic").library;
+    expect(generic.filter((w) => w.id === "contact-request")).toHaveLength(1);
+    expect(generic.find((w) => w.id === "contact-request")?.group).toBe("industry");
   });
 });

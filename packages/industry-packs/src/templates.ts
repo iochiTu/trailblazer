@@ -12,6 +12,8 @@
  * may only answer from the business's own information.
  */
 
+import { commonLibrary, industryLibrary } from "./library.js";
+
 /** Limits for a business's workflows (also enforced by the API schema). */
 export const WORKFLOW_LIMITS = {
   maxWorkflows: 20,
@@ -59,11 +61,20 @@ export interface IndustryTemplate {
   workflows: TemplateWorkflow[];
 }
 
+/** A workflow the business can add from the library: for its industry, or for any business. */
+export type LibraryWorkflow = Workflow & { group: "industry" | "common" };
+
 /** What an assistant gets from its template (and what "reset to template" restores). */
 export interface TemplateContent {
   guidelines: string;
   quickReplies: Record<"en" | "fr", string[]>;
+  /** Starter workflows, copied into a new assistant. */
   workflows: Workflow[];
+  /**
+   * Every workflow the business can pick from: the starters, more for its industry, then ones for
+   * any business. Ids are unique.
+   */
+  library: LibraryWorkflow[];
 }
 
 const lines = (...xs: string[]) => xs.join("\n");
@@ -318,24 +329,45 @@ const templates: Record<string, IndustryTemplate> = {
 
 const generic = templates.generic!;
 
+const forVariant = (variant: string | null | undefined) => (w: TemplateWorkflow) =>
+  !w.variants || (variant != null && w.variants.includes(variant));
+
+/** A fresh copy (callers may edit it) of a template workflow, ready to store on an assistant. */
+const toWorkflow = ({ key, name, when, steps, finish }: TemplateWorkflow): Workflow => ({
+  id: key,
+  name,
+  enabled: true,
+  when,
+  steps: [...steps],
+  finish,
+  template: key,
+});
+
 /** The template for an industry (and variant), as copied into a new assistant. */
 export function getTemplate(slug: string, variant?: string | null): TemplateContent {
   const t = templates[slug] ?? generic;
   const extra = variant ? t.variantGuidelines?.[variant] : undefined;
+  const starters = t.workflows.filter(forVariant(variant));
+  const industry = [...starters, ...(industryLibrary[slug] ?? industryLibrary.generic!)].filter(
+    forVariant(variant),
+  );
+  const seen = new Set<string>();
+  const library: LibraryWorkflow[] = [];
+  for (const [group, list] of [
+    ["industry", industry],
+    ["common", commonLibrary],
+  ] as const) {
+    for (const w of list) {
+      if (seen.has(w.key)) continue;
+      seen.add(w.key);
+      library.push({ ...toWorkflow(w), group });
+    }
+  }
   return {
     guidelines: extra ? `${t.guidelines}\n${extra}` : t.guidelines,
     quickReplies: t.quickReplies,
-    workflows: t.workflows
-      .filter((w) => !w.variants || (variant != null && w.variants.includes(variant)))
-      .map(({ key, name, when, steps, finish }) => ({
-        id: key,
-        name,
-        enabled: true,
-        when,
-        steps: [...steps],
-        finish,
-        template: key,
-      })),
+    workflows: starters.map(toWorkflow),
+    library,
   };
 }
 
