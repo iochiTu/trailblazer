@@ -198,10 +198,17 @@ function DetailsSection({
     description: detail.profile?.description ?? "",
     serviceArea: detail.profile?.serviceArea ?? "",
     credentials: detail.profile?.credentials ?? "",
+    serviceTowns: (detail.profile?.serviceTowns ?? []).join(", "),
+    servicePostalPrefixes: (detail.profile?.servicePostalPrefixes ?? []).join(", "),
   });
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const list = (text: string) =>
+    text
+      .split(/[,;\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -213,6 +220,8 @@ function DetailsSection({
         description: draft.description.trim() || null,
         serviceArea: draft.serviceArea.trim() || null,
         credentials: draft.credentials.trim() || null,
+        serviceTowns: list(draft.serviceTowns),
+        servicePostalPrefixes: list(draft.servicePostalPrefixes),
       };
       await api(`${base}/profile`, { method: "PUT", body });
       await onSaved();
@@ -251,6 +260,31 @@ function DetailsSection({
           <span className="muted text-xs">{hint}</span>
         </label>
       ))}
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 text-sm font-medium">{t("page.areaCheck")}</legend>
+        <span className="muted text-xs">{t("page.areaCheckHint")}</span>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>{t("page.serviceTowns")}</span>
+          <input
+            className="input"
+            dir="auto"
+            placeholder="Guelph, Fergus, Elora"
+            value={draft.serviceTowns}
+            onChange={(e) => setDraft({ ...draft, serviceTowns: e.target.value })}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>{t("page.servicePostalPrefixes")}</span>
+          <input
+            className="input"
+            dir="ltr"
+            placeholder="N1H, N1E, N1G, N0B"
+            value={draft.servicePostalPrefixes}
+            onChange={(e) => setDraft({ ...draft, servicePostalPrefixes: e.target.value })}
+          />
+          <span className="muted text-xs">{t("page.servicePostalPrefixesHint")}</span>
+        </label>
+      </fieldset>
       <div className="flex items-center gap-3">
         <button className="btn" type="submit" disabled={busy}>
           {t("page.details.save")}

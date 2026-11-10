@@ -22,6 +22,8 @@ export interface ToolContext {
   channel: Channel;
   /** Language the visitor is writing in, when known. */
   language: string | null;
+  /** The visitor's latest message was triaged as urgent or a danger (see triage.ts). */
+  urgent?: boolean;
   embeddings?: EmbeddingProvider | null;
   signal?: AbortSignal;
 }

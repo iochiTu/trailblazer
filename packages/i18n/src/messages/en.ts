@@ -536,6 +536,16 @@ export const en = {
   "notices.limit": "You've reached the limit of notices. Delete one to add another.",
   "page.preview.title": "Preview",
   "page.preview.hint": "Your page as visitors see it. Conversations you have here are saved as tests.",
+  "requests.urgent": "Urgent",
+  "requests.photos": "Photos the visitor sent",
+  "requests.photo": "Photo the visitor sent",
+  "page.areaCheck": "Service-area check",
+  "page.areaCheckHint":
+    "Lists your assistant checks visitors' towns and postal codes against. Leave them empty to answer from the service area text above.",
+  "page.serviceTowns": "Towns served (separate with commas)",
+  "page.servicePostalPrefixes": "Postal codes served (separate with commas)",
+  "page.servicePostalPrefixesHint":
+    'The start of each postal code you serve: "N1H" for one area, "N1" for every code starting with N1.',
 } as const;
 
 export type MessageKey = keyof typeof en;

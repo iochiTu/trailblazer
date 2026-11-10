@@ -31,6 +31,14 @@ const strings = {
     imageTooBig: "That image is too large to send. Please choose a smaller one.",
     imageTooMany: "You can send up to {max} images at a time.",
     imagesLimit: "You've sent a lot of images. Please wait a while before sending more.",
+    actionCall: "Call {phone}",
+    actionCallPlain: "Call",
+    actionBook: "Book online",
+    urgentTitle: "This sounds urgent",
+    urgentText: "The fastest way to get help is to call {business}.",
+    dangerTitle: "Your safety comes first",
+    dangerText:
+      "If you smell gas, a carbon monoxide alarm is going off, or there is fire or smoke: get everyone out and call 911 from outside. For gas, also call your gas utility.",
   },
   fr: {
     placeholder: "Écrivez votre message…",
@@ -66,6 +74,14 @@ const strings = {
     imageTooBig: "Cette image est trop volumineuse. Veuillez en choisir une plus petite.",
     imageTooMany: "Vous pouvez envoyer jusqu'à {max} images à la fois.",
     imagesLimit: "Vous avez envoyé beaucoup d'images. Veuillez attendre un peu avant d'en envoyer d'autres.",
+    actionCall: "Appeler le {phone}",
+    actionCallPlain: "Appeler",
+    actionBook: "Réserver en ligne",
+    urgentTitle: "Cela semble urgent",
+    urgentText: "Le moyen le plus rapide d'obtenir de l'aide est d'appeler {business}.",
+    dangerTitle: "Votre sécurité d'abord",
+    dangerText:
+      "Si vous sentez une odeur de gaz, si une alarme de monoxyde de carbone sonne ou s'il y a du feu ou de la fumée : faites sortir tout le monde et appelez le 911 de l'extérieur. Pour le gaz, appelez aussi votre distributeur de gaz.",
   },
 } as const;
 

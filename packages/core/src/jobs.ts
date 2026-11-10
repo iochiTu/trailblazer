@@ -9,21 +9,32 @@ export const JOB_TYPES = {
   addonEffect: "addon.effect",
   /** The setup assistant reads a business's information (payload: { runId }). */
   botSetup: "bot.setup",
+  /** Emails the business about an urgent request right away (payload: { botId, leadId }). */
+  urgentAlert: "request.urgent_alert",
 } as const;
+
+/** Job priorities: higher runs first. */
+export const JOB_PRIORITY = { normal: 0, urgent: 10 } as const;
 
 export async function enqueueJob(
   db: Db,
-  job: { tenantId: string; type: string; payload: Record<string, unknown>; runAt?: Date },
+  job: { tenantId: string; type: string; payload: Record<string, unknown>; runAt?: Date; priority?: number },
 ): Promise<string> {
   const [row] = await db
     .insert(jobs)
-    .values({ tenantId: job.tenantId, type: job.type, payload: job.payload, runAt: job.runAt ?? new Date() })
+    .values({
+      tenantId: job.tenantId,
+      type: job.type,
+      payload: job.payload,
+      runAt: job.runAt ?? new Date(),
+      priority: job.priority ?? JOB_PRIORITY.normal,
+    })
     .returning({ id: jobs.id });
   return row!.id;
 }
 
 /**
- * Atomically claims the next runnable job. `SKIP LOCKED` lets several workers poll safely; jobs
+ * Atomically claims the next runnable job, highest priority first. `SKIP LOCKED` lets several workers poll safely; jobs
  * stuck in "running" for 15 minutes (crashed worker) are picked up again.
  */
 export async function claimNextJob(db: Db, workerId: string): Promise<JobRow | null> {
@@ -34,7 +45,7 @@ export async function claimNextJob(db: Db, workerId: string): Promise<JobRow | n
        select id from jobs
         where (status = 'queued' and run_at <= now())
            or (status = 'running' and locked_at < now() - interval '15 minutes')
-        order by run_at
+        order by priority desc, run_at
         for update skip locked
         limit 1)
     returning id`);

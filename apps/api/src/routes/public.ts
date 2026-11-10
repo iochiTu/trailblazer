@@ -272,7 +272,9 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       websiteUrl: profile?.websiteUrl ?? null,
       address: profile?.address ? Object.values(profile.address).filter(Boolean).join(", ") || null : null,
       bookingUrl: profile?.bookingUrl ?? null,
-      serviceArea: profile?.serviceArea ?? null,
+      // The owner's own wording, or the towns listed for the service-area check.
+      serviceArea:
+        profile?.serviceArea ?? (profile?.serviceTowns.length ? profile.serviceTowns.join(", ") : null),
       credentials: profile?.credentials ?? null,
       staffLanguages: (profile?.staffLanguages ?? []).map((code) => getLanguage(code)?.nativeName ?? code),
       timezone: profile?.timezone ?? "America/Toronto",
@@ -550,6 +552,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             // Names only: the visitor's transcript shows a file chip, never the image itself.
             attachments: messages.attachments,
             images: messages.images,
+            flags: messages.flags,
           })
           .from(messages)
           .where(eq(messages.conversationId, id))
@@ -557,7 +560,14 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           .limit(100);
       });
       if (!rows) throw notFound("Conversation");
-      return { messages: rows.map((m) => ({ ...m, images: m.images.map(toPublicImage) })) };
+      return {
+        messages: rows.map(({ flags, ...m }) => ({
+          ...m,
+          images: m.images.map(toPublicImage),
+          // Buttons shown under the reply (links from the business profile when it was written).
+          actions: flags.actions ?? [],
+        })),
+      };
     },
   );
 }

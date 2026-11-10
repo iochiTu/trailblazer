@@ -284,6 +284,32 @@ describe("business page", () => {
   });
 });
 
+describe("service area lists", () => {
+  it("saves towns and postal code beginnings, cleaned up, and validates them", async () => {
+    const res = await call("PUT", `${owner.base}/profile`, {
+      serviceTowns: ["Guelph", "Fergus", "Guelph"],
+      servicePostalPrefixes: ["n1h", "N1E-", " n0b "],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().profile).toMatchObject({
+      serviceTowns: ["Guelph", "Fergus"],
+      servicePostalPrefixes: ["N1H", "N1E", "N0B"],
+    });
+    for (const bad of ["12345", "NN1", "N1H4E6X"]) {
+      expect(
+        (await call("PUT", `${owner.base}/profile`, { servicePostalPrefixes: [bad] })).statusCode,
+        bad,
+      ).toBe(400);
+    }
+  });
+
+  it("shows the towns on the page when there's no service area text", async () => {
+    await call("PUT", `${owner.base}/profile`, { serviceArea: null });
+    expect((await visit(`/c/${owner.publicKey}`)).body).toContain("Guelph, Fergus");
+    await call("PUT", `${owner.base}/profile`, { serviceArea: "Guelph and Fergus" });
+  });
+});
+
 describe("friendly page links", () => {
   it("sets a link that opens the page and becomes its canonical address", async () => {
     const res = await call("PATCH", owner.base, { pageSlug: ` ${slug.toUpperCase()} ` });

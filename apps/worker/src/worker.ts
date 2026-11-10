@@ -1,6 +1,6 @@
 /**
  * Background worker: polls the Postgres job queue and runs jobs (website crawls, text indexing,
- * add-on effects such as notification emails, the setup assistant).
+ * add-on effects such as notification emails, urgent request alerts, the setup assistant).
  * Several workers can run side by side; jobs are claimed with FOR UPDATE SKIP LOCKED.
  */
 import { hostname } from "node:os";
@@ -13,7 +13,9 @@ import {
   type JobRow,
   runAddonEffect,
   runSetup,
+  runUrgentAlert,
   syncSource,
+  type UrgentAlertPayload,
 } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
 import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
@@ -30,6 +32,8 @@ const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
 const log = (msg: string, data: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ time: new Date().toISOString(), msg, ...data }));
 const mailer = createMailerFromEnv(process.env, log);
+/** Admin portal origin, for links in urgent alerts. */
+const adminUrl = process.env.ADMIN_ORIGIN ? new URL(process.env.ADMIN_ORIGIN).origin : undefined;
 
 async function run(job: JobRow): Promise<void> {
   switch (job.type) {
@@ -40,6 +44,12 @@ async function run(job: JobRow): Promise<void> {
       const payload = job.payload as unknown as AddonEffectPayload;
       const outcome = await runAddonEffect({ db, mailer }, job.tenantId, payload);
       log("add-on effect", { id: job.id, addonId: payload.addonId, kind: payload.effect.kind, outcome });
+      return;
+    }
+    case JOB_TYPES.urgentAlert: {
+      const payload = job.payload as unknown as UrgentAlertPayload;
+      const outcome = await runUrgentAlert({ db, mailer, adminUrl }, job.tenantId, payload);
+      log("urgent alert", { id: job.id, leadId: payload.leadId, outcome });
       return;
     }
     case JOB_TYPES.botSetup:

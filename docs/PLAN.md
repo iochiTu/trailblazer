@@ -1,7 +1,7 @@
 # Traiblazer — Multi-Tenant AI Business Page and Chat Assistant Platform for Small Businesses
 
 > Working name taken from the project folder. Status: **web chat platform and AI business page built
-> (Phase 1, milestones 1.1–1.2 — see README); next: requests for trades and auto shops (1.3); phone and
+> (Phase 1, milestones 1.1–1.3 — see README); next: setup without a website (1.4); phone and
 > SMS not started**.
 > **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
 > the hosted chat page works as the business's website, for businesses that have no site or an outdated
@@ -182,10 +182,10 @@ Sector            e.g. Food & Drink
 | **Business page** | The hosted chat page as the business's public page: header, contact buttons, hours, area, services, photos, with the assistant in front (§7.1) | built |
 | **Services & products** | A list the owner keeps (name, description, photo, price text, category), shown as cards on the page and used by the assistant in answers | built |
 | **Lead capture (requests)** | Contact + pack fields + preferred language; CASL consent for marketing | built |
-| **Urgent request flag** | Pack keywords and questions sort urgent from routine. Urgent → the phone number shown at once, the request marked urgent, the owner emailed immediately (text alert in the phone and SMS phase), plus the safety message (911, gas utility) | 1 |
-| **Quote request** | Guided questions + customer photos; price ranges only from the business's own price rules | 1 |
-| **Service-area check** | Postal code or town checked against the business's service area | 1 |
-| **Booking links** | Buttons and answers that link to the booking tool the business already uses | built (buttons: 1) |
+| **Urgent request flag** | Pack keywords and questions sort urgent from routine. Urgent → the phone number shown at once, the request marked urgent, the owner emailed immediately (text alert in the phone and SMS phase), plus the safety message (911, gas utility) | built |
+| **Quote request** | Guided questions + customer photos; price ranges only from the business's own price rules | built |
+| **Service-area check** | Postal code or town checked against the business's service area | built |
+| **Booking links** | Buttons and answers that link to the booking tool the business already uses | built |
 | **Hours & seasons** | Regular, holiday, seasonal hours; "open now?" on the page and in answers | built (regular hours); holiday and seasonal hours: 2 |
 | **Notices & live status** | Time-limited announcements on the page and in answers (closures, storm delays, "booking tire changeovers now"), auto-translated | built (the assistant translates in answers; page shows the owner's text) |
 | **Human handoff** | Email alert to the owner with the request and the conversation | built |
@@ -193,7 +193,7 @@ Sector            e.g. Food & Drink
 | **Setup assistant** | Proposes business details, greeting and FAQs from the website (built); interview mode and services from a price list for businesses without a website | 1 |
 | **Image upload** | Customer photos in chat via vision models | built |
 | **Multilingual** | Answers in the customer's language; EN/FR page and admin (§6) | built |
-| **Safety & escalation** | Emergency keywords → urgent message + phone; crisis lines (9-8-8, 911) | 1 |
+| **Safety & escalation** | Emergency keywords → urgent message + phone; crisis lines (9-8-8, 911) | built |
 | **Page sharing** | QR code, friendly link, search-engine basics; own domain | built (own domain: 2) |
 | **Job & appointment booking** | Real availability and booking through Google Calendar and Jobber; Housecall Pro, Cal.com and Calendly next | 2 |
 | **Payment and deposit links** | Stripe links in answers and requests | 2 |
@@ -847,7 +847,7 @@ Durations are estimates for 1–2 developers.
 | Phase | Duration | Deliverables |
 |---|---|---|
 | **0. Foundations** | done | Monorepo, CI, docker-compose, schema + RLS, auth with orgs, tenant/bot CRUD, i18n framework (ICU, RTL-ready) |
-| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.2 done; the rest ~3–5 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics. **To build:** urgent request flag; quote request with photos; service-area check; setup without a website (interview, price-list upload); scope guard classifier; evals EN/FR; prospect demo page generator; done-for-you onboarding checklist |
+| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.3 done; the rest ~2–4 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag with immediate email, quote requests with photos and industry fields, service-area check, call and book buttons, scope guard (keyword rules + auxiliary model). **To build:** setup without a website (interview, price-list upload); evals EN/FR; prospect demo page generator; done-for-you onboarding checklist |
 | **2. Paid launch + property management** | ~5–6 weeks | Stripe (CAD; setup fee + monthly plan); own domain for the page; page analytics (visits, questions, requests); booking through **Google Calendar and Jobber**; payment and deposit links; seasonal scripts; pack: **Property management & rentals** (maintenance requests, rental inquiry pre-screening after a privacy check); design-partner clinics and firms; agency white-label and referral tracking; Tier 2 reviewed UI strings |
 | **Later phase — Phone and SMS** | ~6–8 weeks; starts after the paid launch, when pilots ask for it | **SMS first:** telephony (numbers, signed webhooks), missed-call text-back with a link to the business page, two-way SMS/MMS, owner alerts by text, reminders. **Then voice:** voice agent on a managed orchestrator with a fast model profile, emergency transfer, call log (recording, transcript, summary), EN then FR. Housecall Pro; status & pickup alerts from shop software; minutes and SMS metering |
 | **3. Clinics and professional services (customer service only)** | ~6–8 weeks | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; clinic booking integrations (as API access allows); **document chaser** with secure upload and vision check; minimal intake; catalog feeds; packs: Clinic (vet first), Pharmacy, Accounting & tax, Law firm, Immigration consultant, Insurance & financial, Real estate, **Car dealership**; with phone and SMS in place: waitlist backfill & recall |
@@ -862,7 +862,7 @@ pack phases in code (1–4) follow the industry phases above.
 |---|---|
 | **1.1 Chat end-to-end** (done) | Knowledge tables + RLS; LLM gateway; background jobs; website crawl, text and Q&A sources; retrieval; streaming answers with sources; conversation logging + usage metering; hosted chat page, inline iframe and floating widget; admin: knowledge sources, playground, share link & embed codes |
 | **1.2 Business page** (done) | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
-| **1.3 Requests for trades and auto shops** | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
+| **1.3 Requests for trades and auto shops** (done) | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
 | **1.4 Setup without a website** | Interview mode in the setup assistant; price list and brochure upload (PDF, DOCX, photo with vision OCR); services proposed from the sources; Google listing details if the terms allow (§17) |
 | **1.5 Pilot readiness** | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) |
 

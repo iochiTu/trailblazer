@@ -138,6 +138,9 @@ describe("email notifications", () => {
       bestTime: "after 5 pm",
       message: "Wedding cake for 80, June 3.",
       language: "en",
+      urgent: false,
+      details: [{ key: "guests", label: { en: "Guests", fr: "Invités" }, value: "80" }],
+      photoCount: 2,
       at: new Date(),
     };
     const on = activeAddons([install("email-notifications", { email: "o@e.co" })]);
@@ -147,12 +150,17 @@ describe("email notifications", () => {
     expect(mail?.effect.text).toContain("Email: jane@example.com");
     expect(mail?.effect.text).not.toContain("Phone:");
     expect(mail?.effect.text).toContain("Best time: after 5 pm");
+    expect(mail?.effect.text).toContain("Guests: 80");
     expect(mail?.effect.text).toContain("Request: Wedding cake for 80, June 3.");
+    expect(mail?.effect.text).toContain("The visitor sent 2 photos");
     const [fr] = addonEffects(on, request, { ...ctx, ownerLanguage: "fr" });
     expect(fr?.effect.subject).toMatch(/Jane Doe demande une soumission$/);
+    expect(fr?.effect.text).toContain("Invités: 80");
 
     const off = activeAddons([install("email-notifications", { email: "o@e.co", newRequest: false })]);
     expect(addonEffects(off, request, ctx)).toEqual([]);
+    // Urgent requests are emailed by the platform's urgent alert instead (never twice).
+    expect(addonEffects(on, { ...request, urgent: true }, ctx)).toEqual([]);
   });
 
   it("emails on new conversations and unanswered questions, as configured", () => {

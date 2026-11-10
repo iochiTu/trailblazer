@@ -97,6 +97,9 @@ export interface BusinessProfile {
   description: string | null;
   serviceArea: string | null;
   credentials: string | null;
+  /** Service area as lists, for the assistant's service-area check. */
+  serviceTowns: string[];
+  servicePostalPrefixes: string[];
 }
 
 /** A service or product card on the business page. */
@@ -169,6 +172,8 @@ export interface BotDetail {
     workflows: Workflow[];
     /** Every workflow template the business can add: for its industry, then for any business. */
     library: (Workflow & { group: "industry" | "common" })[];
+    /** Details the industry asks for on requests (vehicle, tire size, address…). */
+    leadFields: { key: string; label: Localized; hint: string }[];
   };
   chatUrl: string;
 }
@@ -274,6 +279,12 @@ export interface Lead {
   bestTime: string | null;
   message: string;
   language: string | null;
+  /** A problem that can't wait; the business was emailed at once. */
+  urgent: boolean;
+  /** Industry details (e.g. vehicle, tire size), keyed by the template's lead fields. */
+  details: Record<string, string>;
+  /** Photos the visitor sent in the conversation. */
+  attachmentIds: string[];
   createdAt: string;
 }
 

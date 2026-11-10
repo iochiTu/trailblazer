@@ -361,6 +361,13 @@ export const businessProfiles = pgTable(
     serviceArea: text("service_area"),
     /** Licences, certifications and insurance, shown in the page footer when given. */
     credentials: text("credentials"),
+    /**
+     * Service area as data, for the assistant's service-area check: town names, and postal code
+     * beginnings (e.g. "N1H", or "N1" for every code starting with it). `serviceArea` is the
+     * owner's own wording, shown on the page.
+     */
+    serviceTowns: text("service_towns").array().notNull().default(sql`ARRAY[]::text[]`),
+    servicePostalPrefixes: text("service_postal_prefixes").array().notNull().default(sql`ARRAY[]::text[]`),
     ...timestamps,
   },
   (t) => [
@@ -715,6 +722,12 @@ export interface ReplyImage {
   title: string;
 }
 
+/** A button under an assistant reply; the link always comes from the business profile, never the model. */
+export interface ReplyAction {
+  kind: "call" | "book";
+  href: string;
+}
+
 export interface MessageFlags {
   /**
    * The assistant couldn't answer from the business's information and said so (it marked the reply
@@ -728,6 +741,16 @@ export interface MessageFlags {
   busy?: boolean;
   /** The visitor sent images but no available model could look at them. */
   imagesUnseen?: boolean;
+  /**
+   * Triage of the visitor's message: "danger" (a danger to life: gas, carbon monoxide, fire) or
+   * "urgent" (a problem that can't wait, by the industry's rules). The chat showed the phone
+   * number at once.
+   */
+  urgency?: "urgent" | "danger";
+  /** The visitor asked for professional advice or a diagnosis; the assistant was told to decline. */
+  advice?: boolean;
+  /** Buttons shown under the reply ("call", "book"). */
+  actions?: ReplyAction[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
 }
@@ -773,6 +796,15 @@ export const leads = pgTable(
     message: text("message").notNull(),
     /** Language the visitor was writing in. */
     language: text("language"),
+    /** A problem that can't wait (by the industry's triage rules or the assistant's judgement). */
+    urgent: boolean("urgent").notNull().default(false),
+    /**
+     * The industry's request fields the visitor gave (e.g. { vehicle: "2018 Honda Civic",
+     * tireSize: "215/55R16" }); keys come from the industry template's `leadFields`.
+     */
+    details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+    /** Photos the visitor sent in the conversation (message_attachments ids), shown with the request. */
+    attachmentIds: uuid("attachment_ids").array().notNull().default(sql`ARRAY[]::uuid[]`),
     ...timestamps,
   },
   (t) => [
@@ -1043,6 +1075,8 @@ export const jobs = pgTable(
     status: text("status").$type<JobStatus>().notNull().default("queued"),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(3),
+    /** Higher runs first (urgent request alerts jump ahead of website crawls). */
+    priority: integer("priority").notNull().default(0),
     runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
     lockedAt: timestamp("locked_at", { withTimezone: true }),
     lockedBy: text("locked_by"),

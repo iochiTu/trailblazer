@@ -633,3 +633,62 @@ body:has(.tb-shell[data-theme="midnight"]) {
   background: color-mix(in srgb, var(--tb-accent) 8%, var(--tb-surface));
   border-color: color-mix(in srgb, var(--tb-accent) 35%, transparent);
 }
+
+/* ---- Buttons under replies, urgent banner ---------------------------------------------------- */
+
+.tb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tb-action,
+.tb-msg a.tb-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--tb-accent);
+  color: var(--tb-accent);
+  background: var(--tb-surface);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.tb-action:hover {
+  background: color-mix(in srgb, var(--tb-accent) 10%, var(--tb-surface));
+}
+
+.tb-action-call,
+.tb-msg a.tb-action-call {
+  background: var(--tb-brand);
+  border-color: var(--tb-brand);
+  color: var(--tb-on-brand);
+}
+
+.tb-action-call:hover {
+  background: color-mix(in srgb, var(--tb-brand) 85%, #000000);
+}
+
+.tb-urgent {
+  margin: 0 12px 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border-inline-start: 4px solid var(--tb-brand);
+  background: color-mix(in srgb, var(--tb-brand) 10%, var(--tb-surface));
+  color: var(--tb-text);
+  font-size: 14px;
+}
+
+.tb-urgent[data-level="danger"] {
+  border-inline-start-color: var(--tb-danger);
+  background: color-mix(in srgb, var(--tb-danger) 10%, var(--tb-surface));
+}
+
+.tb-urgent-text {
+  margin: 4px 0 8px;
+}
