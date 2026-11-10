@@ -19,8 +19,10 @@ describe("industry packs", () => {
     }
   });
 
-  it("launches with the phase-1 packs only", () => {
+  it("launches with the phase-1 packs only, first-pilot industries first", () => {
     expect(availablePacks().map((p) => p.slug)).toEqual([
+      "trades",
+      "auto-repair",
       "restaurant",
       "cafe-bakery",
       "retail",
@@ -50,7 +52,16 @@ describe("industry packs", () => {
     expect(isSelectable("restaurant", "dental")).toBe(false);
     expect(isSelectable("clinic")).toBe(false); // phase 3
     expect(isSelectable("clinic", null, 3)).toBe(true);
+    expect(isSelectable("clinic", "vet", 3)).toBe(true);
     expect(isSelectable("nope")).toBe(false);
+  });
+
+  it("releases trades and auto shops first, property management in phase 2", () => {
+    expect(isSelectable("trades", "roofing")).toBe(true);
+    expect(isSelectable("auto-repair", "tires")).toBe(true);
+    expect(isSelectable("property-management")).toBe(false);
+    expect(isSelectable("property-management", "student-housing", 2)).toBe(true);
+    expect(packs.find((p) => p.slug === "property-management")?.scope).toBe("standard");
   });
 });
 
@@ -85,6 +96,28 @@ describe("industry templates", () => {
     expect(florist.workflows.map((w) => w.id)).toContain("flower-delivery");
     expect(florist.guidelines).toContain("cut-off");
     expect(getTemplate("restaurant", "pub").guidelines).toContain("19");
+  });
+
+  it("gives trades and auto shops urgent-first guidelines and variant-only workflows", () => {
+    const trades = getTemplate("trades");
+    expect(trades.guidelines).toContain("911");
+    expect(trades.workflows.map((w) => w.id)).toEqual([
+      "urgent-repair",
+      "service-visit",
+      "quote-request",
+      "service-area",
+    ]);
+    expect(trades.library.map((w) => w.id)).not.toContain("seasonal-contract");
+    expect(getTemplate("trades", "landscaping-snow").library.map((w) => w.id)).toContain("seasonal-contract");
+    expect(getTemplate("trades", "hvac").guidelines).toContain("freezing");
+
+    const auto = getTemplate("auto-repair");
+    expect(auto.guidelines).toContain("safe to drive");
+    expect(auto.workflows.map((w) => w.id)).toContain("tire-changeover");
+    expect(auto.library.map((w) => w.id)).not.toContain("insurance-claim");
+    expect(getTemplate("auto-repair", "body-collision").library.map((w) => w.id)).toContain(
+      "insurance-claim",
+    );
   });
 
   it("returns fresh copies, so editing one assistant's workflows can't change the template", () => {

@@ -74,8 +74,8 @@ export const fmtCad = (cents: number | null) =>
 
 /** What each industry-pack rollout phase adds (cumulative). */
 export const PACK_PHASES: Record<number, string> = {
-  1: "Phase 1 — launch: restaurants, cafés, retail, salons, lodging, attractions, other",
-  2: "Phase 2 — adds grocery, breweries, arts, gyms, business services, trades, auto repair, tutoring, non-profits",
+  1: "Phase 1 — launch: trades, auto repair & tire shops, restaurants, cafés, retail, salons, lodging, attractions, other",
+  2: "Phase 2 — adds property management, business services, grocery, breweries, arts, gyms, tutoring, non-profits",
   3: "Phase 3 — adds clinics, pharmacies, law, accounting, insurance, immigration, real estate, dealerships",
   4: "Phase 4 — adds mining, engineering, manufacturing, auto makers, logistics, utilities, colleges",
 };

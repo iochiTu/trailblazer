@@ -88,6 +88,143 @@ export const commonLibrary: TemplateWorkflow[] = [
 ];
 
 export const industryLibrary: Record<string, TemplateWorkflow[]> = {
+  trades: [
+    {
+      key: "maintenance",
+      name: "Seasonal maintenance and tune-ups",
+      when: "The visitor asks about a furnace or air-conditioner tune-up, seasonal maintenance or a maintenance plan.",
+      steps: [
+        "Describe maintenance services and plans from the business's information, with prices if they're listed.",
+        "Ask what equipment they have and when it was last serviced, if they know.",
+      ],
+      finish: "Share the booking link, or take their details so the business can schedule it.",
+    },
+    {
+      key: "seasonal-contract",
+      name: "Lawn care or snow removal contract",
+      when: "The visitor asks about a seasonal or recurring contract for lawn care or snow removal.",
+      variants: ["landscaping-snow"],
+      steps: [
+        "Ask for the address or town, whether it is a home or a business, and the size of the lawn, driveway or lot.",
+        "Describe what the contract covers and when sign-up opens or closes, only from the business's information.",
+      ],
+      finish: "Take their details so the business can send a quote.",
+    },
+    {
+      key: "after-job",
+      name: "Problem after a recent job",
+      when: "The visitor says a recent repair or installation by the business isn't working, or asks about the warranty on it.",
+      steps: [
+        "Ask what was done, roughly when, and what is happening now.",
+        "Explain the warranty or guarantee only as the business's information describes it.",
+        "Don't admit fault or promise a free repair.",
+      ],
+      finish: "Take their name, phone number and address so the business can follow up.",
+    },
+    {
+      key: "change-visit",
+      name: "Change or cancel a visit",
+      when: "The visitor wants to reschedule or cancel a booked visit.",
+      steps: [
+        "Explain the cancellation policy from the business's information, if there is one.",
+        "You can't see or change bookings yourself.",
+      ],
+      finish: "Give the phone number, or pass on their request with the date of the visit.",
+    },
+    {
+      key: "financing-rebates",
+      name: "Financing and rebates",
+      when: "The visitor asks about financing, payment plans, or government or utility rebates.",
+      steps: [
+        "Share financing options and rebate help only as the business's information describes them.",
+        "Don't say whether they qualify for a rebate or for financing.",
+      ],
+      finish: "Suggest asking for the details with their quote, and give the phone number or email.",
+    },
+    {
+      key: "licences-insurance",
+      name: "Licences and insurance",
+      when: "The visitor asks whether the business is licensed, insured or certified.",
+      steps: [
+        "Share the licences, certifications and insurance listed in the business's information.",
+        "If it isn't listed, say you don't have that information rather than guessing.",
+      ],
+      finish: "Give the phone number or email for proof of insurance or licence numbers.",
+    },
+  ],
+  "auto-repair": [
+    {
+      key: "repair-estimate",
+      name: "Repair estimate",
+      when: "The visitor asks how much a repair or service will cost.",
+      steps: [
+        "Ask for the year, make and model and what needs doing.",
+        "Give prices only for services listed in the business's information.",
+        "Say the final estimate follows an inspection.",
+      ],
+      finish: "Offer to book an inspection, or give the phone number.",
+    },
+    {
+      key: "tire-storage",
+      name: "Tire storage",
+      when: "The visitor asks about storing their tires at the shop.",
+      steps: ["Say whether storage is offered, and the price, from the business's information."],
+      finish: "Explain how to arrange it (at the changeover appointment, or by phone).",
+    },
+    {
+      key: "drop-off",
+      name: "Drop-off, shuttle and loaner car",
+      when: "The visitor asks about dropping the vehicle off after hours, a key drop, a shuttle, a loaner car or waiting at the shop.",
+      steps: [
+        "Explain what's offered only from the business's information.",
+        "If it isn't covered, say so rather than guessing.",
+      ],
+      finish: "Suggest asking when they book, and give the phone number.",
+    },
+    {
+      key: "repair-warranty",
+      name: "Warranty on a repair",
+      when: "The visitor asks about the warranty on parts or labour, or says a problem came back after a repair.",
+      steps: [
+        "Explain the warranty only as the business's information describes it.",
+        "Ask what was done, roughly when, and what is happening now.",
+        "Don't admit fault or promise a free repair.",
+      ],
+      finish: "Take their details so the shop can follow up, or give the phone number.",
+    },
+    {
+      key: "insurance-claim",
+      name: "Insurance claim",
+      when: "The visitor has, or asks about, an insurance claim for collision or glass damage.",
+      variants: ["body-collision", "glass"],
+      steps: [
+        "Ask whether a claim has been opened, without asking for policy or claim numbers.",
+        "Explain how the shop works with insurers only as the business's information describes it.",
+        "Don't say what the insurer will pay.",
+      ],
+      finish: "Explain how to get an estimate (booking link, phone or bringing the vehicle in).",
+    },
+    {
+      key: "inspection",
+      name: "Safety inspection or certificate",
+      when: "The visitor asks about a safety inspection, a safety certificate or an emissions test.",
+      steps: [
+        "Say whether the shop does that inspection, and the price, from the business's information.",
+        "Don't say whether the vehicle will pass.",
+      ],
+      finish: "Share the booking link, or the phone number.",
+    },
+    {
+      key: "breakdown",
+      name: "Breakdown or towing",
+      when: "The visitor's vehicle won't start, has broken down or needs a tow.",
+      steps: [
+        "If they are somewhere unsafe or someone is hurt, tell them to call 911 first.",
+        "Say whether the shop offers or arranges towing, based on the business's information.",
+      ],
+      finish: "Give the phone number right away.",
+    },
+  ],
   restaurant: [
     {
       key: "private-event",
