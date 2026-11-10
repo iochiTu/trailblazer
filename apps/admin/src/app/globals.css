@@ -343,6 +343,96 @@
     box-shadow: var(--shadow-1);
   }
 
+  /* Scrollable tab row (ScrollTabs): faded edges and arrow buttons where more tabs are hidden. */
+  .tabs-scroller {
+    position: relative;
+    max-width: 100%;
+    width: fit-content;
+  }
+
+  .tabs-scroller .tabs {
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 2.75rem;
+    --fade-start: 0px;
+    --fade-end: 0px;
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent 100%
+    );
+  }
+
+  .tabs-scroller[data-start="true"] .tabs {
+    --fade-start: 3rem;
+  }
+
+  .tabs-scroller[data-end="true"] .tabs {
+    --fade-end: 3rem;
+  }
+
+  [dir="rtl"] .tabs-scroller .tabs {
+    mask-image: linear-gradient(
+      to left,
+      transparent 0,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent 100%
+    );
+  }
+
+  .tabs-scroller .tabs[data-dragging="true"] {
+    cursor: grabbing;
+    user-select: none;
+  }
+
+  .tabs-scroller .tabs[data-dragging="true"] .tab {
+    pointer-events: none;
+  }
+
+  .tabs-arrow {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    display: none;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin-top: -1rem;
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+    color: var(--text);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .tabs-arrow:hover {
+    background: var(--surface-2);
+  }
+
+  .tabs-arrow-start {
+    inset-inline-start: 0.25rem;
+  }
+
+  .tabs-arrow-end {
+    inset-inline-end: 0.25rem;
+  }
+
+  [dir="rtl"] .tabs-arrow {
+    transform: scaleX(-1);
+  }
+
+  /* Arrows for mouse and trackpad; touch screens scroll with a swipe, where arrows would cover tabs. */
+  @media (hover: hover) and (pointer: fine) {
+    .tabs-scroller[data-start="true"] .tabs-arrow-start,
+    .tabs-scroller[data-end="true"] .tabs-arrow-end {
+      display: grid;
+    }
+  }
+
   /* ---------- Chips & badges ---------- */
 
   .chip {

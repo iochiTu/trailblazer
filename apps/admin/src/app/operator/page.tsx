@@ -10,6 +10,7 @@ import { OverviewTab } from "@/components/operator/OverviewTab";
 import { PlansTab } from "@/components/operator/PlansTab";
 import { PoliciesTab } from "@/components/operator/PoliciesTab";
 import { UsersTab } from "@/components/operator/UsersTab";
+import { ScrollTabs } from "@/components/ScrollTabs";
 import { ApiError, api, type Me } from "@/lib/api";
 
 const TABS = [
@@ -90,7 +91,7 @@ export default function OperatorPage() {
         </div>
       </header>
 
-      <div role="tablist" className="tabs">
+      <ScrollTabs selectedKey={tab} label="Operator console">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -103,7 +104,7 @@ export default function OperatorPage() {
             {label}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
 
       <section role="tabpanel">
         {tab === "overview" && <OverviewTab />}
