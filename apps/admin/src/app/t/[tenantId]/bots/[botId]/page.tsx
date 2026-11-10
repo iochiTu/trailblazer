@@ -13,6 +13,7 @@ import { RequestsTab } from "@/components/bot/RequestsTab";
 import { ShareTab } from "@/components/bot/ShareTab";
 import { WorkflowsTab } from "@/components/bot/WorkflowsTab";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ScrollTabs } from "@/components/ScrollTabs";
 import { SupportBanner } from "@/components/SupportBanner";
 import { ApiError, api, type BotDetail } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -117,7 +118,7 @@ export default function BotPage() {
         </div>
       </header>
 
-      <div role="tablist" className="tabs">
+      <ScrollTabs selectedKey={tab} label={bot.name}>
         {TABS.map((id) => (
           <button
             key={id}
@@ -139,7 +140,7 @@ export default function BotPage() {
             )}
           </button>
         ))}
-      </div>
+      </ScrollTabs>
 
       <section className="card p-5 sm:p-7" role="tabpanel">
         {tab === "knowledge" && (
