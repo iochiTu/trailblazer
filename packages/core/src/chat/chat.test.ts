@@ -37,13 +37,7 @@ import { tsvectorSql } from "../knowledge/index-documents.js";
 import { syncSource } from "../knowledge/sync.js";
 import { type ChatImage, type ChatStreamEvent, MAX_IMAGES_IN_CONTEXT, runChat } from "./engine.js";
 import { retrievePassages } from "./retrieval.js";
-import {
-  chatTools,
-  MAX_REQUESTS_PER_CONVERSATION,
-  MAX_TOOL_ROUNDS,
-  requestFollowUp,
-  searchKnowledge,
-} from "./tools/index.js";
+import { chatTools, MAX_REQUESTS_PER_CONVERSATION, MAX_TOOL_ROUNDS, searchKnowledge } from "./tools/index.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
@@ -1117,8 +1111,12 @@ describe("requests for the business to follow up", () => {
   });
 
   it("isn't offered when the business turned requests off", () => {
-    expect(chatTools({ settings: {} })).toContain(requestFollowUp);
+    expect(chatTools({ settings: {} }).map((t) => t.name)).toEqual(["search_knowledge", "request_follow_up"]);
     expect(chatTools({ settings: { followUps: false } }).map((t) => t.name)).toEqual(["search_knowledge"]);
+    // The service-area check comes with a listed service area.
+    expect(chatTools({ settings: {} }, { serviceArea: true }).map((t) => t.name)).toContain(
+      "check_service_area",
+    );
   });
 });
 

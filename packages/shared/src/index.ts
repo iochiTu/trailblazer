@@ -308,6 +308,27 @@ export const businessProfileSchema = z
     serviceArea: z.string().trim().max(300).nullable(),
     /** Licences, certifications, insurance. */
     credentials: z.string().trim().max(300).nullable(),
+    /** Service area as data (the assistant's service-area check): towns, and postal code beginnings. */
+    serviceTowns: z
+      .array(z.string().trim().min(1).max(80))
+      .max(100)
+      .transform((list) => [...new Set(list)]),
+    servicePostalPrefixes: z
+      .array(
+        z
+          .string()
+          .transform((code) => code.replace(/[\s-]/g, "").toUpperCase())
+          .pipe(
+            z
+              .string()
+              .regex(
+                /^[A-Z](\d([A-Z](\d([A-Z]\d?)?)?)?)?$/,
+                'Use the start of a Canadian postal code, e.g. "N1H" or "N1"',
+              ),
+          ),
+      )
+      .max(200)
+      .transform((list) => [...new Set(list)]),
   })
   .partial();
 export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;

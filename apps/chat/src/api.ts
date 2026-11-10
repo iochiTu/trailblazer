@@ -46,12 +46,19 @@ export interface ReplyPhoto {
   alt: string;
 }
 
+/** A button under an assistant reply. */
+export interface ReplyAction {
+  kind: "call" | "book";
+  href: string;
+}
+
 export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
   citations: Citation[];
   attachments?: AttachmentName[];
   images?: ReplyPhoto[];
+  actions?: ReplyAction[];
 }
 
 export type StreamEvent =
@@ -60,6 +67,9 @@ export type StreamEvent =
   /** The reply text so far is taken back; what follows replaces it. */
   | { type: "reset" }
   | { type: "image"; image: ReplyPhoto }
+  /** The message sounds urgent or dangerous: show the phone number now. */
+  | { type: "urgent"; level: "urgent" | "danger"; phone: string | null }
+  | { type: "action"; action: ReplyAction }
   | { type: "done"; messageId: string; citations: Citation[] }
   | { type: "error"; code: string; message: string };
 

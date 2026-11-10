@@ -21,11 +21,13 @@ import {
   messageAttachments,
   messages,
   notices,
+  type ReplyAction,
   type ReplyImage,
   tenants,
   usageEvents,
   withTenant,
 } from "@traiblazer/db";
+import { getTemplate } from "@traiblazer/industry-packs";
 import {
   type ChatMessage,
   type ContentBlock,
@@ -37,13 +39,14 @@ import {
   toolCallsOf,
 } from "@traiblazer/llm";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
-import { JOB_TYPES } from "../jobs.js";
+import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
 import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
 import { MarkerFilter } from "./markers.js";
 import { buildSearchQueryPrompt, buildSystemBlocks, parseSearchQueries, photoPromptId } from "./prompt.js";
 import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./retrieval.js";
 import { chatTools, MAX_TOOL_ROUNDS, runToolCalls, toToolDefinition } from "./tools/index.js";
+import { higherUrgency, keywordTriage, parseTriage, type Urgency } from "./triage.js";
 
 export interface ChatDeps {
   db: Db;
@@ -85,6 +88,13 @@ export type ChatStreamEvent =
   | { type: "reset" }
   /** A business photo shown with the reply (sent after the text). */
   | { type: "image"; image: ReplyImage }
+  /**
+   * The visitor's message was triaged urgent or a danger: the chat shows the business's phone
+   * number at once (with the 911 safety line for a danger). Sent again if a later layer raises it.
+   */
+  | { type: "urgent"; level: Urgency; phone: string | null }
+  /** A button under the reply (sent after the text); the link comes from the business profile. */
+  | { type: "action"; action: ReplyAction }
   | { type: "done"; messageId: string; citations: Citation[]; flags: MessageFlags }
   | { type: "error"; code: "unavailable" | "failed"; message: string };
 
@@ -425,6 +435,34 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   const lang2 = language === "fr" ? "fr" : "en";
   yield { type: "start", conversationId };
 
+  // Triage, layer 1: the platform's danger words and the industry's urgent words (EN/FR, instant).
+  // The auxiliary model's reading (layer 2, any language) can raise it below.
+  const template = getTemplate(bot.pack, bot.variant);
+  let urgency: Urgency | null = message ? keywordTriage(message, template.triage) : null;
+  let advice = false;
+  const phone = profile?.phone ?? null;
+  if (urgency) yield { type: "urgent", level: urgency, phone };
+  /** Raises the triage from the auxiliary model's reply; true when it went up. */
+  const applyModelTriage = (output: string) => {
+    const read = parseTriage(output);
+    advice = read.advice;
+    const next = higherUrgency(urgency, read.urgency);
+    const raised = next !== urgency;
+    urgency = next;
+    return raised;
+  };
+
+  /** Buttons the reply asked for, resolved from the business profile (never from the model). */
+  const shownActions: ReplyAction[] = [];
+  const addAction = (kind: string) => {
+    if (shownActions.some((a) => a.kind === kind)) return;
+    if (kind === "call" && phone && /\d/.test(phone)) {
+      shownActions.push({ kind: "call", href: `tel:${phone.replace(/[^\d+]/g, "")}` });
+    } else if (kind === "book" && profile?.bookingUrl && /^https?:\/\//i.test(profile.bookingUrl)) {
+      shownActions.push({ kind: "book", href: profile.bookingUrl });
+    }
+  };
+
   // Images reach the model only when a chat route can see them; otherwise they become placeholders
   // and the visitor is told, politely, that images can't be looked at right now.
   const canSee = deps.gateway.supportsImages("chat");
@@ -468,6 +506,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   let answer = "";
   let chatMeta: GatewayResultMeta | undefined;
   let auxMeta: GatewayResultMeta | undefined;
+  /** The auxiliary model's triage, when it runs alongside the answer (first EN/FR message). */
+  let pendingTriage: Promise<Awaited<ReturnType<LLMGateway["complete"]>> | null> | null = null;
   /** How many model calls the answer took (more than one when tools were used). */
   let modelCalls = 0;
   const toolsUsed = new Set<string>();
@@ -498,19 +538,29 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   // An image nobody can look at, with no text: the notice is the whole answer.
   if (message || !notice) {
     try {
-      // 2. Search queries: rewrite follow-ups and translate other languages into EN/FR.
-      let queries = message ? [message] : [];
-      if (history.length || (message && !isEnOrFr(language))) {
-        const aux = await deps.gateway.complete("aux", {
+      // 2. Search queries: rewrite follow-ups and translate other languages into EN/FR. The same
+      // auxiliary call triages the message (scope guard, any language). When no rewrite is needed
+      // it runs alongside the answer, so it never slows the first reply down.
+      const analyze = () =>
+        deps.gateway.complete("aux", {
           ...buildSearchQueryPrompt(textHistory, message || IMAGE_ONLY_TEXT),
           maxTokens: 2000,
           effort: "low",
           signal: input.signal,
         });
+      let queries = message ? [message] : [];
+      if (history.length || (message && !isEnOrFr(language))) {
+        const aux = await analyze();
         auxMeta = aux;
         queries = parseSearchQueries(aux.text, message || IMAGE_ONLY_TEXT).filter(
           (q) => q !== IMAGE_ONLY_TEXT,
         );
+        if (applyModelTriage(aux.text) && urgency) yield { type: "urgent", level: urgency, phone };
+      } else if (message) {
+        pendingTriage = analyze().catch((error: unknown) => {
+          deps.log?.("triage failed", { error: error instanceof Error ? error.message : String(error) });
+          return null;
+        });
       }
 
       // 3. Retrieve business information.
@@ -544,7 +594,10 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           }
         }
       };
-      const tools = chatTools(bot);
+      const tools = chatTools(bot, {
+        leadFields: template.leadFields,
+        serviceArea: Boolean(profile?.serviceTowns.length || profile?.servicePostalPrefixes.length),
+      });
       const request = {
         system: buildSystemBlocks({
           bot,
@@ -553,6 +606,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           photos: offeredPhotos,
           catalog,
           notices: runningNotices,
+          triage: { urgency, advice },
           addons: addonPrompt(addons, addonCtx, addonLog),
           now: deps.now?.() ?? new Date(),
         }),
@@ -577,6 +631,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         answer = "";
         gapTopic = null;
         shownPhotos.length = 0;
+        shownActions.length = 0;
         yield { type: "reset" };
         if (notice) {
           yield { type: "text", text: notice };
@@ -590,12 +645,13 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         let meta: GatewayResultMeta | undefined;
         for await (const event of deps.gateway.stream("chat", { ...request, messages: turn })) {
           if (event.type === "text") {
-            const { text, ids, gaps } = markers.push(event.text);
+            const { text, ids, gaps, actions } = markers.push(event.text);
             if (wroteEarlier && text.trim()) {
               yield* retract();
               wroteEarlier = false;
             }
             choose(ids);
+            for (const action of actions) addAction(action);
             gapTopic ??= gaps[0] ?? null;
             if (text) yield write(text);
           } else if (event.type === "reset") {
@@ -626,6 +682,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             conversationId,
             channel: input.channel,
             language,
+            urgent: Boolean(urgency),
             embeddings: deps.embeddings,
             signal: input.signal,
           },
@@ -670,9 +727,28 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       shownPhotos.length = 0;
     }
   }
+  // The auxiliary model's triage that ran alongside the answer.
+  if (pendingTriage) {
+    const aux = await pendingTriage;
+    if (aux) {
+      auxMeta = aux;
+      if (applyModelTriage(aux.text) && urgency) yield { type: "urgent", level: urgency, phone };
+    }
+  }
+  if (urgency) flags.urgency = urgency;
+  if (advice && !urgency) flags.advice = true;
+  // An urgent problem always gets a Call button, first.
+  if (urgency && !flags.error && !flags.busy) {
+    addAction("call");
+    shownActions.sort((a, b) => (a.kind === "call" ? -1 : b.kind === "call" ? 1 : 0));
+  }
+  if (flags.error || flags.busy) shownActions.length = 0;
+  if (shownActions.length) flags.actions = [...shownActions];
+
   if (notice) answer = answer ? `${notice}\n\n${answer}` : notice;
   answer = answer.replace(/\n{3,}/g, "\n\n").trim();
   for (const image of shownPhotos) yield { type: "image", image };
+  for (const action of shownActions) yield { type: "action", action };
 
   // 5. Store the answer, usage and cost.
   const messageId = await withTenant(deps.db, input.tenantId, async (tx) => {
@@ -744,15 +820,29 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       ...(input.channel === "playground" ? [] : toolEvents),
     ];
     const effects = events.flatMap((event) => addonEffects(addons, event, addonCtx, addonLog));
-    if (effects.length) {
-      await tx.insert(jobs).values(
-        effects.map(({ addonId, effect }) => ({
-          tenantId: input.tenantId,
-          type: JOB_TYPES.addonEffect,
-          payload: { botId: bot.id, addonId, effect },
-        })),
-      );
-    }
+    // Urgent requests are emailed by the platform right away, ahead of other jobs.
+    const urgentAlerts = events.flatMap((event) =>
+      event.type === "request.created" && event.urgent
+        ? [
+            {
+              tenantId: input.tenantId,
+              type: JOB_TYPES.urgentAlert,
+              priority: JOB_PRIORITY.urgent,
+              payload: { botId: bot.id, leadId: event.leadId },
+            },
+          ]
+        : [],
+    );
+    const queued = [
+      ...urgentAlerts,
+      ...effects.map(({ addonId, effect }) => ({
+        tenantId: input.tenantId,
+        type: JOB_TYPES.addonEffect,
+        priority: JOB_PRIORITY.normal,
+        payload: { botId: bot.id, addonId, effect } as Record<string, unknown>,
+      })),
+    ];
+    if (queued.length) await tx.insert(jobs).values(queued);
     return row!.id;
   });
 

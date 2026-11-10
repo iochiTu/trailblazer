@@ -3,7 +3,9 @@
 Multi-tenant AI assistant (chatbot / RAG) platform for small businesses. See [docs/PLAN.md](docs/PLAN.md)
 for the product plan and roadmap.
 
-**Status:** Phase 1, milestones 1.1 (chat end-to-end) and 1.2 (business page) — knowledge sources
+**Status:** Phase 1, milestones 1.1 (chat end-to-end), 1.2 (business page) and 1.3 (requests for
+trades and auto shops: urgent triage and alerts, request details and photos, service-area check, call
+and book buttons) — knowledge sources
 (website crawl, text, Q&A), retrieval, streaming answers with sources, multi-provider LLM gateway,
 three ways to put the chat on a customer's site (business page, inline iframe, floating widget), and
 the business page itself: services and products, notices, gallery, hours, friendly link, search-engine
@@ -106,13 +108,17 @@ model supports and falls back to the model's default otherwise.
 
 The assistant can call **tools** while it answers: the model asks for a tool, the chat engine runs it
 on the server under the assistant's own business, and the model continues with the result (up to 3
-rounds per answer). Today there are two:
+rounds per answer). Today there are three:
 
 - `search_knowledge`: look the business's information up again with other words, or once per part of
   a multi-part question.
-- `request_follow_up`: pass a visitor's request to the business (see **Requests** below).
+- `request_follow_up`: pass a visitor's request to the business (see **Requests** below). Its schema
+  includes the industry's request fields (`leadFields` in the template: address, vehicle, tire size…).
+- `check_service_area`: check a town, address or postal code against the business's own lists
+  (`business_profiles.service_towns`, `service_postal_prefixes`: "N1H", or "N1" for every code starting
+  with it). Only offered when the business listed them.
 
-Catalog lookup and booking will be added the same way.
+Booking through calendars will be added the same way.
 
 - A tool is a definition in `packages/core/src/chat/tools/` (registered in `index.ts`): name,
   description, a Zod schema for its input and `run`. Every call is validated against the schema first; a bad call, an unknown tool or a
@@ -147,6 +153,37 @@ are new. With the **Email notifications** add-on the owner also gets an email fo
   as before.
 - Requests are personal data: every member of the business can read them, editors can change or
   delete them, and the audit log records who did, without the visitor's details.
+- A request carries the industry's details the visitor gave (`leads.details`, labelled for the owner)
+  and the photos they sent in the conversation (`leads.attachment_ids`, up to 6), shown on the
+  Requests tab and counted in the email.
+
+## Urgent problems (triage) and buttons in answers
+
+Every visitor message is sorted before the answer (`packages/core/src/chat/triage.ts`):
+
+- **Keyword rules**, instant, English and French: the platform's **danger** words for every business
+  (gas smell, carbon monoxide alarm, fire, smoke, sparks) and each industry's **urgent** words
+  (`triage` in the template: burst pipe, no heat, car won't start…). Whole words, without case or
+  accents.
+- **The auxiliary model**, any language: the search-query call also returns a `TYPE:` line (`danger`,
+  `urgent`, `advice` or `routine`). For a first message in English or French it runs alongside the
+  answer, so it never delays the reply; for follow-ups and other languages it already runs first and
+  its reading reaches the answer's prompt as `<triage>`.
+
+The higher reading wins (`flags.urgency` on the answer; `flags.advice` for advice requests, which the
+assistant declines kindly). When a message is urgent or a danger:
+
+- the chat shows a banner at once with a **Call** button (and, for a danger, the 911 safety message),
+  and the reply gets a Call button;
+- a request the visitor leaves is marked **urgent**, sorted first on the Requests tab, and emailed right
+  away by the platform (job `request.urgent_alert`, priority 10, ahead of crawls): to the Email
+  notifications add-on's address when that add-on is on, otherwise to the business's owners and
+  admins. The add-on doesn't send its own email for it, so it arrives once.
+
+**Buttons in answers:** the model writes `[[action:call]]` or `[[action:book]]`; the engine removes the
+marker and sends a button whose link comes from the business profile (phone number, booking link),
+never from the model. Buttons are kept on the message (`flags.actions`) and come back with the
+conversation history.
 
 ## Questions the assistant couldn't answer (knowledge gaps)
 

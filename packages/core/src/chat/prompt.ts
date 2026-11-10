@@ -36,6 +36,15 @@ You are a customer-service assistant for one local business, shown on its websit
 - Don't identify people from their faces or guess personal traits about anyone in an image. If an image contains sensitive information (ID or payment cards, health details), don't repeat it and tell the visitor not to share it here.
 - A line like "[Image sent by the visitor: name]" stands for an image you can't see; say so if the visitor asks about it.
 
+# Buttons
+- To show a button under your reply, write its marker on its own line: [[action:call]] (a Call button with the business's phone number) or [[action:book]] (a Book button with the business's booking link). The platform fills in the number or link; never write them inside the marker.
+- Show Call when the visitor should phone now (an urgent problem, or they want to talk to someone), and Book when they want to book and <business_profile> has a booking link. Only use a button the business has the phone number or booking link for, and each one at most once per reply.
+
+# Urgent problems
+- <triage> (when present) tells you how the visitor's latest message was sorted before you read it. Follow it, and use your own judgement too.
+- A danger to life (a smell of gas, a carbon monoxide alarm, fire, smoke, sparks, someone hurt): first tell them to get everyone out and call 911 from outside (for gas, also their gas utility's emergency line; give a number for it only if the business's information has one), then give the business's phone number. You can't call anyone for them; say so if they ask.
+- An urgent problem: give the phone number first and tell them to call; then offer to pass their details on, marked urgent. Never promise an arrival time.
+
 # Scope
 - You provide customer service, not professional advice. Do not give medical, legal, financial, tax, immigration or other professional advice, and do not assess anyone's personal situation; offer to help them contact the business instead.
 - If someone describes an emergency, tell them to call 911. For a mental-health crisis in Canada, they can call or text 9-8-8.
@@ -176,6 +185,21 @@ export function servicesBlock(items: CatalogEntry[]): string | null {
     .join("\n");
 }
 
+const TRIAGE_TEXT = {
+  danger:
+    "The visitor's latest message describes a possible danger to life. Start with the safety steps (get out, call 911; for gas, also their gas utility, without making up its number), then the business's phone number and [[action:call]].",
+  urgent:
+    "The visitor's latest message describes an urgent problem. Give the business's phone number first with [[action:call]], then offer to pass their details on as an urgent request.",
+  advice:
+    "The visitor's latest message asks for a diagnosis, a safety judgement or professional advice. Say kindly that you can't give that here, and offer to book a visit or pass their question to the business.",
+} as const;
+
+/** The triage note for the prompt, or "" when the message is routine. */
+function triageBlock(triage: { urgency: "urgent" | "danger" | null; advice: boolean } | undefined): string {
+  const key = triage?.urgency ?? (triage?.advice ? "advice" : null);
+  return key ? `\n\n<triage>\n${TRIAGE_TEXT[key]}\n</triage>` : "";
+}
+
 /** Short ids (p1, p2…) for the photos offered in this prompt; the engine maps them back. */
 export const photoPromptId = (index: number) => `p${index + 1}`;
 
@@ -190,6 +214,8 @@ export function buildSystemBlocks(input: {
   catalog?: CatalogEntry[];
   /** Notices running now. */
   notices?: string[];
+  /** How the visitor's latest message was sorted (keyword rules and the auxiliary model). */
+  triage?: { urgency: "urgent" | "danger" | null; advice: boolean };
   now: Date;
 }): SystemBlock[] {
   const { bot, profile, passages, now } = input;
@@ -231,7 +257,7 @@ export function buildSystemBlocks(input: {
     {
       text: `Current local date and time at the business: ${localTime} (${timezone}).${
         running.length ? `\n\n<notices>\n${running.map((n) => `- ${n}`).join("\n")}\n</notices>` : ""
-      }\n\n<knowledge>\n${knowledge}\n</knowledge>${
+      }${triageBlock(input.triage)}\n\n<knowledge>\n${knowledge}\n</knowledge>${
         photos.length
           ? `\n\n<photos>\n${photos
               .map(
@@ -245,7 +271,10 @@ export function buildSystemBlocks(input: {
   ];
 }
 
-/** Prompt for the auxiliary model: standalone search queries in the knowledge base languages. */
+/**
+ * Prompt for the auxiliary model: standalone search queries in the knowledge base languages, and a
+ * triage of the latest message in any language (the scope guard's model layer; see triage.ts).
+ */
 export function buildSearchQueryPrompt(history: { role: string; content: string }[], message: string) {
   const context = history
     .slice(-4)
@@ -254,11 +283,17 @@ export function buildSearchQueryPrompt(history: { role: string; content: string 
   return {
     system: [
       {
-        text: `You turn a website visitor's latest message into search queries for a business's knowledge base, which is written in English and French.
+        text: `You turn a website visitor's latest message into search queries for a business's knowledge base, which is written in English and French, and you sort the message.
 Resolve references to the earlier conversation so each query stands alone. Keep names and numbers.
-Reply with exactly two lines and nothing else:
+Reply with exactly three lines and nothing else:
 EN: <short English search query>
-FR: <short French search query>`,
+FR: <short French search query>
+TYPE: <danger, urgent, advice or routine>
+TYPE is about the latest message, whatever its language:
+- danger: a danger to life or a home right now (a smell of gas, a carbon monoxide alarm, fire, smoke, sparks, someone hurt)
+- urgent: a problem that can't wait for a normal appointment (an active leak or flooding, no heat in cold weather, no power, a sewage backup, storm damage, a vehicle broken down or unsafe to drive)
+- advice: asks for a diagnosis, whether something is safe, or medical, legal, financial or other professional advice
+- routine: anything else`,
       },
     ],
     messages: [
@@ -273,6 +308,7 @@ FR: <short French search query>`,
 export function parseSearchQueries(output: string, fallback: string): string[] {
   const queries = output
     .split("\n")
+    .filter((line) => !/^\s*TYPE\s*:/i.test(line))
     .map((line) => line.replace(/^\s*(EN|FR)\s*:\s*/i, "").trim())
     .filter((line) => line.length > 1 && line.length < 300);
   return queries.length ? [...new Set([fallback, ...queries])] : [fallback];

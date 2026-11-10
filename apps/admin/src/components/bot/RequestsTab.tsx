@@ -68,9 +68,16 @@ export function RequestsTab({
     });
 
   const fmt = new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" });
-  const shown = (list ?? []).filter((lead) =>
-    filter === "all" ? true : filter === "done" ? lead.status === "done" : lead.status !== "done",
-  );
+  const shown = (list ?? [])
+    .filter((lead) =>
+      filter === "all" ? true : filter === "done" ? lead.status === "done" : lead.status !== "done",
+    )
+    // Urgent requests still to do come first.
+    .sort((a, b) => Number(b.urgent && b.status !== "done") - Number(a.urgent && a.status !== "done"));
+  const fieldLabel = (key: string) => {
+    const field = detail.defaults.leadFields.find((f) => f.key === key);
+    return field ? field.label[language === "fr" ? "fr" : "en"] : key;
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -112,8 +119,21 @@ export function RequestsTab({
           {!shown.length && <p className="muted text-sm">{t("requests.emptyFilter")}</p>}
           <ul className="flex flex-col gap-3">
             {shown.map((lead) => (
-              <li key={lead.id} className="panel flex flex-col gap-3 p-4">
+              <li
+                key={lead.id}
+                className="panel flex flex-col gap-3 p-4"
+                style={
+                  lead.urgent && lead.status !== "done"
+                    ? { boxShadow: "inset 4px 0 0 var(--danger, #b42318)" }
+                    : undefined
+                }
+              >
                 <div className="flex flex-wrap items-center gap-2">
+                  {lead.urgent && (
+                    <span className="badge" style={{ background: "#b42318", color: "#ffffff" }}>
+                      {t("requests.urgent")}
+                    </span>
+                  )}
                   <span className="font-semibold" dir="auto">
                     {lead.name}
                   </span>
@@ -128,6 +148,37 @@ export function RequestsTab({
                 <p className="text-sm whitespace-pre-wrap" dir="auto">
                   {lead.message}
                 </p>
+
+                {Object.keys(lead.details ?? {}).length > 0 && (
+                  <dl className="grid gap-x-5 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                    {Object.entries(lead.details).map(([key, value]) => (
+                      <div key={key} className="contents">
+                        <dt className="muted">{fieldLabel(key)}</dt>
+                        <dd dir="auto">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+
+                {lead.conversationId && lead.attachmentIds?.length > 0 && (
+                  <ul className="flex flex-wrap gap-2" aria-label={t("requests.photos")}>
+                    {lead.attachmentIds.map((id) => {
+                      const src = `/api${base}/conversations/${lead.conversationId}/attachments/${id}`;
+                      return (
+                        <li key={id}>
+                          <a href={src} target="_blank" rel="noopener noreferrer">
+                            {/* biome-ignore lint/performance/noImgElement: private visitor image served by the API */}
+                            <img
+                              src={src}
+                              alt={t("requests.photo")}
+                              className="h-20 w-20 rounded-xl border border-[var(--border)] object-cover"
+                            />
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
 
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
                   {lead.email && (

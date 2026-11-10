@@ -53,6 +53,10 @@ const TEXT = {
     phone: "Phone",
     bestTime: "Best time",
     request: "Request",
+    photos: (n: number) =>
+      n === 1
+        ? "The visitor sent 1 photo: see it with the request."
+        : `The visitor sent ${n} photos: see them with the request.`,
     openRequests: "Open your requests",
     footer: "You receive this because the Email notifications add-on is installed. Change it in Add-ons.",
   },
@@ -84,6 +88,10 @@ const TEXT = {
     phone: "Téléphone",
     bestTime: "Meilleur moment",
     request: "Demande",
+    photos: (n: number) =>
+      n === 1
+        ? "Le visiteur a envoyé 1 photo : voyez-la avec la demande."
+        : `Le visiteur a envoyé ${n} photos : voyez-les avec la demande.`,
     openRequests: "Ouvrir vos demandes",
     footer:
       "Vous recevez ce courriel parce que le module Notifications par courriel est installé. Modifiez-le dans Modules.",
@@ -180,7 +188,8 @@ export const emailNotifications = defineAddon<EmailNotificationsConfig>({
         },
       ];
     }
-    if (event.type === "request.created" && config.newRequest) {
+    // Urgent requests are emailed by the platform at once (to this address too), so not twice.
+    if (event.type === "request.created" && config.newRequest && !event.urgent) {
       const requests = tabLink(ctx, "requests");
       const line = (label: string, value: string | null) => (value ? `${label}: ${value}` : null);
       return [
@@ -199,7 +208,9 @@ export const emailNotifications = defineAddon<EmailNotificationsConfig>({
             line(t.email, event.email),
             line(t.phone, event.phone),
             line(t.bestTime, event.bestTime),
+            ...event.details.map((d) => line(d.label[ctx.ownerLanguage], d.value)),
             line(t.request, event.message.trim()),
+            event.photoCount ? t.photos(event.photoCount) : null,
             "",
             requests ? `${t.openRequests}: ${requests}` : null,
             "",

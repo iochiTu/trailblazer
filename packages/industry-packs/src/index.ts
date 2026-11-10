@@ -411,10 +411,12 @@ export {
   getTemplate,
   hasTemplate,
   type IndustryTemplate,
+  type LeadField,
   type LibraryWorkflow,
   resolveBehavior,
   type TemplateContent,
   type TemplateWorkflow,
+  type TriageRules,
   WORKFLOW_LIMITS,
   type Workflow,
 } from "./templates.js";

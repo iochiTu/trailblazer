@@ -8,6 +8,7 @@ import {
   fetchConfig,
   fetchHistory,
   type PublicBotConfig,
+  type ReplyAction,
   type ReplyPhoto,
   streamChat,
 } from "./api";
@@ -25,6 +26,8 @@ interface Message {
   attachments?: AttachmentName[];
   /** Business photos the assistant showed. */
   images?: ReplyPhoto[];
+  /** Buttons under the reply (call, book). */
+  actions?: ReplyAction[];
   pending?: boolean;
   error?: boolean;
   /** A limit or "busy" message (not an error). */
@@ -103,6 +106,8 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
   /** Problem with a picked image, shown above the composer. */
   const [imageError, setImageError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  /** The visitor described an urgent problem or a danger: the phone number stays on screen. */
+  const [urgent, setUrgent] = useState<{ level: "urgent" | "danger"; phone: string | null } | null>(null);
   const dragDepth = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const conversationId = useRef<string | null>(conversationStore.get(publicKey));
@@ -126,6 +131,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                 citations: m.citations,
                 attachments: m.attachments?.map((a) => ({ name: a.name })),
                 images: m.images,
+                actions: m.actions,
               })),
             );
           } else {
@@ -246,6 +252,11 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
           update((m) => ({ ...m, content: m.content + event.text }));
         } else if (event.type === "reset") {
           update((m) => ({ ...m, content: "" }));
+        } else if (event.type === "urgent") {
+          const { level, phone } = event;
+          setUrgent((current) => (current?.level === "danger" ? current : { level, phone }));
+        } else if (event.type === "action") {
+          update((m) => ({ ...m, actions: [...(m.actions ?? []), event.action] }));
         } else if (event.type === "image") {
           update((m) => ({ ...m, images: [...(m.images ?? []), event.image] }));
         } else if (event.type === "done") {
@@ -285,6 +296,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
   }, [onPage]);
 
   function newConversation() {
+    setUrgent(null);
     conversationId.current = null;
     conversationStore.set(publicKey, null);
     setMessages([]);
@@ -468,6 +480,33 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                   ))}
                 </div>
               )}
+              {m.actions && m.actions.length > 0 && (
+                <div class="tb-actions">
+                  {m.actions
+                    .filter((a) => (a.kind === "call" ? /^tel:/.test(a.href) : /^https?:\/\//i.test(a.href)))
+                    .map((a) =>
+                      a.kind === "call" ? (
+                        <a key={a.kind} class="tb-action tb-action-call" href={a.href}>
+                          <span aria-hidden="true">📞</span>
+                          {config.contact.phone
+                            ? ui(lang, "actionCall", { phone: config.contact.phone })
+                            : ui(lang, "actionCallPlain")}
+                        </a>
+                      ) : (
+                        <a
+                          key={a.kind}
+                          class="tb-action"
+                          href={a.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <span aria-hidden="true">📅</span>
+                          {ui(lang, "actionBook")}
+                        </a>
+                      ),
+                    )}
+                </div>
+              )}
               {!m.pending && m.citations.length > 0 && (
                 <div class="tb-sources">
                   <span>{ui(lang, "sources")}:</span>
@@ -494,6 +533,21 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
         )}
       </div>
 
+      {urgent && (
+        <div class="tb-urgent" data-level={urgent.level} role="alert">
+          <strong>{ui(lang, urgent.level === "danger" ? "dangerTitle" : "urgentTitle")}</strong>
+          {urgent.level === "danger" && <p class="tb-urgent-text">{ui(lang, "dangerText")}</p>}
+          {urgent.phone && /\d/.test(urgent.phone) ? (
+            <>
+              <p class="tb-urgent-text">{ui(lang, "urgentText", { business: config.businessName })}</p>
+              <a class="tb-action tb-action-call" href={`tel:${urgent.phone.replace(/[^\d+]/g, "")}`}>
+                <span aria-hidden="true">📞</span>
+                {ui(lang, "actionCall", { phone: urgent.phone })}
+              </a>
+            </>
+          ) : null}
+        </div>
+      )}
       {(images.length > 0 || imageError) && (
         <div class="tb-attachments">
           {imageError && (

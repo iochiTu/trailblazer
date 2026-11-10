@@ -53,12 +53,36 @@ export interface TemplateWorkflow {
   variants?: string[];
 }
 
+/**
+ * A detail the industry needs on a request (e.g. the vehicle for an auto shop). The assistant asks
+ * for it when it matters and passes it on with the request; the owner sees it labelled.
+ */
+export interface LeadField {
+  /** Stable key, stored in `leads.details` (camelCase). */
+  key: string;
+  label: { en: string; fr: string };
+  /** What to put in it, written for the model. */
+  hint: string;
+}
+
+/**
+ * Words that mark a visitor's problem as urgent for this industry (PLAN §4.2 "Urgent request
+ * flag"), per Tier 1 language. Matched on whole words, ignoring case and accents. A danger to life
+ * (gas, carbon monoxide, fire) is a platform rule for every industry, in the chat engine.
+ * Other languages rely on the assistant's own triage.
+ */
+export interface TriageRules {
+  urgent: { en: string[]; fr: string[] };
+}
+
 export interface IndustryTemplate {
   /** How the assistant responds: focus, tone and industry-specific care points. */
   guidelines: string;
   variantGuidelines?: Record<string, string>;
   quickReplies: Record<"en" | "fr", string[]>;
   workflows: TemplateWorkflow[];
+  triage?: TriageRules;
+  leadFields?: LeadField[];
 }
 
 /** A workflow the business can add from the library: for its industry, or for any business. */
@@ -75,7 +99,20 @@ export interface TemplateContent {
    * any business. Ids are unique.
    */
   library: LibraryWorkflow[];
+  /** Urgent-problem words for the industry (none for industries without them). */
+  triage: TriageRules;
+  /** Industry details a request can carry. */
+  leadFields: LeadField[];
 }
+
+const NO_TRIAGE: TriageRules = { urgent: { en: [], fr: [] } };
+
+/** Where the job is: used by every home-services request. */
+const LOCATION_FIELD: LeadField = {
+  key: "location",
+  label: { en: "Address or town", fr: "Adresse ou ville" },
+  hint: "The address, town or postal code where the work is, as the visitor gave it.",
+};
 
 const lines = (...xs: string[]) => xs.join("\n");
 
@@ -103,6 +140,70 @@ const templates: Record<string, IndustryTemplate> = {
       en: ["Do you serve my area?", "I need a repair", "Can I get a quote?"],
       fr: ["Desservez-vous mon secteur?", "J'ai besoin d'une réparation", "Puis-je obtenir une soumission?"],
     },
+    triage: {
+      urgent: {
+        en: [
+          "burst pipe",
+          "pipe burst",
+          "flooding",
+          "flooded",
+          "water everywhere",
+          "water pouring",
+          "leaking through the ceiling",
+          "sewage backup",
+          "sewer backup",
+          "toilet overflowing",
+          "no heat",
+          "furnace not working",
+          "furnace stopped",
+          "furnace won't turn on",
+          "heat isn't working",
+          "frozen pipe",
+          "frozen pipes",
+          "no hot water",
+          "no power",
+          "power is out",
+          "roof is leaking",
+          "roof leak",
+          "storm damage",
+          "tree fell on",
+        ],
+        fr: [
+          "tuyau éclaté",
+          "tuyau a éclaté",
+          "dégât d'eau",
+          "inondation",
+          "inondé",
+          "refoulement d'égout",
+          "toilette déborde",
+          "pas de chauffage",
+          "plus de chauffage",
+          "fournaise ne fonctionne",
+          "fournaise en panne",
+          "tuyaux gelés",
+          "tuyau gelé",
+          "pas d'eau chaude",
+          "pas d'électricité",
+          "panne de courant",
+          "toit coule",
+          "fuite dans le toit",
+          "dommages causés par la tempête",
+        ],
+      },
+    },
+    leadFields: [
+      LOCATION_FIELD,
+      {
+        key: "property",
+        label: { en: "Property", fr: "Propriété" },
+        hint: "The type of property: house, apartment or condo, business.",
+      },
+      {
+        key: "equipment",
+        label: { en: "Equipment", fr: "Équipement" },
+        hint: "For equipment (furnace, water heater, panel, pump): its type and rough age, if the visitor said.",
+      },
+    ],
     workflows: [
       {
         key: "urgent-repair",
@@ -178,6 +279,54 @@ const templates: Record<string, IndustryTemplate> = {
         "Quelles sont vos heures?",
       ],
     },
+    triage: {
+      urgent: {
+        en: [
+          "brakes failed",
+          "no brakes",
+          "brakes not working",
+          "car won't start",
+          "won't start",
+          "broke down",
+          "broken down",
+          "stranded",
+          "need a tow",
+          "flat tire",
+          "blowout",
+          "smoke from the engine",
+          "overheating",
+        ],
+        fr: [
+          "plus de freins",
+          "freins ne fonctionnent",
+          "ne démarre pas",
+          "en panne",
+          "crevaison",
+          "pneu crevé",
+          "pneu à plat",
+          "besoin d’une remorqueuse",
+          "fumée du moteur",
+          "surchauffe",
+        ],
+      },
+    },
+    leadFields: [
+      {
+        key: "vehicle",
+        label: { en: "Vehicle", fr: "Véhicule" },
+        hint: "Year, make and model, as the visitor gave them (e.g. 2018 Honda Civic).",
+      },
+      {
+        key: "tireSize",
+        label: { en: "Tire size", fr: "Dimension des pneus" },
+        hint: "The tire size from the sidewall, e.g. 215/55R16, if the visitor gave it.",
+      },
+      {
+        key: "mileage",
+        label: { en: "Mileage", fr: "Kilométrage" },
+        hint: "The vehicle's kilometres, if the visitor said.",
+      },
+    ],
     workflows: [
       {
         key: "service-booking",
@@ -516,6 +665,8 @@ export function getTemplate(slug: string, variant?: string | null): TemplateCont
     quickReplies: t.quickReplies,
     workflows: starters.map(toWorkflow),
     library,
+    triage: t.triage ?? NO_TRIAGE,
+    leadFields: t.leadFields ?? [],
   };
 }
 

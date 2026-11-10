@@ -563,4 +563,14 @@ export const fr: Record<MessageKey, string> = {
   "page.preview.title": "Aperçu",
   "page.preview.hint":
     "Votre page telle que les visiteurs la voient. Les conversations ici sont enregistrées comme tests.",
+  "requests.urgent": "Urgent",
+  "requests.photos": "Photos envoyées par le visiteur",
+  "requests.photo": "Photo envoyée par le visiteur",
+  "page.areaCheck": "Vérification du territoire",
+  "page.areaCheckHint":
+    "Listes avec lesquelles votre assistant vérifie la ville ou le code postal des visiteurs. Laissez-les vides pour répondre à partir du texte du territoire desservi ci-dessus.",
+  "page.serviceTowns": "Villes desservies (séparées par des virgules)",
+  "page.servicePostalPrefixes": "Codes postaux desservis (séparés par des virgules)",
+  "page.servicePostalPrefixesHint":
+    "Le début de chaque code postal desservi : « N1H » pour un secteur, « N1 » pour tous les codes qui commencent par N1.",
 };

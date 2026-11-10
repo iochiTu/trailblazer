@@ -106,6 +106,15 @@ export type AddonEvent =
       /** What the visitor wants, summarised by the assistant. */
       message: string;
       language: string | null;
+      /**
+       * A problem that can't wait. The platform emails the business about urgent requests itself,
+       * right away (see the urgent alert in @traiblazer/core).
+       */
+      urgent: boolean;
+      /** Industry details the visitor gave (vehicle, tire size, address…), labelled for the owner. */
+      details: { key: string; label: Localized; value: string }[];
+      /** Photos the visitor sent in the conversation, attached to the request. */
+      photoCount: number;
       at: Date;
     };
 export type AddonEventType = AddonEvent["type"];
