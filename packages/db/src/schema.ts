@@ -219,6 +219,21 @@ export interface BotSettings {
    * (default true). See `leads`.
    */
   followUps?: boolean;
+  /** The business page (the web version as the business's public page, PLAN §7.1). */
+  page?: PageSettings;
+}
+
+/** "business": logo, one or more people; "personal": one person (a solo contractor). */
+export const pagePresets = ["business", "personal"] as const;
+export type PagePreset = (typeof pagePresets)[number];
+
+export interface PageSettings {
+  preset?: PagePreset;
+  /**
+   * Let search engines list the page (default true). Only an active assistant with its web version
+   * on is ever listed; an owner can keep the page unlisted (reachable by link only).
+   */
+  listed?: boolean;
 }
 
 /**
@@ -275,11 +290,18 @@ export const bots = pgTable(
      * embedding on the business's allowed websites works either way.
      */
     hostedPageEnabled: boolean("hosted_page_enabled").notNull().default(false),
+    /**
+     * Friendly link to the business page, e.g. "smith-plumbing" for <chat-domain>/smith-plumbing.
+     * Unique across the platform; NULL = only the /c/<public-key> link. Unlike the key, it
+     * survives key rotation.
+     */
+    pageSlug: text("page_slug"),
     settings: jsonb("settings").$type<BotSettings>().notNull().default({}),
     ...timestamps,
   },
   (t) => [
     index("bots_tenant_id_idx").on(t.tenantId),
+    uniqueIndex("bots_page_slug_uq").on(t.pageSlug),
     // Lets child tables reference (bot_id, tenant_id) together, so a row can never point at
     // another tenant's bot (plain FK checks ignore row-level security).
     unique("bots_id_tenant_uq").on(t.id, t.tenantId),
@@ -333,6 +355,12 @@ export const businessProfiles = pgTable(
     staffLanguages: text("staff_languages").array().notNull().default(sql`ARRAY[]::text[]`),
     bookingUrl: text("booking_url"),
     orderingUrl: text("ordering_url"),
+    /** One or two sentences under the name on the business page (and in search results). */
+    description: text("description"),
+    /** Towns, neighbourhoods or postal areas served, in the owner's words. */
+    serviceArea: text("service_area"),
+    /** Licences, certifications and insurance, shown in the page footer when given. */
+    credentials: text("credentials"),
     ...timestamps,
   },
   (t) => [
@@ -562,6 +590,81 @@ export const knowledgeImages = pgTable(
     index("knowledge_images_tsv_idx").using("gin", t.tsv),
     foreignKey({
       name: "knowledge_images_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+// ---------------------------------------------------------------------------------------------
+// Business page (RLS enforced)
+// ---------------------------------------------------------------------------------------------
+
+export const catalogKinds = ["service", "product"] as const;
+export type CatalogKind = (typeof catalogKinds)[number];
+/** What the card's main button does: ask the assistant about it, request a quote, or book. */
+export const catalogActions = ["ask", "quote", "book"] as const;
+export type CatalogAction = (typeof catalogActions)[number];
+
+/**
+ * Services and products the business offers, kept by the owner: shown as cards on the business
+ * page and listed for the assistant. Prices are the owner's own text ("from $120", "call for a
+ * quote"); nothing here is ever filled in by a model without the owner's review.
+ */
+export const catalogItems = pgTable(
+  "catalog_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    kind: text("kind").$type<CatalogKind>().notNull().default("service"),
+    name: text("name").notNull(),
+    description: text("description"),
+    priceText: text("price_text"),
+    /** Cards with the same category are shown together. */
+    category: text("category"),
+    /** Photo (asset kind "catalog_image"); public, like the rest of the page. */
+    assetId: uuid("asset_id").references(() => assets.id, { onDelete: "set null" }),
+    action: text("action").$type<CatalogAction>().notNull().default("ask"),
+    /** Order on the page, smallest first. */
+    position: integer("position").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [
+    index("catalog_items_bot_idx").on(t.tenantId, t.botId, t.position),
+    foreignKey({
+      name: "catalog_items_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Time-limited announcements ("closed Monday for the holiday", "booking tire changeovers now"),
+ * shown at the top of the business page and known to the assistant while they run. No start =
+ * from now on; no end = until removed.
+ */
+export const notices = pgTable(
+  "notices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    text: text("text").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("notices_bot_idx").on(t.tenantId, t.botId),
+    foreignKey({
+      name: "notices_bot_tenant_fk",
       columns: [t.botId, t.tenantId],
       foreignColumns: [bots.id, bots.tenantId],
     }).onDelete("cascade"),
@@ -954,8 +1057,11 @@ export const jobs = pgTable(
 // Stored in Postgres for now; behind an interface so they can move to object storage (S3/R2).
 // ---------------------------------------------------------------------------------------------
 
-/** avatar: assistant picture; knowledge_image: business photo the assistant can show visitors. */
-export const assetKinds = ["avatar", "knowledge_image"] as const;
+/**
+ * avatar: assistant picture; knowledge_image: business photo the assistant can show visitors;
+ * catalog_image: photo of a service or product on the business page.
+ */
+export const assetKinds = ["avatar", "knowledge_image", "catalog_image"] as const;
 export type AssetKind = (typeof assetKinds)[number];
 
 export const assets = pgTable(
@@ -989,6 +1095,8 @@ export const rlsTables = [
   "chunks",
   "qa_pairs",
   "knowledge_images",
+  "catalog_items",
+  "notices",
   "conversations",
   "messages",
   "message_attachments",

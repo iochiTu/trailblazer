@@ -54,6 +54,8 @@ export interface Bot {
   languages: string[];
   defaultLanguage: string;
   hostedPageEnabled: boolean;
+  /** Friendly link to the business page (<chat-domain>/<slug>), if set. */
+  pageSlug: string | null;
   /** The business's own copy; null = still following the industry template (older assistants). */
   guidelines: string | null;
   workflows: Workflow[] | null;
@@ -71,6 +73,8 @@ export interface Bot {
     answerOtherLanguages?: boolean;
     /** Let the assistant take visitors' requests and contact details (default true). */
     followUps?: boolean;
+    /** Business page layout and search-engine listing (listed by default). */
+    page?: { preset?: "business" | "personal"; listed?: boolean };
   };
 }
 
@@ -89,6 +93,32 @@ export interface BusinessProfile {
   hours: WeeklyHours | null;
   bookingUrl: string | null;
   orderingUrl: string | null;
+  /** Business page: a line or two under the name, area served, licences and insurance. */
+  description: string | null;
+  serviceArea: string | null;
+  credentials: string | null;
+}
+
+/** A service or product card on the business page. */
+export interface CatalogItem {
+  id: string;
+  kind: "service" | "product";
+  name: string;
+  description: string | null;
+  priceText: string | null;
+  category: string | null;
+  action: "ask" | "quote" | "book";
+  enabled: boolean;
+  position: number;
+  photoUrl: string | null;
+}
+
+/** A time-limited announcement on the page and in answers. */
+export interface Notice {
+  id: string;
+  text: string;
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 /** What the setup assistant proposes after reading the business's information. */

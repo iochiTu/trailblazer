@@ -190,6 +190,20 @@
       "when": 1794333150539,
       "tag": "0026_setup_runs_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794340386153,
+      "tag": "0027_business_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794340390894,
+      "tag": "0028_business_page_rls",
+      "breakpoints": true
     }
   ]
 }

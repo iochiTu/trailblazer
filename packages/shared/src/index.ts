@@ -97,6 +97,62 @@ export const workflowsSchema = z
     message: "Workflow ids must be unique",
   });
 
+/**
+ * Friendly page links are <chat-domain>/<slug>: lowercase letters, numbers and dashes, 3–60
+ * characters. Words the platform uses (or may use) for its own pages are reserved.
+ */
+export const PAGE_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,58})[a-z0-9]$/;
+export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
+  "admin",
+  "api",
+  "app",
+  "assets",
+  "blog",
+  "c",
+  "chat",
+  "chat-assets",
+  "dashboard",
+  "docs",
+  "help",
+  "login",
+  "logout",
+  "operator",
+  "pricing",
+  "privacy",
+  "robots-txt",
+  "signup",
+  "sitemap",
+  "status",
+  "support",
+  "terms",
+  "traiblazer",
+  "v1",
+  "v2",
+  "widget",
+  "www",
+]);
+
+export const pageSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(PAGE_SLUG_RE, "Use 3–60 lowercase letters, numbers and dashes")
+  .refine((slug) => !slug.includes("--"), "Don't use two dashes in a row")
+  .refine((slug) => !RESERVED_PAGE_SLUGS.has(slug), "This link is reserved; please choose another");
+
+/** A page link proposed from the business's name ("Smith & Sons Plumbing" → "smith-sons-plumbing"). */
+export function suggestPageSlug(name: string): string {
+  const slug = name
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+  return slug.length >= 3 && !RESERVED_PAGE_SLUGS.has(slug) ? slug : "";
+}
+
 export const updateBotSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -126,8 +182,12 @@ export const updateBotSchema = z
         answerOtherLanguages: z.boolean(),
         // Requests: let the assistant take a visitor's contact details and request (default) or not.
         followUps: z.boolean(),
+        // Business page: business or personal layout; listed in search engines (default) or not.
+        page: z.object({ preset: z.enum(["business", "personal"]), listed: z.boolean() }).partial(),
       })
       .partial(),
+    /** Friendly page link; null removes it. */
+    pageSlug: pageSlugSchema.nullable(),
   })
   .partial();
 
@@ -243,9 +303,66 @@ export const businessProfileSchema = z
     staffLanguages: z.array(languageCode).max(30),
     bookingUrl: httpUrl.nullable(),
     orderingUrl: httpUrl.nullable(),
+    /** Business page: one or two sentences under the name. */
+    description: z.string().trim().max(300).nullable(),
+    serviceArea: z.string().trim().max(300).nullable(),
+    /** Licences, certifications, insurance. */
+    credentials: z.string().trim().max(300).nullable(),
   })
   .partial();
 export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
+
+// ---- Business page ---------------------------------------------------------------------------
+
+/** Services and products on the business page. */
+export const CATALOG_LIMIT = 60;
+export const CATALOG_KINDS = ["service", "product"] as const;
+export const CATALOG_ACTIONS = ["ask", "quote", "book"] as const;
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullish()
+    .transform((value) => value || null);
+
+export const catalogItemFields = {
+  kind: z.enum(CATALOG_KINDS),
+  name: z.string().trim().min(1).max(120),
+  description: optionalText(500),
+  /** The owner's own words: "from $120", "$89.99", "call for a quote". */
+  priceText: optionalText(60),
+  category: optionalText(60),
+  action: z.enum(CATALOG_ACTIONS),
+  enabled: z.boolean(),
+};
+export const createCatalogItemSchema = z.object({
+  ...catalogItemFields,
+  kind: catalogItemFields.kind.default("service"),
+  action: catalogItemFields.action.default("ask"),
+  enabled: catalogItemFields.enabled.default(true),
+});
+export const updateCatalogItemSchema = z.object(catalogItemFields).partial();
+export type CreateCatalogItemInput = z.infer<typeof createCatalogItemSchema>;
+export const reorderCatalogSchema = z.object({ ids: z.array(z.uuid()).max(CATALOG_LIMIT) });
+/** A service or product photo: base64 without a `data:` prefix, at most 2 MB decoded. */
+export const catalogPhotoSchema = z.object({
+  data: z.base64().max(Math.ceil((2 * 1024 * 1024 * 4) / 3) + 4),
+});
+
+/** Time-limited announcements on the page and in answers. */
+export const NOTICE_LIMIT = 10;
+export const noticeSchema = z
+  .object({
+    text: z.string().trim().min(1).max(300),
+    startsAt: z.iso.datetime({ offset: true }).nullish(),
+    endsAt: z.iso.datetime({ offset: true }).nullish(),
+  })
+  .refine((n) => !n.startsAt || !n.endsAt || new Date(n.endsAt) > new Date(n.startsAt), {
+    path: ["endsAt"],
+    message: "The end must be after the start",
+  });
+export type NoticeInput = z.infer<typeof noticeSchema>;
 
 export const addAllowedOriginSchema = z.object({ origin: httpUrl });
 

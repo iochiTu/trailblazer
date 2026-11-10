@@ -8,6 +8,7 @@ import { AppearanceTab } from "@/components/bot/AppearanceTab";
 import { ConversationsTab } from "@/components/bot/ConversationsTab";
 import { GeneralTab } from "@/components/bot/GeneralTab";
 import { KnowledgeTab } from "@/components/bot/KnowledgeTab";
+import { PageTab } from "@/components/bot/PageTab";
 import { RequestsTab } from "@/components/bot/RequestsTab";
 import { ShareTab } from "@/components/bot/ShareTab";
 import { WorkflowsTab } from "@/components/bot/WorkflowsTab";
@@ -18,6 +19,7 @@ import { useI18n } from "@/lib/i18n";
 
 type Tab =
   | "knowledge"
+  | "page"
   | "workflows"
   | "addons"
   | "general"
@@ -28,6 +30,7 @@ type Tab =
   | "conversations";
 const TABS: Tab[] = [
   "knowledge",
+  "page",
   "workflows",
   "addons",
   "general",
@@ -153,6 +156,7 @@ export default function BotPage() {
             />
           </div>
         )}
+        {tab === "page" && <PageTab detail={detail} base={base} onChange={load} />}
         {tab === "workflows" && <WorkflowsTab detail={detail} base={base} onChange={load} />}
         {tab === "addons" && <AddonsTab base={base} />}
         {tab === "general" && <GeneralTab detail={detail} base={base} onChange={load} />}

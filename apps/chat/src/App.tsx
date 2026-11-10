@@ -71,6 +71,8 @@ export interface AppProps {
   pageUrl: string | null;
   /** Admin preview: looks like `mode`, but conversations are logged as playground tests. */
   preview?: boolean;
+  /** Shown inside the business page (the page around it is rendered by the API). */
+  onPage?: boolean;
 }
 
 let counter = 0;
@@ -90,7 +92,7 @@ function pickLanguage(config: PublicBotConfig, publicKey: string): string {
   return config.defaultLanguage;
 }
 
-export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
+export function App({ publicKey, mode, pageUrl, preview = false, onPage = false }: AppProps) {
   const [config, setConfig] = useState<PublicBotConfig | null>(null);
   const [failed, setFailed] = useState(false);
   const [lang, setLang] = useState("en");
@@ -145,8 +147,9 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = dir;
-    if (config) document.title = config.businessName;
-  }, [lang, dir, config]);
+    // The business page keeps its own title (it is what search engines and shared links show).
+    if (config && !onPage) document.title = config.businessName;
+  }, [lang, dir, config, onPage]);
 
   async function addImages(files: File[]) {
     if (!files.length) return;
@@ -268,6 +271,19 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
     }
   }
 
+  // Buttons on the business page ("Ask about this", "Request a quote") send their text here.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    if (!onPage) return;
+    const onAsk = (event: Event) => {
+      const text = (event as CustomEvent<unknown>).detail;
+      if (typeof text === "string") void sendRef.current(text);
+    };
+    window.addEventListener("tb:ask", onAsk);
+    return () => window.removeEventListener("tb:ask", onAsk);
+  }, [onPage]);
+
   function newConversation() {
     conversationId.current = null;
     conversationStore.set(publicKey, null);
@@ -330,6 +346,7 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
     <div
       class="tb-shell"
       data-mode={mode}
+      data-page={onPage ? "" : undefined}
       data-theme={appearance.theme}
       dir={dir}
       style={{

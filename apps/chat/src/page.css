@@ -1,0 +1,442 @@
+/*
+ * Business page (PLAN §7.1): the hosted chat page as the business's public page. The API renders
+ * the markup (so it works without JavaScript and search engines read it); the chat app mounts in
+ * .tbp-chat. Colours come from the business's template (data-theme) and brand colour, like the chat.
+ * One fixed layout on purpose: no custom CSS, so every page stays fast and accessible.
+ */
+
+html.tbp-root,
+html.tbp-root body {
+  height: auto;
+  min-height: 100%;
+}
+
+html.tbp-root body {
+  background: #f7f7f5;
+}
+
+body:has(.tbp[data-theme="midnight"]) {
+  background: #0f0f11;
+}
+
+.tbp {
+  --tbp-bg: #f7f7f5;
+  --tbp-surface: #ffffff;
+  --tbp-text: #1c1c1a;
+  --tbp-muted: #5f5f58;
+  --tbp-border: #e3e3de;
+  --tbp-radius: 16px;
+  min-height: 100vh;
+  background: var(--tbp-bg);
+  color: var(--tbp-text);
+}
+
+.tbp[data-theme="minimal"] {
+  --tbp-radius: 8px;
+}
+
+.tbp[data-theme="friendly"] {
+  --tbp-radius: 22px;
+  --tbp-bg: color-mix(in srgb, var(--tb-brand) 6%, #ffffff);
+}
+
+.tbp[data-theme="midnight"] {
+  --tbp-bg: #0f0f11;
+  --tbp-surface: #17171a;
+  --tbp-text: #ececf1;
+  --tbp-muted: #a5a5b0;
+  --tbp-border: #2c2c33;
+  color-scheme: dark;
+}
+
+.tbp a:focus-visible,
+.tbp button:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* ---- Header ---------------------------------------------------------------------------------- */
+
+.tbp-hero {
+  padding: 28px 16px 20px;
+  background: var(--tb-brand);
+  color: var(--tb-on-brand);
+}
+
+.tbp[data-theme="minimal"] .tbp-hero,
+.tbp[data-theme="midnight"] .tbp-hero {
+  background: var(--tbp-surface);
+  color: var(--tbp-text);
+  border-bottom: 3px solid var(--tb-brand);
+}
+
+.tbp-hero-inner,
+.tbp-actions {
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+.tbp-hero-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.tbp-logo {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+  background: var(--tbp-surface);
+  color: var(--tb-accent);
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.tbp[data-preset="personal"] .tbp-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+}
+
+.tbp-heading {
+  min-width: 0;
+}
+
+.tbp-heading h1 {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.tbp-desc {
+  margin: 6px 0 0;
+  font-size: 16px;
+  max-width: 60ch;
+}
+
+.tbp-meta {
+  margin: 8px 0 0;
+  font-size: 14px;
+  opacity: 0.92;
+}
+
+.tbp-open {
+  font-weight: 600;
+}
+
+.tbp-open::before {
+  content: "●";
+  margin-inline-end: 6px;
+}
+
+.tbp-open[data-open="false"]::before {
+  content: "○";
+}
+
+.tbp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.tbp-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.tbp-action:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.tbp-action-primary {
+  background: var(--tb-on-brand);
+  color: var(--tb-brand);
+  border-color: var(--tb-on-brand);
+}
+
+.tbp-action-primary:hover {
+  background: color-mix(in srgb, var(--tb-on-brand) 88%, var(--tb-brand));
+}
+
+.tbp[data-theme="minimal"] .tbp-action-primary,
+.tbp[data-theme="midnight"] .tbp-action-primary {
+  background: var(--tb-brand);
+  color: var(--tb-on-brand);
+  border-color: var(--tb-brand);
+}
+
+/* ---- Notices --------------------------------------------------------------------------------- */
+
+.tbp-notices {
+  max-width: 1120px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.tbp-notices p {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: calc(var(--tbp-radius) * 0.6);
+  border-inline-start: 4px solid var(--tb-brand);
+  background: color-mix(in srgb, var(--tb-brand) 10%, var(--tbp-surface));
+  font-weight: 500;
+}
+
+/* ---- Main: chat + content -------------------------------------------------------------------- */
+
+.tbp-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  display: grid;
+  gap: 28px;
+}
+
+.tbp-chat {
+  height: min(78vh, 640px);
+  min-height: 420px;
+  border-radius: var(--tbp-radius);
+  overflow: hidden;
+  border: 1px solid var(--tbp-border);
+  background: var(--tbp-surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.06);
+  scroll-margin-top: 12px;
+}
+
+.tbp-chat #app {
+  height: 100%;
+}
+
+.tbp-noscript {
+  margin: 0;
+  padding: 24px;
+  color: var(--tbp-muted);
+}
+
+.tb-shell[data-page] {
+  max-width: none;
+  border-inline: 0;
+}
+
+@media (min-width: 960px) {
+  .tbp-main {
+    grid-template-columns: minmax(0, 1fr) 420px;
+    align-items: start;
+  }
+
+  .tbp-chat {
+    order: 2;
+    position: sticky;
+    top: 16px;
+    height: calc(100vh - 32px);
+    max-height: 760px;
+  }
+
+  .tbp-content {
+    order: 1;
+  }
+}
+
+.tbp-content {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+
+.tbp-section h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.tbp-category {
+  margin: 18px 0 10px;
+  font-size: 16px;
+  color: var(--tbp-muted);
+}
+
+.tbp-section > p {
+  margin: 0;
+}
+
+/* ---- Services & products --------------------------------------------------------------------- */
+
+.tbp-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.tbp-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--tbp-radius);
+  border: 1px solid var(--tbp-border);
+  background: var(--tbp-surface);
+  overflow: hidden;
+}
+
+.tbp-card-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+.tbp-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+}
+
+.tbp-card h3 {
+  margin: 0;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+
+.tbp-price {
+  margin: 0;
+  font-weight: 700;
+  color: var(--tb-accent);
+}
+
+.tbp-card-text {
+  margin: 0;
+  color: var(--tbp-muted);
+  font-size: 14px;
+}
+
+.tbp-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.tbp-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--tb-accent);
+  background: transparent;
+  color: var(--tb-accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tbp-btn:hover {
+  background: color-mix(in srgb, var(--tb-accent) 10%, transparent);
+}
+
+.tbp-btn-primary {
+  background: var(--tb-brand);
+  border-color: var(--tb-brand);
+  color: var(--tb-on-brand);
+}
+
+.tbp-btn-primary:hover {
+  background: color-mix(in srgb, var(--tb-brand) 85%, #000000);
+}
+
+/* ---- Photos, hours --------------------------------------------------------------------------- */
+
+.tbp-gallery {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.tbp-gallery img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: calc(var(--tbp-radius) * 0.6);
+}
+
+.tbp-hours {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.tbp-hours th,
+.tbp-hours td {
+  padding: 4px 0;
+  text-align: start;
+  vertical-align: top;
+}
+
+.tbp-hours th {
+  padding-inline-end: 24px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* ---- Footer ---------------------------------------------------------------------------------- */
+
+.tbp-footer {
+  max-width: 1120px;
+  margin: 12px auto 0;
+  padding: 24px 16px 40px;
+  border-top: 1px solid var(--tbp-border);
+  color: var(--tbp-muted);
+  font-size: 14px;
+}
+
+.tbp-footer-name {
+  margin: 0 0 12px;
+  color: var(--tbp-text);
+  font-weight: 700;
+}
+
+.tbp-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.tbp-facts dt {
+  font-weight: 600;
+  color: var(--tbp-text);
+}
+
+.tbp-facts dd {
+  margin: 2px 0 0;
+}
+
+.tbp-privacy,
+.tbp-powered {
+  margin: 8px 0 0;
+}

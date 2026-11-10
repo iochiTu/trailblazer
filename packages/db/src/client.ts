@@ -50,6 +50,14 @@ export async function resolveBotKey(
   return row ? { tenantId: row.tenant_id, botId: row.bot_id, allowedOrigins: row.allowed_origins } : null;
 }
 
+/** The public key of the assistant whose business page has this friendly link, without tenant context. */
+export async function resolvePageSlug(db: Db, slug: string): Promise<string | null> {
+  const rows = await db.execute<{ public_key: string }>(
+    sql`select public_key from app_resolve_page_slug(${slug})`,
+  );
+  return rows[0]?.public_key ?? null;
+}
+
 /** Reads a public image (e.g. an assistant avatar) by id, without tenant context. */
 export async function getPublicAsset(
   db: Db,

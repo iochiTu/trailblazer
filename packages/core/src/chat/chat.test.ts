@@ -5,6 +5,7 @@ import {
   botAddons,
   bots,
   businessProfiles,
+  catalogItems,
   createDb,
   type DbHandle,
   jobs,
@@ -14,6 +15,7 @@ import {
   leads,
   messageAttachments,
   messages,
+  notices,
   qaPairs,
   runMigrations,
   tenants,
@@ -29,7 +31,7 @@ import {
   OfflineProvider,
   type ToolResultBlock,
 } from "@traiblazer/llm";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { tsvectorSql } from "../knowledge/index-documents.js";
 import { syncSource } from "../knowledge/sync.js";
@@ -548,6 +550,57 @@ describe("chat engine", () => {
       expect(text.replace(/\s+/g, " ")).toBe("Here it is and done");
       expect(events.filter((e) => e.type === "image")).toHaveLength(1);
     });
+  });
+
+  it("gives the model the business page's services and the notices running now", async () => {
+    const hour = 3_600_000;
+    const items = await owner.db
+      .insert(catalogItems)
+      .values([
+        { tenantId, botId, name: "Custom birthday cake", priceText: "from $45", category: "Cakes" },
+        { tenantId, botId, name: "Wedding cake", enabled: false },
+      ])
+      .returning({ id: catalogItems.id });
+    const posted = await owner.db
+      .insert(notices)
+      .values([
+        { tenantId, botId, text: "Closed Monday for Thanksgiving" },
+        { tenantId, botId, text: "Summer patio is open", endsAt: new Date(Date.now() - hour) },
+        { tenantId, botId, text: "Holiday pies", startsAt: new Date(Date.now() + hour) },
+      ])
+      .returning({ id: notices.id });
+    try {
+      const vision = new VisionProvider();
+      const recording = new LLMGateway({
+        providers: [vision, new OfflineProvider()],
+        routes: { chat: [{ provider: "vision", model: "v" }], aux: [{ provider: "offline", model: "echo" }] },
+      });
+      await collect(
+        runChat(
+          { db: app.db, gateway: recording },
+          { tenantId, botId, visitorId: "v-page", channel: "hosted", message: "do you make cakes?" },
+        ),
+      );
+      const system = vision.last!.system.map((b) => b.text).join("\n");
+      expect(system).toContain("<services>\n- Custom birthday cake [Cakes] — price: from $45\n</services>");
+      expect(system).not.toContain("Wedding cake");
+      expect(system).toContain("<notices>\n- Closed Monday for Thanksgiving\n</notices>");
+      expect(system).not.toContain("Summer patio");
+      expect(system).not.toContain("Holiday pies");
+    } finally {
+      await owner.db.delete(catalogItems).where(
+        inArray(
+          catalogItems.id,
+          items.map((i) => i.id),
+        ),
+      );
+      await owner.db.delete(notices).where(
+        inArray(
+          notices.id,
+          posted.map((n) => n.id),
+        ),
+      );
+    }
   });
 
   it("refuses paused bots", async () => {

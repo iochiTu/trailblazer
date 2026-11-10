@@ -20,10 +20,12 @@ export function ShareTab({
   const key = detail.keys[0];
   if (!key) return null;
 
-  const pageUrl = `${detail.chatUrl}/c/${key.publicKey}`;
+  const keyUrl = `${detail.chatUrl}/c/${key.publicKey}`;
+  // The link and QR code use the friendly page link when there is one; embeds always use the key.
+  const pageUrl = detail.bot.pageSlug ? `${detail.chatUrl}/${detail.bot.pageSlug}` : keyUrl;
   // Colors, picture and label come from the Appearance settings at load time; the code never changes.
   const widgetCode = `<script src="${detail.chatUrl}/widget.js" data-bot="${key.publicKey}" async></script>`;
-  const iframeCode = `<iframe src="${pageUrl}?embed=inline" title="Chat" style="width:100%;height:600px;border:0;border-radius:12px" loading="lazy"></iframe>`;
+  const iframeCode = `<iframe src="${keyUrl}?embed=inline" title="Chat" style="width:100%;height:600px;border:0;border-radius:12px" loading="lazy"></iframe>`;
 
   async function patch(body: unknown) {
     setError(null);

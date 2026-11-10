@@ -1,4 +1,12 @@
-import { assets, botKeys, bots, businessProfiles, tenants, withTenant } from "@traiblazer/db";
+import {
+  assets,
+  botKeys,
+  bots,
+  businessProfiles,
+  resolvePageSlug,
+  tenants,
+  withTenant,
+} from "@traiblazer/db";
 import { getPack, getTemplate, isSelectable, resolveBehavior } from "@traiblazer/industry-packs";
 import {
   addAllowedOriginSchema,
@@ -10,7 +18,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
-import { badRequest, notFound } from "../lib/errors.js";
+import { badRequest, HttpError, isUniqueViolation, notFound } from "../lib/errors.js";
 import { isUuid, newPublicKey, toOrigin } from "../lib/ids.js";
 import { requireTenantRole } from "../plugins/auth.js";
 
@@ -18,6 +26,11 @@ type TenantParams = { Params: { tenantId: string } };
 type BotParams = { Params: { tenantId: string; botId: string } };
 
 const DEFAULT_LANGUAGES = ["en", "fr"];
+
+const pageSlugTaken = () =>
+  new HttpError(409, "slug_taken", "This page link is already used by another business", [
+    { path: "pageSlug", message: "This page link is already used by another business" },
+  ]);
 
 export async function botRoutes(app: FastifyInstance, { db, config, platform }: AppContext) {
   const base = "/v1/tenants/:tenantId/bots";
@@ -144,6 +157,16 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
       const defaultLanguage = input.defaultLanguage ?? current.defaultLanguage;
       if (!languages.includes(defaultLanguage)) throw badRequest("defaultLanguage must be one of languages");
 
+      // Friendly links are unique across the platform: check first for a clear message (the
+      // unique index below is the final word).
+      if (
+        input.pageSlug &&
+        input.pageSlug !== current.pageSlug &&
+        (await resolvePageSlug(db, input.pageSlug))
+      ) {
+        throw pageSlugTaken();
+      }
+
       const [bot] = await tx
         .update(bots)
         .set({
@@ -151,10 +174,24 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
           languages,
           defaultLanguage,
           // Settings are merged so one field can be changed without resending the others.
-          ...(input.settings ? { settings: { ...current.settings, ...input.settings } } : {}),
+          ...(input.settings
+            ? {
+                settings: {
+                  ...current.settings,
+                  ...input.settings,
+                  ...(input.settings.page
+                    ? { page: { ...current.settings.page, ...input.settings.page } }
+                    : {}),
+                },
+              }
+            : {}),
         })
         .where(eq(bots.id, botId))
-        .returning();
+        .returning()
+        .catch((error: unknown) => {
+          if (isUniqueViolation(error, "bots_page_slug_uq")) throw pageSlugTaken();
+          throw error;
+        });
       await audit(tx, {
         tenantId: request.tenant!.id,
         actorUserId: request.user!.id,
