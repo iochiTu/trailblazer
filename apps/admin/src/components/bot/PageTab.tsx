@@ -6,6 +6,7 @@ import { ApiError, api, type BotDetail, type BusinessProfile } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { CatalogSection } from "./CatalogSection";
 import { NoticesSection } from "./NoticesSection";
+import { QrCode } from "./QrCode";
 
 /** A friendly link proposed from the business's name (the API has the final say). */
 export function suggestSlug(name: string): string {
@@ -103,6 +104,8 @@ function PublishSection({
       </div>
 
       <CopyField value={pageUrl} label={t("share.link")} />
+      {/* Only once published: a printed code must never open an "unavailable" page. */}
+      {bot.hostedPageEnabled && <QrCode url={pageUrl} name={detail.profile?.businessName ?? bot.name} />}
 
       <form className="flex flex-col gap-2" onSubmit={saveSlug}>
         <label className="flex flex-col gap-1 text-sm">
