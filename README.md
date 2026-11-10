@@ -3,9 +3,11 @@
 Multi-tenant AI assistant (chatbot / RAG) platform for small businesses. See [docs/PLAN.md](docs/PLAN.md)
 for the product plan and roadmap.
 
-**Status:** Phase 1, milestone 1.1 (chat end-to-end) — knowledge sources (website crawl, text, Q&A),
-retrieval, streaming answers with sources, multi-provider LLM gateway, and three ways to put the chat
-on a customer's site: hosted chat page, inline iframe, floating widget. See PLAN.md §14 for what's next.
+**Status:** Phase 1, milestones 1.1 (chat end-to-end) and 1.2 (business page) — knowledge sources
+(website crawl, text, Q&A), retrieval, streaming answers with sources, multi-provider LLM gateway,
+three ways to put the chat on a customer's site (business page, inline iframe, floating widget), and
+the business page itself: services and products, notices, gallery, hours, friendly link, search-engine
+basics. See PLAN.md §14 for what's next.
 
 ## Layout
 
@@ -30,13 +32,43 @@ infra/postgres/     Local database init (roles, test database)
 
 | Surface | What the business uses |
 |---|---|
-| Hosted chat page | `http://localhost:4000/c/<public-key>` — a link to share anywhere (QR codes, social media) |
+| Business page (hosted chat page) | `http://localhost:4000/<friendly-link>` or `http://localhost:4000/c/<public-key>`: the business's public page with the chat on it, to share anywhere (QR codes, Google listing, social media) |
 | Inline iframe | `<iframe src="http://localhost:4000/c/<public-key>?embed=inline">` inside one of their pages |
 | Floating widget | `<script src="http://localhost:4000/widget.js" data-bot="<public-key>" async></script>` |
 
-All three load the same chat page. It is served with `frame-ancestors` limited to the bot's allowed
+All three load the same chat app. It is served with `frame-ancestors` limited to the bot's allowed
 websites (plus the admin portal), and talks to the API on its own origin. The admin's
 **Share & install** tab shows the ready-to-copy codes.
+
+## Business page
+
+A top-level visit to the hosted link is the business's **public page** (PLAN §7.1): header with name,
+picture, description, "open now" and service area; Call / Book / Email / Directions buttons; running
+notices; services and products as cards; photo gallery; opening hours; and a footer with address,
+licences and languages. The chat sits beside the content on wide screens and right under the header
+on phones. `?embed=…` (iframe, widget, test chat) still gets the plain chat.
+
+- **Rendered by the API** (`apps/api/src/page/`), so the content is in the HTML when it loads: it works
+  without JavaScript and search engines read it. The head has the title, description, canonical
+  link, Open Graph tags and schema.org structured data (`LocalBusiness` subtype per industry, e.g.
+  `Plumber`, `TireShop`, with hours and offers). The chat app (`apps/chat`) then mounts in `#app`;
+  "Ask about this" / "Request a quote" / "Book" buttons on the cards send their text to the chat.
+- **Listed by search engines** only when the assistant is active, its web version is on and the owner
+  hasn't kept it unlisted; otherwise `noindex`.
+- **Friendly link** `<chat-domain>/<slug>` (`bots.page_slug`, unique across the platform, resolved by
+  the `SECURITY DEFINER` function `app_resolve_page_slug`). Platform words are reserved
+  (`RESERVED_PAGE_SLUGS` in `@traiblazer/shared`). The `/c/<key>` link keeps working and points
+  search engines at the friendly link.
+- **Services & products** (`catalog_items`, RLS): name, description, price in the owner's words,
+  category, photo, main button (ask / quote / book), order, shown or hidden; up to 60 per assistant.
+  **Notices** (`notices`, RLS): text with optional start and end, up to 10. Both are also given to the
+  assistant (`<services>` in the cached prompt block, `<notices>` next to the date), and it quotes
+  prices only as written.
+- **Page details** on the business profile: short description, service area, licences & insurance.
+  Layout preset (business or personal) and listing are in `bots.settings.page`.
+- Edited on the admin's **Business page** tab, with a live preview (`/c/<key>?preview=1` in an iframe:
+  works before publishing, chats are logged as tests). Page text is English or French (the
+  assistant's default language); the chat on it still answers in the visitor's language.
 
 ## Add-ons
 

@@ -12,6 +12,7 @@ import {
   isTheme,
   type PublicAppearance,
   type PublicAvatar,
+  paletteFor,
 } from "@traiblazer/appearance";
 import { type ChatImage, runChat } from "@traiblazer/core";
 import {
@@ -19,23 +20,35 @@ import {
   botAddons,
   bots,
   businessProfiles,
+  catalogItems,
   conversations,
+  knowledgeImages,
   messages,
+  notices,
   type ReplyImage,
   resolveBotKey,
+  resolvePageSlug,
   tenants,
   withTenant,
 } from "@traiblazer/db";
 import { getLanguage } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
-import { MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES, publicChatSchema } from "@traiblazer/shared";
-import { and, asc, eq } from "drizzle-orm";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import {
+  MAX_CHAT_IMAGE_BYTES,
+  MAX_CHAT_IMAGES,
+  PAGE_SLUG_RE,
+  publicChatSchema,
+  RESERVED_PAGE_SLUGS,
+} from "@traiblazer/shared";
+import { and, asc, eq, gt, isNull, lte, or } from "drizzle-orm";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
 import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guard.js";
 import { HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
 import { prepareChatImage } from "../lib/images.js";
+import { renderBusinessPage, renderChatOnly, schemaTypeFor } from "../page/render.js";
+import { pageLanguage } from "../page/strings.js";
 import { publicAssetUrl } from "./assets.js";
 
 /** English fallback text; the chat page shows its own translated message for each code. */
@@ -145,10 +158,47 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     });
   }
 
+  /** What the business page shows besides the profile: cards, running notices, gallery photos. */
+  async function loadPageContent(tenantId: string, botId: string, now: Date) {
+    return withTenant(db, tenantId, async (tx) => {
+      const items = await tx
+        .select()
+        .from(catalogItems)
+        .where(and(eq(catalogItems.botId, botId), eq(catalogItems.enabled, true)))
+        .orderBy(asc(catalogItems.position), asc(catalogItems.createdAt));
+      const running = await tx
+        .select({ text: notices.text })
+        .from(notices)
+        .where(
+          and(
+            eq(notices.botId, botId),
+            or(isNull(notices.startsAt), lte(notices.startsAt, now)),
+            or(isNull(notices.endsAt), gt(notices.endsAt, now)),
+          ),
+        )
+        .orderBy(asc(notices.createdAt));
+      const photos = await tx
+        .select({ assetId: knowledgeImages.assetId, title: knowledgeImages.title })
+        .from(knowledgeImages)
+        .where(and(eq(knowledgeImages.botId, botId), eq(knowledgeImages.enabled, true)))
+        .orderBy(asc(knowledgeImages.createdAt))
+        .limit(12);
+      return { items, notices: running.map((n) => n.text), photos };
+    });
+  }
+
   // ---- Chat page ----------------------------------------------------------------------------
 
-  app.get<{ Params: { key: string } }>("/c/:key", async (request, reply) => {
-    const found = await loadBot(request.params.key);
+  /**
+   * The chat page for a key: the business page for a top-level visit (the shareable link), the
+   * plain chat for `?embed=` (iframe, widget panel, admin test chat).
+   */
+  async function serveChatPage(
+    publicKey: string,
+    request: FastifyRequest<{ Querystring: { embed?: string; preview?: string } }>,
+    reply: FastifyReply,
+  ) {
+    const found = await loadBot(publicKey);
     reply.header("cache-control", "no-store").header("referrer-policy", "strict-origin-when-cross-origin");
     if (!found || found.bot.status === "paused") {
       return reply.code(404).type("text/html; charset=utf-8").send(UNAVAILABLE_PAGE);
@@ -161,8 +211,12 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     }
 
     if (!distDir) throw new HttpError(503, "unavailable", "Chat page is not built");
-    const html = await readFile(path.join(distDir, "index.html"), "utf8").catch(() => null);
-    if (!html) throw new HttpError(503, "unavailable", "Chat page is not built (run pnpm build)");
+    const template = await readFile(path.join(distDir, "index.html"), "utf8").catch(() => null);
+    if (!template) throw new HttpError(503, "unavailable", "Chat page is not built (run pnpm build)");
+
+    const html = request.query.embed
+      ? renderChatOnly(template, publicKey)
+      : await businessPage(template, found, publicKey, request.query.preview === "1", request);
 
     const ancestors = ["'self'", adminOrigin, ...found.allowedOrigins].join(" ");
     reply.header(
@@ -180,6 +234,92 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       ].join("; "),
     );
     return reply.type("text/html; charset=utf-8").send(html);
+  }
+
+  async function businessPage(
+    template: string,
+    found: NonNullable<Awaited<ReturnType<typeof loadBot>>>,
+    publicKey: string,
+    preview: boolean,
+    request: FastifyRequest,
+  ) {
+    const { bot, profile, addons } = found;
+    const settings: BotSettings = bot.settings ?? {};
+    const now = new Date();
+    const content = await loadPageContent(found.tenantId, bot.id, now);
+    const businessName = profile?.businessName ?? bot.name;
+    const appearance = toPublicAppearance(settings, businessName, config.PUBLIC_URL);
+    const palette = paletteFor(appearance.color, appearance.theme);
+    const links = addonChatLinks(
+      addons,
+      { tenantId: found.tenantId, botId: bot.id, businessName, ownerLanguage: "en" },
+      (msg, data) => request.log.warn(data, msg),
+    );
+    return renderBusinessPage(template, {
+      lang: pageLanguage(bot.defaultLanguage),
+      canonicalUrl: bot.pageSlug
+        ? `${config.PUBLIC_URL}/${bot.pageSlug}`
+        : `${config.PUBLIC_URL}/c/${publicKey}`,
+      // Only a published page is listed: active, web version on, not kept unlisted by the owner.
+      listed: !preview && bot.status === "active" && bot.hostedPageEnabled && settings.page?.listed !== false,
+      preset: settings.page?.preset === "personal" ? "personal" : "business",
+      schemaType: schemaTypeFor(bot.pack, bot.variant),
+      publicKey,
+      businessName,
+      description: profile?.description ?? null,
+      phone: profile?.phone ?? null,
+      email: profile?.email ?? null,
+      websiteUrl: profile?.websiteUrl ?? null,
+      address: profile?.address ? Object.values(profile.address).filter(Boolean).join(", ") || null : null,
+      bookingUrl: profile?.bookingUrl ?? null,
+      serviceArea: profile?.serviceArea ?? null,
+      credentials: profile?.credentials ?? null,
+      staffLanguages: (profile?.staffLanguages ?? []).map((code) => getLanguage(code)?.nativeName ?? code),
+      timezone: profile?.timezone ?? "America/Toronto",
+      hours: profile?.hours ?? null,
+      avatar: appearance.avatar,
+      theme: appearance.theme,
+      palette,
+      items: content.items.map((item) => ({
+        id: item.id,
+        kind: item.kind,
+        name: item.name,
+        description: item.description,
+        priceText: item.priceText,
+        category: item.category,
+        photoUrl: item.assetId ? publicAssetUrl(config.PUBLIC_URL, item.assetId) : null,
+        action: item.action,
+      })),
+      photos: content.photos.map((p) => ({
+        url: publicAssetUrl(config.PUBLIC_URL, p.assetId),
+        title: p.title,
+      })),
+      notices: content.notices,
+      links: links.map(({ url, label, icon }) => ({ url, label, icon })),
+      poweredBy: true,
+      now,
+    });
+  }
+
+  type PageRequest = { Querystring: { embed?: string; preview?: string } };
+
+  app.get<{ Params: { key: string } } & PageRequest>("/c/:key", (request, reply) =>
+    serveChatPage(request.params.key, request, reply),
+  );
+
+  // Friendly link to the business page: <chat-domain>/<slug>. Anything else at the root is a 404.
+  app.get<{ Params: { slug: string } } & PageRequest>("/:slug", async (request, reply) => {
+    const { slug } = request.params;
+    if (!PAGE_SLUG_RE.test(slug) || RESERVED_PAGE_SLUGS.has(slug)) return reply.callNotFound();
+    const publicKey = await resolvePageSlug(db, slug);
+    if (!publicKey) {
+      return reply
+        .code(404)
+        .header("cache-control", "no-store")
+        .type("text/html; charset=utf-8")
+        .send(UNAVAILABLE_PAGE);
+    }
+    return serveChatPage(publicKey, request, reply);
   });
 
   app.get("/widget.js", async (_request, reply) => {

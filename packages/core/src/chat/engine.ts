@@ -13,12 +13,14 @@ import {
   businessProfiles,
   type Channel,
   type Citation,
+  catalogItems,
   conversations,
   type Db,
   jobs,
   type MessageFlags,
   messageAttachments,
   messages,
+  notices,
   type ReplyImage,
   tenants,
   usageEvents,
@@ -34,7 +36,7 @@ import {
   type LLMGateway,
   toolCallsOf,
 } from "@traiblazer/llm";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { JOB_TYPES } from "../jobs.js";
 import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
@@ -237,6 +239,30 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       .from(businessProfiles)
       .where(eq(businessProfiles.botId, bot.id))
       .limit(1);
+    // The business page: services and products the owner lists, and notices running now.
+    const catalog = await tx
+      .select({
+        kind: catalogItems.kind,
+        name: catalogItems.name,
+        description: catalogItems.description,
+        priceText: catalogItems.priceText,
+        category: catalogItems.category,
+      })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.botId, bot.id), eq(catalogItems.enabled, true)))
+      .orderBy(asc(catalogItems.position), asc(catalogItems.createdAt));
+    const at = deps.now?.() ?? new Date();
+    const running = await tx
+      .select({ text: notices.text })
+      .from(notices)
+      .where(
+        and(
+          eq(notices.botId, bot.id),
+          or(isNull(notices.startsAt), lte(notices.startsAt, at)),
+          or(isNull(notices.endsAt), gt(notices.endsAt, at)),
+        ),
+      )
+      .orderBy(asc(notices.createdAt));
 
     let conversation = input.conversationId
       ? (
@@ -377,6 +403,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     return {
       bot,
       profile: profile ?? null,
+      catalog,
+      notices: running.map((n) => n.text),
       conversationId: conversation!.id,
       isNew,
       history,
@@ -390,7 +418,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     yield { type: "error", code: "unavailable", message: "This assistant is not available right now." };
     return;
   }
-  const { bot, profile, conversationId, isNew, history, historyImages, addons, addonCtx } = setup;
+  const { bot, profile, catalog, conversationId, isNew, history, historyImages, addons, addonCtx } = setup;
+  const runningNotices = setup.notices;
   const addonLog = (msg: string, data?: Record<string, unknown>) =>
     deps.log?.(msg, { ...data, botId: bot.id });
   const lang2 = language === "fr" ? "fr" : "en";
@@ -522,6 +551,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           profile,
           passages: passages as Passage[],
           photos: offeredPhotos,
+          catalog,
+          notices: runningNotices,
           addons: addonPrompt(addons, addonCtx, addonLog),
           now: deps.now?.() ?? new Date(),
         }),

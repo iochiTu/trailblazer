@@ -1,16 +1,18 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb, type DbHandle, resolveBotKey, withTenant } from "./client.js";
+import { createDb, type DbHandle, resolveBotKey, resolvePageSlug, withTenant } from "./client.js";
 import { runMigrations } from "./migrator.js";
 import {
   assets,
   botKeys,
   bots,
   businessProfiles,
+  catalogItems,
   conversations,
   knowledgeImages,
   messageAttachments,
   messages,
+  notices,
   rlsTables,
   tenants,
 } from "./schema.js";
@@ -23,6 +25,7 @@ let app: DbHandle;
 let tenantA: string;
 let tenantB: string;
 let botB: string;
+let tenantSuffix: string;
 
 beforeAll(async () => {
   await runMigrations(ownerUrl);
@@ -30,6 +33,7 @@ beforeAll(async () => {
   app = createDb(appUrl, { max: 2 });
 
   const suffix = crypto.randomUUID().slice(0, 8);
+  tenantSuffix = suffix;
   const [a] = await owner.db
     .insert(tenants)
     .values({ name: "A", slug: `a-${suffix}` })
@@ -238,6 +242,45 @@ describe("row-level security", () => {
       sql`select content_type from app_get_public_asset(${photo.assetId}::uuid)`,
     );
     expect(rows.map((r) => r.content_type)).toEqual(["image/png"]);
+  });
+
+  it("keeps services and notices within their business; resolves page links without tenant context", async () => {
+    const slug = `b-page-${crypto.randomUUID().slice(0, 8)}`;
+    const item = await withTenant(app.db, tenantB, async (tx) => {
+      await tx.update(bots).set({ pageSlug: slug }).where(eq(bots.id, botB));
+      await tx.insert(notices).values({ tenantId: tenantB, botId: botB, text: "Closed Monday" });
+      const [row] = await tx
+        .insert(catalogItems)
+        .values({ tenantId: tenantB, botId: botB, name: "Drain cleaning", priceText: "from $120" })
+        .returning();
+      return row!;
+    });
+    expect(await app.db.select().from(catalogItems)).toHaveLength(0);
+    expect(await withTenant(app.db, tenantA, (tx) => tx.select().from(catalogItems))).toHaveLength(0);
+    expect(await withTenant(app.db, tenantA, (tx) => tx.select().from(notices))).toHaveLength(0);
+    const changed = await withTenant(app.db, tenantA, (tx) =>
+      tx.update(catalogItems).set({ name: "x" }).where(eq(catalogItems.id, item.id)).returning(),
+    );
+    expect(changed).toHaveLength(0);
+    await expect(
+      withTenant(app.db, tenantA, (tx) =>
+        tx.insert(catalogItems).values({ tenantId: tenantA, botId: botB, name: "x" }),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      withTenant(app.db, tenantA, (tx) =>
+        tx.insert(notices).values({ tenantId: tenantA, botId: botB, text: "x" }),
+      ),
+    ).rejects.toThrow();
+
+    expect(await resolvePageSlug(app.db, slug)).toBe(`pk_test_${tenantSuffix}`);
+    expect(await resolvePageSlug(app.db, "no-such-page")).toBeNull();
+    // A friendly link belongs to one business only.
+    await expect(
+      withTenant(app.db, tenantA, (tx) =>
+        tx.insert(bots).values({ tenantId: tenantA, name: "Copy", pack: "retail", pageSlug: slug }),
+      ),
+    ).rejects.toThrow();
   });
 
   it("rejects a non-UUID tenant id", async () => {

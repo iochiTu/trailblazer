@@ -28,7 +28,7 @@ export const AVAILABLE_PHASE = 1;
 const v = (slug: string, name: string): PackVariant => ({ slug, name });
 
 export const packs: IndustryPack[] = [
-  // Phase 1 — first pilots (phone and SMS first, PLAN §2.1)
+  // Phase 1 — first pilots (business page and chat first, PLAN §2.1)
   {
     slug: "trades",
     sector: "home-construction",

@@ -8,7 +8,7 @@ const MAX_SIDE = 1600;
 const MAX_BYTES = 2 * 1024 * 1024;
 
 /** Scales a photo down to at most 1600 px and returns JPEG base64 (also drops camera metadata). */
-async function toUploadable(file: File): Promise<string | null> {
+export async function toUploadable(file: File): Promise<string | null> {
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
