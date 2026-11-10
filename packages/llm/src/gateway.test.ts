@@ -8,6 +8,7 @@ import { AnthropicProvider, toAnthropicMessage } from "./providers/anthropic.js"
 import { OfflineProvider } from "./providers/offline.js";
 import {
   OpenAICompatibleProvider,
+  ThinkFilter,
   toOpenAIMessage,
   toOpenAIMessages,
 } from "./providers/openai-compatible.js";
@@ -308,6 +309,7 @@ async function run(provider: LLMProvider, req: ChatRequest, model = "m1") {
   let done: Extract<ChatEvent, { type: "done" }> | undefined;
   for await (const event of provider.stream(model, req)) {
     if (event.type === "text") text += event.text;
+    else if (event.type === "reset") text = "";
     else done = event;
   }
   return { text, done: done! };
@@ -465,6 +467,48 @@ describe("tool calling", () => {
           { role: "assistant" },
           { role: "tool", tool_call_id: "call_1" },
         ],
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("keeps a model's thinking out of the reply text", async () => {
+    const filter = (chunks: string[]) => {
+      const thinking = new ThinkFilter();
+      let text = "";
+      for (const chunk of chunks) {
+        const reply = thinking.push(chunk);
+        text = (reply.reset ? "" : text) + reply.text;
+      }
+      return text + thinking.flush();
+    };
+    // Tags split across chunks; a closing tag on its own; text that only looks like a tag.
+    expect(filter(["<thi", "nk>The visitor asks", " about pie.</th", "ink>\n\nYes, daily."])).toBe(
+      "\n\nYes, daily.",
+    );
+    // A closing tag with no opening one: what came before it was thinking as well.
+    expect(filter(["We open at 7.\n</think>", "\n\nWe open at 7 am."])).toBe("\n\nWe open at 7 am.");
+    expect(filter(["Pies are <", "$20 and 3 < 5", " <t"])).toBe("Pies are <$20 and 3 < 5 <t");
+    expect(filter(["Hello <think>never closed"])).toBe("Hello ");
+
+    const chunk = (content: string, finish: string | null = null) =>
+      `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", model: "served", choices: [{ index: 0, delta: { content }, finish_reason: finish }] })}\n\n`;
+    const server = await sseServer(() => [
+      chunk("<think>Let me"),
+      chunk(" check.</thi"),
+      chunk("nk>We close at two."),
+      chunk("</think>We close "),
+      chunk("at 2 pm.", "stop"),
+      "data: [DONE]\n\n",
+    ]);
+    try {
+      const provider = new OpenAICompatibleProvider("local", { apiKey: "x", baseURL: server.url });
+      const { text, done } = await run(provider, { system: [], messages: [{ role: "user", content: "Hi" }] });
+      expect(text).toBe("We close at 2 pm.");
+      expect(done.message).toEqual({
+        role: "assistant",
+        content: [{ type: "text", text: "We close at 2 pm." }],
       });
     } finally {
       await server.close();

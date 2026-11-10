@@ -162,6 +162,20 @@
       "when": 1794282030799,
       "tag": "0022_leads_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794304045858,
+      "tag": "0023_knowledge_gaps",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794304046368,
+      "tag": "0024_knowledge_gaps_rls",
+      "breakpoints": true
     }
   ]
 }

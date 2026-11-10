@@ -48,6 +48,8 @@ export default function BotPage() {
   const [detail, setDetail] = useState<BotDetail | null>(null);
   const [tab, setTab] = useState<Tab>(isTab(requestedTab) ? requestedTab : "knowledge");
   const [testKey, setTestKey] = useState(0);
+  /** Questions the assistant couldn't answer, shown on the Knowledge tab. */
+  const [openGaps, setOpenGaps] = useState(0);
   /** Requests waiting for the business, shown on the Requests tab. */
   const [newRequests, setNewRequests] = useState(0);
   /** Conversation to open on the Conversations tab (from a request). */
@@ -69,6 +71,9 @@ export default function BotPage() {
   useEffect(() => {
     void api<{ newCount: number }>(`${base}/leads?status=new`)
       .then((d) => setNewRequests(d.newCount))
+      .catch(() => {});
+    void api<{ openCount: number }>(`${base}/gaps`)
+      .then((d) => setOpenGaps(d.openCount))
       .catch(() => {});
   }, [base]);
 
@@ -123,6 +128,9 @@ export default function BotPage() {
             }}
           >
             {t(`bots.tab.${id}`)}
+            {id === "knowledge" && openGaps > 0 && (
+              <span className="badge badge-accent ms-2">{openGaps}</span>
+            )}
             {id === "requests" && newRequests > 0 && (
               <span className="badge badge-accent ms-2">{newRequests}</span>
             )}
@@ -131,7 +139,7 @@ export default function BotPage() {
       </div>
 
       <section className="card p-5 sm:p-7" role="tabpanel">
-        {tab === "knowledge" && <KnowledgeTab base={base} />}
+        {tab === "knowledge" && <KnowledgeTab base={base} onGapCount={setOpenGaps} />}
         {tab === "test" && key && (
           <div className="flex flex-col gap-3">
             <p className="muted text-sm">{t("test.hint")}</p>

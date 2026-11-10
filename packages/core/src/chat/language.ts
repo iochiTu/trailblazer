@@ -21,7 +21,8 @@ export function guessLanguage(text: string): string | null {
   if (/[一-鿿]/.test(t)) return /[們這個麼來時點開門營業價錢]/.test(t) ? "zh-Hant" : "zh-Hans";
   if (/[Ѐ-ӿ]/.test(t)) return /[іїєґІЇЄҐ]/.test(t) ? "uk" : "ru";
 
-  const lower = ` ${t.toLowerCase()} `;
+  // Punctuation next to a word ("Bonjour, …") must not hide the word.
+  const lower = ` ${t.toLowerCase().replace(/[.,;:!?…«»"()]/g, " ")} `;
   const words = (list: string[]) =>
     list.filter((w) => lower.includes(` ${w} `) || lower.includes(` ${w}?`)).length;
   if (/[ăơưđ]|[ạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/.test(lower)) return "vi";

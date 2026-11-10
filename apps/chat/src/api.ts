@@ -57,6 +57,8 @@ export interface StoredMessage {
 export type StreamEvent =
   | { type: "start"; conversationId: string }
   | { type: "text"; text: string }
+  /** The reply text so far is taken back; what follows replaces it. */
+  | { type: "reset" }
   | { type: "image"; image: ReplyPhoto }
   | { type: "done"; messageId: string; citations: Citation[] }
   | { type: "error"; code: string; message: string };

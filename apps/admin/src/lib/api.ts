@@ -165,6 +165,19 @@ export interface QaPair {
   language: string;
 }
 
+/** A question visitors asked that the assistant couldn't answer from the business's information. */
+export interface KnowledgeGap {
+  id: string;
+  /** What was missing, in a few words. */
+  topic: string;
+  /** The latest visitor question about it. */
+  question: string;
+  language: string | null;
+  status: "open" | "answered" | "dismissed";
+  occurrences: number;
+  lastAskedAt: string;
+}
+
 export type LeadStatus = "new" | "in_progress" | "done";
 
 /** A request a visitor left with the assistant for the business to follow up on. */

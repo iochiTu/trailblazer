@@ -4,8 +4,8 @@ import { type ChatEvent, type ChatRequest, type LLMProvider, textOf } from "../t
  * Offline provider for development and tests (no API key, no network, no cost).
  *
  * It does not understand language. For chat it echoes the most relevant sentences found in the
- * prompt's <knowledge> section, and shows the best-matching photo from <photos> (with the same
- * marker a real model writes), so the whole pipeline (retrieval, streaming, citations, photos,
+ * prompt's <knowledge> section, shows the best-matching photo from <photos> and marks questions
+ * it found nothing for (with the same markers a real model writes), so the whole pipeline (retrieval, streaming, citations, photos,
  * logging) can be exercised end to end. For auxiliary calls it returns the last user message unchanged.
  */
 export class OfflineProvider implements LLMProvider {
@@ -89,7 +89,12 @@ function answerFromKnowledge(system: string, question: string): string {
     .slice(0, 2);
 
   if (!scored.length) {
-    return "[Offline test mode] I couldn't find that in this business's information. Please contact the business directly.";
+    // Like a real model, it marks what it couldn't answer (the chat engine removes the marker).
+    const missing = question
+      .replace(/[[\]\n]/g, " ")
+      .trim()
+      .slice(0, 120);
+    return `[Offline test mode] I couldn't find that in this business's information. Please contact the business directly.\n\n[[gap: ${missing}]]`;
   }
   return `[Offline test mode] ${scored.map((s) => s.sentence).join(" ")}`;
 }

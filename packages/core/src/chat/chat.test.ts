@@ -8,6 +8,7 @@ import {
   createDb,
   type DbHandle,
   jobs,
+  knowledgeGaps,
   knowledgeImages,
   knowledgeSources,
   leads,
@@ -105,10 +106,12 @@ class VisionProvider implements LLMProvider {
 async function collect(gen: AsyncGenerator<ChatStreamEvent>) {
   const events: ChatStreamEvent[] = [];
   for await (const e of gen) events.push(e);
-  const text = events
-    .filter((e): e is Extract<ChatStreamEvent, { type: "text" }> => e.type === "text")
-    .map((e) => e.text)
-    .join("");
+  // What the visitor ends up seeing: a reset takes back the text before it.
+  let text = "";
+  for (const e of events) {
+    if (e.type === "text") text += e.text;
+    else if (e.type === "reset") text = "";
+  }
   return {
     events,
     text,
@@ -574,6 +577,8 @@ class DownProvider implements LLMProvider {
 /** One scripted model turn: text, tool calls, or both. */
 interface ScriptedTurn {
   text?: string;
+  /** Text streamed first and then taken back by the provider (e.g. leaked thinking). */
+  draft?: string;
   calls?: { name: string; input: unknown }[];
 }
 
@@ -593,6 +598,10 @@ class ToolProvider implements LLMProvider {
     this.requests.push({ ...request, messages: [...request.messages] });
     const call = this.requests.length;
     const turn = this.script(request, call);
+    if (turn.draft) {
+      yield { type: "text", text: turn.draft };
+      yield { type: "reset" };
+    }
     if (turn.text) yield { type: "text", text: turn.text };
     const content: ContentBlock[] = [
       ...(turn.text ? [{ type: "text" as const, text: turn.text }] : []),
@@ -638,7 +647,13 @@ describe("tools in the chat engine", () => {
         { tenantId, botId, visitorId: "tool-1", channel: "hosted", message: "zzqx vvkp" },
       ),
     );
-    expect(text).toBe("One moment.\n\nYes, daily.");
+    // What the model wrote before the tool call is taken back; the reply is what it wrote after.
+    expect(text).toBe("Yes, daily.");
+    expect(events.filter((e) => e.type === "text" || e.type === "reset")).toEqual([
+      { type: "text", text: "One moment." },
+      { type: "reset" },
+      { type: "text", text: "Yes, daily." },
+    ]);
     expect(done.citations[0]?.url).toMatch(/\/menu$/);
     expect(done.flags).toEqual({ tools: ["search_knowledge"] });
 
@@ -662,7 +677,7 @@ describe("tools in the chat engine", () => {
     expect(stored).toMatchObject({
       inputTokens: 20,
       outputTokens: 10,
-      content: "One moment.\n\nYes, daily.",
+      content: "Yes, daily.",
     });
     const usage = await withTenant(app.db, tenantId, (tx) =>
       tx.select().from(usageEvents).where(eq(usageEvents.botId, botId)),
@@ -672,6 +687,50 @@ describe("tools in the chat engine", () => {
       quantity: 30,
       metadata: { tools: ["search_knowledge"] },
     });
+  });
+
+  it("replaces what was written before a tool call only when the model writes again", async () => {
+    const search = [{ name: "search_knowledge", input: { query: "blueberry pie" } }];
+    const chat = (visitorId: string, script: (call: number) => ScriptedTurn) =>
+      collect(
+        runChat(
+          { db: app.db, gateway: toolGateway(new ToolProvider((_request, call) => script(call))) },
+          { tenantId, botId, visitorId, channel: "hosted", message: "zzqx vvkp" },
+        ),
+      );
+
+    // Nothing after the tool: what was already written is the reply.
+    const quiet = await chat("tool-quiet", (call) =>
+      call === 1 ? { text: "Yes, daily.", calls: search } : {},
+    );
+    expect(quiet.text).toBe("Yes, daily.");
+    expect(quiet.events.some((e) => e.type === "reset")).toBe(false);
+
+    // A gap marked before the search found the answer is taken back with the text.
+    const found = await chat("tool-found", (call) =>
+      call === 1 ? { text: "I'm not sure.\n[[gap: pie]]", calls: search } : { text: "Yes, daily." },
+    );
+    expect(found.text).toBe("Yes, daily.");
+    expect(found.done.flags).toEqual({ tools: ["search_knowledge"] });
+  });
+
+  it("drops text the provider takes back", async () => {
+    const provider = new ToolProvider(() => ({ draft: "The visitor asks about pie.", text: "Yes, daily." }));
+    const { text, events } = await collect(
+      runChat(
+        { db: app.db, gateway: toolGateway(provider) },
+        { tenantId, botId, visitorId: "tool-draft", channel: "hosted", message: "Do you have pie?" },
+      ),
+    );
+    expect(text).toBe("Yes, daily.");
+    const conversationId = (events[0] as { conversationId: string }).conversationId;
+    const [stored] = await withTenant(app.db, tenantId, (tx) =>
+      tx
+        .select()
+        .from(messages)
+        .where(and(eq(messages.conversationId, conversationId), eq(messages.role, "assistant"))),
+    );
+    expect(stored!.content).toBe("Yes, daily.");
   });
 
   it("answers a bad tool call with an error the model can recover from", async () => {
@@ -728,6 +787,115 @@ describe("tools in the chat engine", () => {
     // Another business's assistant, and another business asking for this assistant, find nothing.
     expect((await run(otherTenantId, otherBotId)).content).toBe("No matching information found.");
     expect((await run(otherTenantId, botId)).content).toBe("No matching information found.");
+  });
+});
+
+describe("questions the assistant couldn't answer", () => {
+  /** A model that answers every question with the given reply. */
+  const says = (reply: string) => toolGateway(new ToolProvider(() => ({ text: reply })));
+  const ask = (reply: string, message: string, extra: object = {}) =>
+    collect(
+      runChat(
+        { db: app.db, gateway: says(reply) },
+        { tenantId, botId, visitorId: `gap-${crypto.randomUUID()}`, channel: "widget", message, ...extra },
+      ),
+    );
+  const gaps = () =>
+    owner.db
+      .select()
+      .from(knowledgeGaps)
+      .where(eq(knowledgeGaps.botId, botId))
+      .orderBy(knowledgeGaps.createdAt);
+  const about = async (word: string) => (await gaps()).filter((g) => g.topic.includes(word));
+
+  beforeAll(async () => {
+    await owner.db.delete(knowledgeGaps).where(eq(knowledgeGaps.botId, botId));
+  });
+
+  it("lists what was missing, hides the marker, and counts repeats on one line", async () => {
+    const first = await ask(
+      "I don't have our cake prices here.\n\n[[gap: wedding cake prices]]",
+      "How much is a wedding cake?",
+    );
+    expect(first.text).toBe("I don't have our cake prices here.\n\n");
+    expect(first.done.flags).toEqual({ unanswered: true });
+    const conversationId = (first.events[0] as { conversationId: string }).conversationId;
+    const [stored] = await withTenant(app.db, tenantId, (tx) =>
+      tx
+        .select({ content: messages.content })
+        .from(messages)
+        .where(and(eq(messages.conversationId, conversationId), eq(messages.role, "assistant"))),
+    );
+    expect(stored!.content).toBe("I don't have our cake prices here.");
+
+    // Asked again in other words, by someone else, in French.
+    await ask(
+      "Désolé, je n'ai pas ça.\n[[gap: prices for wedding cakes]]",
+      "Bonjour, combien coûte un gâteau de mariage?",
+    );
+    expect(await about("wedding")).toMatchObject([
+      {
+        topic: "wedding cake prices",
+        question: "Bonjour, combien coûte un gâteau de mariage?",
+        language: "fr",
+        status: "open",
+        occurrences: 2,
+      },
+    ]);
+
+    // Something else is its own line, even when it sounds alike.
+    await ask("No idea, sorry. [[gap: bike parking]]", "Is there somewhere to lock my bike?");
+    await ask("Not sure, sorry. [[gap: car parking]]", "Where can I park my car?");
+    expect(await about("car parking")).toMatchObject([{ occurrences: 1 }]);
+    expect(await about("bike")).toMatchObject([
+      { occurrences: 1, question: "Is there somewhere to lock my bike?" },
+    ]);
+  });
+
+  it("uses the visitor's question when the assistant names nothing", async () => {
+    await ask("Not sure about that one. [[gap:]]", "Do you have a kids menu?");
+    expect(await about("kids menu")).toMatchObject([{ topic: "Do you have a kids menu?" }]);
+  });
+
+  it("is told by the assistant, not guessed from the search", async () => {
+    const before = (await gaps()).length;
+    // Nothing matches these words, but the assistant handled it (a greeting, a request to be called).
+    const { done } = await ask("Happy to help! What's your name and number?", "zzqx vvkp qqwx");
+    expect(done.flags.unanswered).toBeUndefined();
+    expect((await gaps()).length).toBe(before);
+  });
+
+  it("keeps a dismissed question off the list, and lists an answered one again", async () => {
+    await owner.db
+      .update(knowledgeGaps)
+      .set({ status: "dismissed" })
+      .where(eq(knowledgeGaps.topic, "bike parking"));
+    await ask("Still no idea. [[gap: parking for bikes]]", "Bike racks?");
+    expect(await about("bike")).toMatchObject([{ status: "dismissed", occurrences: 2 }]);
+
+    await owner.db
+      .update(knowledgeGaps)
+      .set({ status: "answered" })
+      .where(eq(knowledgeGaps.topic, "wedding cake prices"));
+    await ask("I don't have that. [[gap: wedding cake prices]]", "Wedding cake cost?");
+    expect((await about("wedding")).map((g) => [g.status, g.occurrences])).toEqual([
+      ["answered", 2],
+      ["open", 1],
+    ]);
+  });
+
+  it("doesn't list questions from the owner's test chat", async () => {
+    const { done } = await ask("I don't have that. [[gap: gift cards]]", "Do you sell gift cards?", {
+      channel: "playground",
+    });
+    expect(done.flags.unanswered).toBe(true);
+    expect(await about("gift")).toEqual([]);
+  });
+
+  it("never touches another business's list", async () => {
+    await withTenant(app.db, otherTenantId, async (tx) => {
+      expect(await tx.select().from(knowledgeGaps)).toEqual([]);
+    });
   });
 });
 
@@ -831,18 +999,34 @@ describe("requests for the business to follow up", () => {
     expect((await saved()).length).toBe(before);
   });
 
-  it("doesn't also report a request as a question it couldn't answer", async () => {
+  it("doesn't also email a passed-on question as one it couldn't answer, but still lists the gap", async () => {
     await owner.db.delete(jobs).where(eq(jobs.tenantId, tenantId));
     await withTenant(app.db, tenantId, (tx) =>
       tx.update(botAddons).set({ config: { email: "owner@cafe.example", newConversation: false } }),
     );
-    // Nothing in the knowledge matches this message, which alone would count as a knowledge gap.
-    const provider = eager({ ...ask, kind: "question", name: "Zed", phone: "8075550188" });
-    const { done } = await chat(provider, "zzqx vvkp 807-555-0188 Zed", { visitorId: "lead-gap" });
-    expect(done.flags).toEqual({ tools: ["request_follow_up"] });
+    // The assistant has no answer, says so (the gap marker), and passes the question to staff.
+    const provider = new ToolProvider((_request, call) =>
+      call === 1
+        ? {
+            calls: [
+              {
+                name: "request_follow_up",
+                input: { ...ask, kind: "question", name: "Zed", phone: "8075550188" },
+              },
+            ],
+          }
+        : { text: "I don't have that, so I passed it on.\n\n[[gap: delivery to Kakabeka Falls]]" },
+    );
+    const { text, done } = await chat(provider, "Do you deliver to Kakabeka? 807-555-0188, Zed", {
+      visitorId: "lead-gap",
+    });
+    expect(text).toBe("I don't have that, so I passed it on.\n\n");
+    expect(done.flags).toEqual({ unanswered: true, tools: ["request_follow_up"] });
     expect((await queued()).map((e) => e.subject)).toEqual([
       "Northern Lights Café: Zed has a question for you",
     ]);
+    const gaps = await owner.db.select().from(knowledgeGaps).where(eq(knowledgeGaps.botId, botId));
+    expect(gaps.map((g) => g.topic)).toContain("delivery to Kakabeka Falls");
   });
 
   it("keeps a test chat's request but doesn't email about it", async () => {

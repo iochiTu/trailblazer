@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api, type QaPair, type Source } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { GapsSection } from "./GapsSection";
 import { PhotosSection } from "./PhotosSection";
 import { SourceDetail } from "./SourceDetail";
 
@@ -13,7 +14,7 @@ const statusColor: Record<Source["status"], string> = {
   failed: "var(--danger)",
 };
 
-export function KnowledgeTab({ base }: { base: string }) {
+export function KnowledgeTab({ base, onGapCount }: { base: string; onGapCount?: (open: number) => void }) {
   const { t } = useI18n();
   const [sources, setSources] = useState<Source[] | null>(null);
   const [pairs, setPairs] = useState<QaPair[]>([]);
@@ -60,6 +61,7 @@ export function KnowledgeTab({ base }: { base: string }) {
 
   return (
     <div className="flex flex-col gap-6">
+      <GapsSection base={base} onAnswered={load} onCount={onGapCount} />
       <section className="flex flex-col gap-3">
         <div>
           <h3 className="text-lg font-semibold">{t("knowledge.sources")}</h3>

@@ -36,17 +36,12 @@ import {
 } from "@traiblazer/llm";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { JOB_TYPES } from "../jobs.js";
+import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
-import { PhotoMarkerFilter } from "./photo-markers.js";
+import { MarkerFilter } from "./markers.js";
 import { buildSearchQueryPrompt, buildSystemBlocks, parseSearchQueries, photoPromptId } from "./prompt.js";
 import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./retrieval.js";
-import {
-  chatTools,
-  MAX_TOOL_ROUNDS,
-  requestFollowUp,
-  runToolCalls,
-  toToolDefinition,
-} from "./tools/index.js";
+import { chatTools, MAX_TOOL_ROUNDS, runToolCalls, toToolDefinition } from "./tools/index.js";
 
 export interface ChatDeps {
   db: Db;
@@ -84,6 +79,8 @@ export interface ChatInput {
 export type ChatStreamEvent =
   | { type: "start"; conversationId: string }
   | { type: "text"; text: string }
+  /** Take back the reply text sent so far: what follows replaces it (see `retract` in `runChat`). */
+  | { type: "reset" }
   /** A business photo shown with the reply (sent after the text). */
   | { type: "image"; image: ReplyImage }
   | { type: "done"; messageId: string; citations: Citation[]; flags: MessageFlags }
@@ -190,6 +187,8 @@ function chatEvents(e: {
   answer: string;
   language: string | null;
   flags: MessageFlags;
+  /** The visitor's request was passed to staff in this answer. */
+  passedOn: boolean;
 }): AddonEvent[] {
   if (e.input.channel === "playground") return [];
   const at = new Date();
@@ -205,7 +204,8 @@ function chatEvents(e: {
     });
   }
   // A knowledge gap, not a failed or busy answer (those say nothing about the business's information).
-  if (e.flags.unanswered && !e.flags.error && !e.flags.busy) {
+  // When the question was passed to staff it already reaches the business as a request.
+  if (e.flags.unanswered && !e.flags.error && !e.flags.busy && !e.passedOn) {
     events.push({
       type: "question.unanswered",
       conversationId: e.conversationId,
@@ -442,6 +442,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   /** How many model calls the answer took (more than one when tools were used). */
   let modelCalls = 0;
   const toolsUsed = new Set<string>();
+  /** What the assistant said was missing from the business's information (null = nothing). */
+  let gapTopic: string | null = null;
   /** Things tools did that add-ons hear about (e.g. a request the visitor left). */
   const toolEvents: AddonEvent[] = [];
   let citations: Citation[] = [];
@@ -498,12 +500,11 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         : [[], []];
       offeredPhotos = photos as PhotoPassage[];
       citations = citationsFrom(passages as Passage[]);
-      if (!passages.length && !photos.length && queries.length) flags.unanswered = true;
 
       // 4. Stream the answer. Photo markers are taken out of the text; only photos offered in
       // this prompt can be shown. The model may stop to call tools (e.g. search again with other
       // words); their results are added to the conversation and it is asked again.
-      const markers = new PhotoMarkerFilter();
+      const markers = new MarkerFilter();
       const byPromptId = new Map(offeredPhotos.map((p, i) => [photoPromptId(i), p]));
       const choose = (ids: string[]) => {
         for (const id of ids) {
@@ -531,22 +532,44 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       };
       const turn: ChatMessage[] = [...modelHistory, { role: "user", content: current }];
       let found = passages as Passage[];
-      // Text written before a tool call and text written after it are separate paragraphs.
-      let gap = "";
       const write = (text: string): ChatStreamEvent => {
-        answer += gap + text;
-        const event = emit(gap + text);
-        gap = "";
-        return event;
+        answer += text;
+        return emit(text);
       };
+      /**
+       * Takes back what the model has written so far, with the markers in it; the chat clears the
+       * reply and what the model writes next replaces it. Used when a model writes again after a
+       * tool call (the later text knows the tool's result, and models often repeat themselves),
+       * and when a provider reports that what it streamed wasn't the reply after all.
+       */
+      function* retract(): Generator<ChatStreamEvent> {
+        answer = "";
+        gapTopic = null;
+        shownPhotos.length = 0;
+        yield { type: "reset" };
+        if (notice) {
+          yield { type: "text", text: notice };
+          separator = "\n\n";
+        }
+      }
+      /** An earlier round of this answer already wrote to the visitor. */
+      let wroteEarlier = false;
 
       for (let round = 0; ; round++) {
         let meta: GatewayResultMeta | undefined;
         for await (const event of deps.gateway.stream("chat", { ...request, messages: turn })) {
           if (event.type === "text") {
-            const { text, ids } = markers.push(event.text);
+            const { text, ids, gaps } = markers.push(event.text);
+            if (wroteEarlier && text.trim()) {
+              yield* retract();
+              wroteEarlier = false;
+            }
             choose(ids);
+            gapTopic ??= gaps[0] ?? null;
             if (text) yield write(text);
+          } else if (event.type === "reset") {
+            markers.flush();
+            if (answer) yield* retract();
           } else {
             meta = event;
           }
@@ -582,17 +605,17 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         if (ran.passages.length) {
           found = mergePassages(found, ran.passages);
           citations = citationsFrom(found);
-          flags.unanswered = undefined;
         }
         turn.push(meta.message, { role: "user", content: ran.results });
-        if (answer.trim()) gap = "\n\n";
+        wroteEarlier = Boolean(answer.trim());
       }
       if (toolsUsed.size) flags.tools = [...toolsUsed];
-      // A request passed to staff reaches the business as a request, not also as a knowledge gap.
-      if (toolsUsed.has(requestFollowUp.name)) flags.unanswered = undefined;
+      // The assistant marked this reply: the business's information didn't have the answer.
+      if (gapTopic !== null) flags.unanswered = true;
 
       if (chatMeta?.stopReason === "refusal" || (!answer.trim() && !shownPhotos.length)) {
         shownPhotos.length = 0;
+        flags.unanswered = undefined;
         flags.refused = chatMeta?.stopReason === "refusal" || undefined;
         const fallback = FALLBACK_TEXT[lang2]!;
         yield emit(answer ? `\n\n${fallback}` : fallback);
@@ -606,6 +629,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         botId: bot.id,
       });
       const busy = isCapacityError(error);
+      flags.unanswered = undefined;
       if (busy) flags.busy = true;
       else flags.error = true;
       const text = (busy ? BUSY_TEXT : ERROR_TEXT)[lang2]!;
@@ -670,9 +694,22 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     }
 
     // Add-on effects (e.g. notification emails) run later in the worker, queued with the answer.
+    // Listed for the business to answer (not from the owner's own test chat).
+    if (flags.unanswered && input.channel !== "playground") {
+      await recordGap(tx, {
+        tenantId: input.tenantId,
+        botId: bot.id,
+        conversationId,
+        topic: gapTopic ?? "",
+        question: message,
+        language,
+      });
+    }
+
     // The owner's own test chat never notifies, whatever happened in it.
+    const passedOn = toolEvents.some((event) => event.type === "request.created");
     const events = [
-      ...chatEvents({ input, conversationId, isNew, message, answer, language, flags }),
+      ...chatEvents({ input, conversationId, isNew, message, answer, language, flags, passedOn }),
       ...(input.channel === "playground" ? [] : toolEvents),
     ];
     const effects = events.flatMap((event) => addonEffects(addons, event, addonCtx, addonLog));

@@ -86,6 +86,74 @@ function parseArguments(json: string): unknown {
   }
 }
 
+const THINK_OPEN = "<think>";
+const THINK_CLOSE = "</think>";
+
+/** The longest end of `text` that could be the start of one of `tags`. */
+function partialTag(text: string, tags: string[]): string {
+  const longest = Math.min(text.length, Math.max(...tags.map((tag) => tag.length)) - 1);
+  for (let length = longest; length > 0; length--) {
+    const tail = text.slice(-length);
+    if (tags.some((tag) => tag.startsWith(tail))) return tail;
+  }
+  return "";
+}
+
+/**
+ * Some servers pass a reasoning model's thinking through in the reply text, wrapped in
+ * <think>…</think> (others send it separately, or not at all). It is never part of the reply: this
+ * removes those spans from streamed text, and a closing tag left on its own. Text that could be the
+ * start of a tag is held back until it can be decided.
+ */
+export class ThinkFilter {
+  private buffer = "";
+  private thinking = false;
+
+  /**
+   * Adds streamed text; returns the text that is part of the reply. `reset` is set when a closing
+   * tag turned up with no opening one: everything given out before it was thinking too.
+   */
+  push(chunk: string): { text: string; reset: boolean } {
+    this.buffer += chunk;
+    let reply = "";
+    let reset = false;
+    for (;;) {
+      if (this.thinking) {
+        const end = this.buffer.indexOf(THINK_CLOSE);
+        if (end < 0) {
+          this.buffer = partialTag(this.buffer, [THINK_CLOSE]);
+          return { text: reply, reset };
+        }
+        this.buffer = this.buffer.slice(end + THINK_CLOSE.length);
+        this.thinking = false;
+        continue;
+      }
+      const tag = /<\/?think>/.exec(this.buffer);
+      if (!tag) {
+        const held = partialTag(this.buffer, [THINK_OPEN, THINK_CLOSE]);
+        reply += this.buffer.slice(0, this.buffer.length - held.length);
+        this.buffer = held;
+        return { text: reply, reset };
+      }
+      if (tag[0] === THINK_OPEN) {
+        reply += this.buffer.slice(0, tag.index);
+        this.thinking = true;
+      } else {
+        reply = "";
+        reset = true;
+      }
+      this.buffer = this.buffer.slice(tag.index + tag[0].length);
+    }
+  }
+
+  /** End of the stream: what is held back was not a tag (unless the thinking never ended). */
+  flush(): string {
+    const rest = this.thinking ? "" : this.buffer;
+    this.buffer = "";
+    return rest;
+  }
+}
+
 /**
  * Any OpenAI-compatible Chat Completions endpoint: OpenRouter, OpenAI, Azure OpenAI (v1 endpoint),
  * Groq, Mistral, Together, Ollama, vLLM, LM Studio.
@@ -147,15 +215,22 @@ export class OpenAICompatibleProvider implements LLMProvider {
     let finish: string | null = null;
     let servedModel = model;
     let text = "";
+    const thinking = new ThinkFilter();
     // Tool calls arrive in fragments keyed by index: the id and name first, then pieces of the arguments.
     const calls = new Map<number, { id: string; name: string; args: string }>();
     for await (const chunk of stream) {
       servedModel = chunk.model || servedModel;
       const choice = chunk.choices[0];
-      const delta = choice?.delta?.content;
-      if (delta) {
-        text += delta;
-        yield { type: "text", text: delta };
+      if (choice?.delta?.content) {
+        const reply = thinking.push(choice.delta.content);
+        if (reply.reset && text) {
+          text = "";
+          yield { type: "reset" };
+        }
+        if (reply.text) {
+          text += reply.text;
+          yield { type: "text", text: reply.text };
+        }
       }
       for (const part of choice?.delta?.tool_calls ?? []) {
         const call = calls.get(part.index) ?? { id: "", name: "", args: "" };
@@ -170,6 +245,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
         usage.outputTokens = chunk.usage.completion_tokens ?? 0;
         usage.cacheReadTokens = chunk.usage.prompt_tokens_details?.cached_tokens ?? 0;
       }
+    }
+
+    const held = thinking.flush();
+    if (held) {
+      text += held;
+      yield { type: "text", text: held };
     }
 
     const content: ContentBlock[] = text ? [{ type: "text", text }] : [];

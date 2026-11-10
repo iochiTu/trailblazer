@@ -613,7 +613,10 @@ export interface ReplyImage {
 }
 
 export interface MessageFlags {
-  /** The assistant said it couldn't find the answer (knowledge gap). */
+  /**
+   * The assistant couldn't answer from the business's information and said so (it marked the reply
+   * with what was missing; see `knowledge_gaps`).
+   */
   unanswered?: boolean;
   /** The model or the fallback chain declined. */
   refused?: boolean;
@@ -674,6 +677,51 @@ export const leads = pgTable(
     index("leads_conversation_idx").on(t.tenantId, t.conversationId),
     foreignKey({
       name: "leads_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+// ---------------------------------------------------------------------------------------------
+// Knowledge gaps (RLS enforced)
+// ---------------------------------------------------------------------------------------------
+
+export const gapStatuses = ["open", "answered", "dismissed"] as const;
+export type GapStatus = (typeof gapStatuses)[number];
+
+/**
+ * Something visitors asked that the assistant couldn't answer from the business's information.
+ * Similar questions are counted on one row, so the business sees what is asked most and can add
+ * the answer (which becomes a Q&A pair) or dismiss it.
+ */
+export const knowledgeGaps = pgTable(
+  "knowledge_gaps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** What was missing, in a few words, as named by the assistant. */
+    topic: text("topic").notNull(),
+    /** The most recent visitor question about it, in the visitor's words. */
+    question: text("question").notNull(),
+    language: text("language"),
+    /** Conversation of that question. Not a foreign key (kept if the conversation is removed). */
+    conversationId: uuid("conversation_id"),
+    status: text("status").$type<GapStatus>().notNull().default("open"),
+    /** How many times visitors asked about it. */
+    occurrences: integer("occurrences").notNull().default(1),
+    /** The Q&A pair that answered it, once answered. Not a foreign key (the pair can be deleted). */
+    qaPairId: uuid("qa_pair_id"),
+    lastAskedAt: timestamp("last_asked_at", { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => [
+    index("knowledge_gaps_bot_status_idx").on(t.tenantId, t.botId, t.status, t.lastAskedAt),
+    foreignKey({
+      name: "knowledge_gaps_bot_tenant_fk",
       columns: [t.botId, t.tenantId],
       foreignColumns: [bots.id, bots.tenantId],
     }).onDelete("cascade"),
@@ -880,5 +928,6 @@ export const rlsTables = [
   "messages",
   "message_attachments",
   "leads",
+  "knowledge_gaps",
   "usage_events",
 ] as const;

@@ -23,7 +23,11 @@ export interface GatewayResultMeta {
   message?: ChatMessage;
 }
 
-export type GatewayEvent = { type: "text"; text: string } | ({ type: "done" } & GatewayResultMeta);
+export type GatewayEvent =
+  | { type: "text"; text: string }
+  /** The text streamed so far in this call was not part of the reply: discard it. */
+  | { type: "reset" }
+  | ({ type: "done" } & GatewayResultMeta);
 
 export interface GatewayOptions {
   providers: LLMProvider[];
@@ -100,6 +104,8 @@ export class LLMGateway {
           if (event.type === "text") {
             emitted = true;
             yield event;
+          } else if (event.type === "reset") {
+            yield event;
           } else {
             yield {
               type: "done",
@@ -129,6 +135,7 @@ export class LLMGateway {
     let meta: GatewayResultMeta | undefined;
     for await (const event of this.stream(purpose, request)) {
       if (event.type === "text") text += event.text;
+      else if (event.type === "reset") text = "";
       else meta = event;
     }
     if (!meta) throw new Error("LLM gateway: stream ended without a result");

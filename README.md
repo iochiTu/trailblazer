@@ -82,6 +82,11 @@ Catalog lookup and booking will be added the same way.
   without them and answer as before; so does the offline provider.
 - What a tool returns is reference data like the knowledge base, never instructions. Tools used are
   recorded on the answer (`flags.tools`) and the answer's tokens and cost cover every model call.
+- The reply is what the model writes after its last tool call. If it wrote to the visitor before a
+  tool call and writes again after it, the chat stream sends a `reset` event and the later text
+  replaces the earlier text (models often repeat themselves there). The same event takes back text an
+  OpenAI-compatible server streamed that turned out to be the model's thinking (`<think>` tags are
+  stripped from replies).
 
 ## Requests (lead capture and handoff)
 
@@ -101,6 +106,25 @@ are new. With the **Email notifications** add-on the owner also gets an email fo
   as before.
 - Requests are personal data: every member of the business can read them, editors can change or
   delete them, and the audit log records who did, without the visitor's details.
+
+## Questions the assistant couldn't answer (knowledge gaps)
+
+When the business's information doesn't contain the answer, the assistant says so and ends its reply
+with a hidden marker naming what was missing (`[[gap: gluten-free options]]`). The chat engine removes
+the marker from the stream (`packages/core/src/chat/markers.ts`, the same filter as photo markers), sets
+`flags.unanswered` and records the gap (`knowledge_gaps` table, RLS).
+
+- The model decides, not the search: a greeting, a call-back request or an off-topic question that
+  matches nothing in the knowledge is not a gap. Works on every provider (it is plain text, not a tool);
+  the offline provider writes the marker too.
+- Rewordings of the same question are counted on one line (trigram similarity of the topic), so the
+  business sees what is asked most. A dismissed question stays dismissed; an answered one that is asked
+  again is listed anew.
+- The admin's **Knowledge** tab lists open gaps first, most asked first, with the latest visitor
+  question. **Answer it** saves a Q&A answer (used from the next question on) and closes the gap;
+  **Not relevant** dismisses it. The tab shows how many are open.
+- Questions from the owner's test chat are flagged but not listed. A question that was also passed to
+  staff as a request is listed, but only the request is emailed.
 
 ## Requirements
 

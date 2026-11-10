@@ -1,7 +1,8 @@
 export { type AddonEffectPayload, type EffectDeps, type Mailer, runAddonEffect } from "./addons/effects.js";
 export * from "./chat/engine.js";
+export { recordGap } from "./chat/gaps.js";
 export { guessLanguage } from "./chat/language.js";
-export { PhotoMarkerFilter } from "./chat/photo-markers.js";
+export { MarkerFilter } from "./chat/markers.js";
 export { buildSystemBlocks, formatHours, PLATFORM_RULES } from "./chat/prompt.js";
 export { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./chat/retrieval.js";
 export {

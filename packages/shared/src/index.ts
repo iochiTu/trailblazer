@@ -266,4 +266,8 @@ export const LEAD_STATUSES = ["new", "in_progress", "done"] as const;
 export const updateLeadSchema = z.object({ status: z.enum(LEAD_STATUSES) });
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 
+/** Questions the assistant couldn't answer: the business answers them (see `qaPairSchema`) or dismisses them. */
+export const updateGapSchema = z.object({ status: z.enum(["open", "dismissed"]) });
+export type UpdateGapInput = z.infer<typeof updateGapSchema>;
+
 export * from "./plans.js";

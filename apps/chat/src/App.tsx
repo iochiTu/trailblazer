@@ -241,6 +241,8 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
           conversationStore.set(publicKey, event.conversationId);
         } else if (event.type === "text") {
           update((m) => ({ ...m, content: m.content + event.text }));
+        } else if (event.type === "reset") {
+          update((m) => ({ ...m, content: "" }));
         } else if (event.type === "image") {
           update((m) => ({ ...m, images: [...(m.images ?? []), event.image] }));
         } else if (event.type === "done") {

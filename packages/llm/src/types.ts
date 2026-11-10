@@ -99,6 +99,8 @@ export type StopReason = "end" | "max_tokens" | "refusal" | "tool_use";
 
 export type ChatEvent =
   | { type: "text"; text: string }
+  /** The text streamed so far in this call was not part of the reply (e.g. leaked thinking): discard it. */
+  | { type: "reset" }
   | {
       type: "done";
       usage: Usage;
