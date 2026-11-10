@@ -28,7 +28,39 @@ export const AVAILABLE_PHASE = 1;
 const v = (slug: string, name: string): PackVariant => ({ slug, name });
 
 export const packs: IndustryPack[] = [
-  // Phase 1 — launch
+  // Phase 1 — first pilots (phone and SMS first, PLAN §2.1)
+  {
+    slug: "trades",
+    sector: "home-construction",
+    name: "Trades & home services",
+    phase: 1,
+    scope: "standard",
+    variants: [
+      v("plumbing", "Plumbing"),
+      v("hvac", "HVAC"),
+      v("electrical", "Electrical"),
+      v("roofing", "Roofing"),
+      v("landscaping-snow", "Landscaping & snow removal"),
+      v("cleaning", "Cleaning"),
+    ],
+  },
+  {
+    slug: "auto-repair",
+    sector: "automotive",
+    name: "Auto repair & tire shop",
+    phase: 1,
+    scope: "standard",
+    variants: [
+      v("general-repair", "General repair"),
+      v("tires", "Tire centre"),
+      v("body-collision", "Body & collision"),
+      v("glass", "Glass"),
+      v("oil-change", "Oil change"),
+      v("detailing", "Detailing"),
+    ],
+  },
+
+  // Phase 1 — self-serve web chat (built; no outbound sales)
   {
     slug: "restaurant",
     sector: "food-drink",
@@ -112,7 +144,19 @@ export const packs: IndustryPack[] = [
   },
   { slug: "generic", sector: "generic", name: "Other business", phase: 1, scope: "standard", variants: [] },
 
-  // Phase 2
+  // Phase 2 — property management, then the self-serve packs released on demand
+  {
+    slug: "property-management",
+    sector: "property",
+    name: "Property management & rentals",
+    phase: 2,
+    scope: "standard",
+    variants: [
+      v("residential", "Residential property manager"),
+      v("student-housing", "Student housing"),
+      v("condo", "Condo management"),
+    ],
+  },
   {
     slug: "grocery-market",
     sector: "food-drink",
@@ -175,33 +219,6 @@ export const packs: IndustryPack[] = [
     ],
   },
   {
-    slug: "trades",
-    sector: "home-construction",
-    name: "Trades & home services",
-    phase: 2,
-    scope: "standard",
-    variants: [
-      v("plumbing", "Plumbing"),
-      v("hvac", "HVAC"),
-      v("electrical", "Electrical"),
-      v("landscaping-snow", "Landscaping & snow removal"),
-    ],
-  },
-  {
-    slug: "auto-repair",
-    sector: "automotive",
-    name: "Auto repair & service shop",
-    phase: 2,
-    scope: "standard",
-    variants: [
-      v("general-repair", "General repair"),
-      v("tires", "Tires"),
-      v("body-collision", "Body & collision"),
-      v("glass", "Glass"),
-      v("detailing", "Detailing"),
-    ],
-  },
-  {
     slug: "small-education",
     sector: "education",
     name: "Tutoring & schools",
@@ -236,11 +253,12 @@ export const packs: IndustryPack[] = [
     phase: 3,
     scope: "professional",
     variants: [
+      v("vet", "Veterinary clinic"),
+      v("aesthetics", "Medspa / medical aesthetics"),
       v("dental", "Dental"),
       v("physio-chiro", "Physio / chiro"),
       v("vision-hearing", "Vision & hearing"),
       v("counselling", "Counselling"),
-      v("aesthetics", "Medical aesthetics"),
     ],
   },
   {
@@ -301,7 +319,11 @@ export const packs: IndustryPack[] = [
     name: "Car dealership",
     phase: 3,
     scope: "professional",
-    variants: [v("new-used", "New & used cars"), v("powersports", "Powersports / RV / boat")],
+    variants: [
+      v("new-used", "New & used cars"),
+      v("used-lot", "Used-car lot"),
+      v("powersports", "Powersports / RV / boat"),
+    ],
   },
 
   // Phase 4 — Business tier

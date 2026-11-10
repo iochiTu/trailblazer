@@ -1,6 +1,15 @@
-# Traiblazer — Multi-Tenant AI Chatbot / RAG Platform for Small Businesses
+# Traiblazer — Multi-Tenant AI Business Page and Chat Assistant Platform for Small Businesses
 
-> Working name taken from the project folder. Status: **plan, nothing built yet**.
+> Working name taken from the project folder. Status: **web chat platform built (Phase 1, milestone 1.1 —
+> see README); next: the AI business page; phone and SMS not started**.
+> **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
+> the hosted chat page works as the business's website, for businesses that have no site or an outdated
+> one (§7.1). Phone and SMS move to a later phase. The audience is unchanged from v5.
+> v5 2026-11-10: early-stage audience changed to five phone-driven industries in small and mid-sized
+> Canadian cities (trades, auto shops, property management, clinics, professional services), from
+> `Canadian SMB AI Agent Playbook.md`. Phone and SMS become the main channel, sold as a done-for-you
+> service with a setup fee and monthly retainer. Restaurants, retail, salons and lodging stay available as
+> self-serve web chat but are no longer the sales focus.
 > v1 2026-11-04 · v2: multi-provider LLM layer; industries refined from the Northern Ontario market research
 > (`Northern_Ontario_Business_AI_Research.xlsx`, Oct 2026, 451 businesses) · v3: go-to-market starts with
 > local small businesses (clinics, legal, mining, auto moved later); multilingual support for newcomer
@@ -10,63 +19,136 @@
 
 ## 1. Product in one paragraph
 
-A small business signs up, picks its industry, pastes its website URL and/or uploads documents, and
-within ~10 minutes has a branded AI assistant answering customer questions on its website from **its own
-content** — in English, French and the languages of its customers (Chinese, Hindi, Punjabi, Arabic,
-Ukrainian, and more). They install it by pasting one `<script>` tag (or a WordPress/Shopify plugin). In an
-admin portal they manage the knowledge base, post notices ("closed today — storm"), read conversations
-(auto-translated into their own language), collect leads, and see which questions the bot couldn't answer.
-The bot is a **customer-service assistant**: it answers questions about the business and books/hands off —
-it never gives professional advice. You (the operator) run one shared platform serving many businesses cheaply.
+A local business — a plumber, an HVAC or roofing contractor, an auto repair or tire shop, a property
+manager, later a clinic or an accounting or law office — gets an **AI business page**: one link that works
+as its website. The page shows who they are, what they offer (services or products, with photos and
+prices), where they work and when they're open. In front sits an AI assistant that answers customers'
+questions 24/7 from the business's **own content**, takes quote and booking requests with photos, flags the
+urgent ones and passes them to the owner. A business with no website, or one that is years out of date,
+**skips building a website**: we set the page up from whatever exists (a Google listing, a Facebook page, a
+price list, a short interview) and it goes on the Google Business Profile, a QR code, the truck and the
+invoice. A solo contractor gets the same thing as a personal page; a business that already has a good
+website adds the same assistant to it as a widget. Answers come in English, French and the customer's own
+language. **Phone and SMS answering come in a later phase** on the same engine (§7.3). The assistant is a
+**customer-service assistant**: it answers questions about the business, takes requests and hands off — it
+never gives professional advice. You (the operator) run one shared platform serving many businesses cheaply.
 
 ## 2. Target market and go-to-market order
 
-**Launch market:** Thunder Bay (190 businesses in the list), Greater Sudbury (162), Sault Ste. Marie (99) —
-all with their own website; 429 of 451 sites were live in Oct 2026.
+**Launch market:** small and mid-sized Canadian cities and suburban hubs, starting in Ontario
+(Kitchener-Waterloo, London, Kingston, Barrie, Guelph), then Kelowna, Halifax and the suburbs of the GTA and
+Metro Vancouver. Start with **one or two cities and one industry** so references and word of mouth build up
+in one place. The Northern Ontario research list (Thunder Bay, Sudbury, Sault Ste. Marie; 451 businesses)
+stays as a second region and the bilingual EN/FR showcase, but trades and auto shops are under-represented
+in it, so each launch city needs its own prospect list (§2.2).
 
-**Strategy for a small company: start where the sale is easy.** Local businesses have short decisions
-(the owner decides alone), low compliance risk and simple needs. Regulated professions and large B2B firms
-have long sales cycles, procurement, liability concerns and integration demands — they come later, once we
-have references, revenue and a proven product.
+**First product: the chat assistant and its AI business page.** It is built, it is cheap to run, and it
+can be live for a business in a day. Phone and SMS answering are a later phase (§14), sold to the same
+customers once the page has shown its value.
 
-| Segment                               | Size in list          | Who                                                                                                                                                                                                               | Priority                            | Why                                                                                               |
-| ------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Local businesses**                  | ~300 (≈ 68 %)         | Restaurants & bars 86, retail 71, arts & culture 27, cafés 22, personal care 22, tourism & recreation 22, professional/business services 21, grocery 12, producers & breweries 11, non-profits 8 — **2–30 staff** | **Phase 1–2 (focus)**               | Owner decides; simple needs (hours, menu, products, booking links); low risk; volume              |
-| **Lodging**                           | 18                    | Motels, B&Bs, lodges, small hotels                                                                                                                                                                                | **Phase 1**                         | Small owner-run businesses with real booking/FAQ volume and many visitors from outside the region |
-| **Professional services** (regulated) | ~60                   | Clinics 25, legal 21, accounting & financial 10, real estate 5, plus immigration consultants                                                                                                                      | **Phase 3** — customer service only | Harder to win, higher liability; enter with a strict no-advice scope (§5)                         |
-| **Auto repair & service shops**       | 1 (under-represented) | Repair, tire, body/collision, glass, detailing                                                                                                                                                                    | **Phase 2**                         | Owner-run local businesses — same needs as trades (services, hours, booking, quotes with photos)  |
-| **Car dealerships**                   | 8                     | New/used cars, powersports                                                                                                                                                                                        | **Phase 3**                         | Want inventory feeds, CRM and lead-response tooling — bigger integration effort                   |
-| **Auto manufacturers & parts makers** | 0                     | OEMs, parts and components manufacturers                                                                                                                                                                          | **Phase 4**                         | Industrial B2B — distributors, specs, RFQs, internal knowledge; enterprise sales                  |
-| **Industrial & institutions**         | ~50                   | Mining & resources 17, transportation 7, education 7, utilities 6, engineering 5, manufacturing 4, hospitals 3                                                                                                    | **Phase 4 / later**                 | Long enterprise sales, procurement, security reviews                                              |
+**Why these businesses** (assumptions to confirm in the pilots):
 
-**Needs that come up in many industries:**
+1. **Many have no website, or an outdated one.** A solo contractor or small shop often has only a Google
+   listing and a Facebook page. A website project costs them money and weeks, and nobody maintains it
+   afterwards. A page that is ready in a day and answers questions by itself skips that step.
+2. **Every unanswered question is a lost job.** The owner is on a roof or under a car and can't answer;
+   the customer moves on to the next business on Google Maps. One lost job is worth roughly $500–5,000+.
+3. **Front-desk labour is expensive.** A receptionist or dispatcher costs $18–25/hour plus CPP, EI,
+   WSIB/WorkSafe and vacation pay — over $3,500/month.
+4. **They already pay for software monthly** (QuickBooks, Jobber, Jane App, Shopify), and **the owner
+   decides alone**, usually in one conversation.
 
-1. **Many languages** — besides EN/FR (Francophone community in Sudbury), a growing number of customers
-   are newcomers from **India, China, the Middle East, Ukraine, the Philippines** and elsewhere; non-profits
-   also need Indigenous-language support (§6).
-2. **Phone/voice** — restaurants (ordering/reservations), trades, lodging; many customers call instead of chat.
-3. **Frequently changing facts** — seasonal hours, weather closures, specials, ski/trail conditions → notices.
-4. **Structured data** — products, rooms, later vehicles and listings → feeds + lookup tools.
-5. **Canadian compliance** — PIPEDA, CASL (lead follow-up), AODA accessibility; PHIPA only once clinics are added.
-6. **Adjacent AI asks** (upsell later): review replies, social posts, product descriptions.
+**Strategy for a small company: start where the sale is easy _and_ the risk is low.** All five industries
+below are early-stage targets, but they aren't equally easy to serve. Trades and auto shops hold no
+regulated data, so they go first. Property management adds tenant privacy questions. Clinics and
+professional firms handle health, tax and legal information; they are served last, as customer service
+only (§5), once a lawyer has reviewed the scope and privacy measures.
 
-**Data notes:** revenue/employee figures in the sheet are benchmarks, not facts. One row (a French-language
-law firm) has shifted columns; "Legal clinic (non-profit)" is filed under Health & Wellness; suburban trades
-are under-represented; 22 websites were unreachable — check before reaching out.
+### 2.1 Early-stage segments
+
+| Segment | Who | Phase | Main pain | What the page and assistant do | Watch out for |
+|---|---|---|---|---|---|
+| **1. Home services & trades** | HVAC, plumbers, electricians, roofers, landscaping / snow removal; many solo contractors | **1 — first pilots** | No website or an old one; the owner can't answer while on a job | Page with services, service area, photos of past work and prices. The assistant answers, checks the service area, takes quote requests with photos, flags urgent problems and shows the phone number | No diagnosis or binding prices; gas smell, carbon monoxide, no heat in winter → 911 / call now (§5) |
+| **2. Auto repair & tire shops** | Mechanic shops, tire centres, body and glass shops | **1 — first pilots** | The same questions all day in the October–November winter-tire rush and the spring changeover | Page with services and the price list. The assistant answers tire and service questions, takes changeover and repair requests (vehicle, tire size), shares the booking link | "Estimate after inspection"; it can't see work orders until shop software is connected |
+| **3. Property management & rentals** | Local property managers, student-housing landlords (Waterloo, Kingston, London), leasing agents | **2** | Maintenance requests at all hours; leasing spikes every April and August | Page with available units and how to apply. The assistant logs maintenance requests, flags emergencies, answers rental inquiries and takes showing requests | What a landlord may ask an applicant is limited by privacy and human-rights law; the assistant collects answers and never accepts or rejects anyone (§5, §12) |
+| **4. Appointment clinics** | Dental, chiropractic, physio, medspas, vet clinics | **3** (design partners in Phase 2) | Front desk juggles walk-ins and ringing phones; no-shows | Page with services, team, fees and the booking link. The assistant answers published information and takes callback requests | Health information (PHIPA and provincial equivalents): Canada-only data, no health details in chat, lawyer review first. Vet clinics hold no human health information, so they can go first |
+| **5. Professional services** | Accounting firms, real-estate lawyers, immigration consultants | **3** (design partners in Phase 2) | February–April tax season; staff answer the same questions and chase clients for missing documents | Page with services, fees, what to bring and how to book. Later: document chaser with a secure upload page | Customer service only (§5). Documents carry SINs → secure upload page, never chat or SMS |
+
+**Design partners in Phase 2:** one or two clinics or firms with a page, the assistant and a booking link
+only (no health or case details), to learn their workflow before the full packs ship.
+
+**Also served, without outbound sales**
+
+| Segment | Status |
+|---|---|
+| **Local businesses** — restaurants, cafés, retail, salons, lodging, attractions | Self-serve: sign up, add the website or build the page, paste the widget. The same product at a low price; a good offer for agency partners |
+| **Car dealerships** | Phase 3 — inventory feeds, CRM and lead-response tooling |
+| **Industrial & institutions** | Phase 4 — long enterprise sales, procurement, security reviews |
+
+**Needs that come up in every early-stage industry:**
+
+1. **A page that is ready without a website project** — from a Google listing, a price list, photos and a
+   short interview.
+2. **Show the offer, not only chat** — services or products, prices, photos, hours and area must be
+   visible without asking a question (§7.1).
+3. **Requests the owner can act on** — who, what, where, how urgent, with photos; by email now, by text later.
+4. **Seasonal bursts** — winter tires (October–November), furnace/AC changeover, snow removal, tax season
+   (February–April), student leasing (April, August) → seasonal notices and suggested questions.
+5. **Urgent problems** — a burst pipe or no heat can't wait: show the phone number and mark the request urgent.
+6. **English and French**, plus newcomer languages in chat (§6).
+7. **Later: phone and SMS, and the tools they already use** — Jobber, Housecall Pro, Google Calendar, shop
+   software (§7.3, §14).
+8. **Canadian compliance** — CASL, PIPEDA and Quebec Law 25, AODA for the page; PHIPA for clinics (§12).
+
+### 2.2 Go-to-market
+
+1. **Prospect list — "Google Maps page 2".** Search `plumber`, `HVAC`, `roofing` or `auto repair` in the
+   target city. Skip the sponsored results and businesses with fewer than 5 reviews. Target businesses
+   ranked **6–25** with **4.2–4.8 stars** and **20–100 reviews**: busy and profitable. Put first the ones
+   whose listing has **no website link, only a Facebook page, or a site that is clearly outdated** (not
+   mobile-friendly, old prices, broken pages).
+2. **Show, don't pitch: a demo page.** Before the first contact, the operator builds a private demo page
+   from the prospect's public information (Google listing, Facebook page, old site) with the prospect
+   demo generator (§7.5). The owner sees their own name, services and area, and can ask the assistant a
+   question about their own business.
+3. **First contact.** A visit or a phone call with the demo link is the lower-risk first touch.
+   - A text or email to a business is a commercial electronic message under CASL. Send it only to an
+     address or number the business publishes for inquiries, keep it relevant to that business, say who
+     you are and how to reach you, and include a way to opt out. Have this checked before sending at
+     volume (§12).
+4. **The pitch.** "Your page is ready. It answers customers and takes requests while you work, for less
+   than a website costs, and you never have to maintain it." With a $450 average ticket, one extra job
+   pays for many months.
+5. **Go live.** The owner approves the page; the link goes on the Google Business Profile, a QR code on the
+   truck, invoices and cards.
+6. **Channel partners.**
+   - Local web design and SEO agencies: offer the page and assistant white-label or on revenue share, for
+     clients who can't afford a full site and as a widget on the sites they build.
+   - Bookkeepers and IT managed-service providers: 20 % recurring referral commission.
+7. **Pilot goal:** 10–20 trades and auto businesses with a live page in one or two cities before adding the
+   next industry. Then offer phone and SMS to the pilots that get the most requests.
+
+**Data notes (Northern Ontario list):** revenue/employee figures in the sheet are benchmarks, not facts. One
+row (a French-language law firm) has shifted columns; "Legal clinic (non-profit)" is filed under Health &
+Wellness; suburban trades are under-represented; 22 websites were unreachable — check before reaching out.
 
 ## 3. Design principles
 
-| Principle                                     | How                                                                                                                                 |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Multi-tenant from day 1**                   | `tenant_id` on every table + Postgres Row-Level Security                                                                            |
-| **Configure industries, don't code them**     | Sector → Pack → Variant built from reusable capability modules (§4)                                                                 |
-| **Customer service, not professional advice** | Platform-wide locked scope rule + classifier + evals (§5)                                                                           |
-| **Multilingual by default**                   | Answer in the visitor's language; language tiers; RTL/CJK/Indic support; owner sees translations (§6)                               |
-| **Built for low traffic**                     | Shared stateless infra; pay-per-use LLM; no per-tenant servers                                                                      |
-| **Zero-effort setup**                         | Website crawl → auto-filled business profile + FAQs → preview → copy snippet                                                        |
-| **Grounded answers, honest "I don't know"**   | Answer only from tenant content, cite sources, fall back to lead capture / human                                                    |
-| **Channel- and audience-agnostic engine**     | No web-specific code in the engine; voice and staff assistants later                                                                |
-| **Provider-agnostic LLM layer**               | Anthropic, Bedrock, Azure Foundry, Vertex, OpenRouter, OpenAI, Gemini, Mistral, self-hosted (§9); the LLM also does all translation |
+| Principle | How |
+|---|---|
+| **The chat page is the storefront** | The first product is a public page with the assistant in front; it replaces a website the business doesn't have. Phone and SMS are added later on the same engine |
+| **Readable without chatting** | Services, prices, hours and contact details are ordinary page content; the assistant is the fast way in, not the only way |
+| **An invisible layer over their tools** (Phase 2 on) | Read and write Jobber, Housecall Pro, Google Calendar, Stripe (later Jane App, shop software) through integrations; never ask the owner to adopt a new CRM or calendar |
+| **Done-for-you setup** | We build the page and the knowledge base from whatever the business has (listing, price list, photos, interview); the portal and self-serve signup stay for those who want them |
+| **Never a dead end** | Every answer leaves a way forward: a request to the owner, a booking link or the phone number; an urgent problem always shows the phone number |
+| **Multi-tenant from day 1** | `tenant_id` on every table + Postgres Row-Level Security |
+| **Configure industries, don't code them** | Sector → Pack → Variant built from reusable capability modules (§4) |
+| **Customer service, not professional advice** | Platform-wide locked scope rule + classifier + evals (§5) |
+| **Grounded answers, honest "I don't know"** | Answer only from tenant content; when it isn't there, take a message, transfer or capture a request instead of guessing |
+| **One engine for every channel** | Voice, SMS and web chat run the same engine, knowledge and tools; only the reply format and the model profile differ (§8.3) |
+| **Built for bursts on shared infra** | Shared stateless services, pay-per-use LLM and telephony, no per-tenant servers; many simultaneous conversations in seasonal peaks |
+| **Multilingual by default** | Text channels answer in the customer's language; voice in English, then French (§6) |
+| **Provider-agnostic** | LLM providers (§9), telephony and voice vendors all sit behind our own interfaces; the LLM also does all translation |
 
 ## 4. Industry structure
 
@@ -92,54 +174,79 @@ Sector            e.g. Food & Drink
 
 ### 4.2 Capability modules
 
-| Module                       | What it does                                                                                    | Phase |
-| ---------------------------- | ----------------------------------------------------------------------------------------------- | ----- |
-| **Lead capture**             | Contact + pack fields + preferred language; CASL consent checkbox for marketing                 | 1     |
-| **Human handoff**            | Email/SMS alert with translated summary; callback request                                       | 1     |
-| **Notices & live status**    | Time-limited announcements (closures, specials, conditions), auto-translated                    | 1     |
-| **Hours & seasons**          | Regular, holiday, seasonal hours; "open now?"                                                   | 1     |
-| **Booking links**            | Links to existing booking tools (Square, Fresha, Vagaro, Calendly, booking engines)             | 1     |
-| **Reservations & ordering**  | Reservation/ordering links; catering & custom-order requests                                    | 1     |
-| **Menu**                     | Menu from PDF/photo (vision OCR); dietary/allergen Q&A with "confirm with staff"                | 1     |
-| **Multilingual**             | Visitor-language answers, widget UI languages, translated owner view (§6)                       | 1     |
-| **Catalog lookup**           | Structured feeds (CSV, Shopify, Square, WooCommerce) — products, rooms; later vehicles/listings | 2     |
-| **Events & tickets**         | Event calendar Q&A + ticket links                                                               | 2     |
-| **Quote request**            | Guided questions + photo upload (trades, event services, printing)                              | 2     |
-| **Donations & volunteering** | Links + FAQs                                                                                    | 2     |
-| **Age gate**                 | Alcohol 19+ (Ontario), tattoo/piercing 18+ wording                                              | 1     |
-| **Safety & escalation**      | Emergency keywords → urgent message + phone; crisis lines (9-8-8, 911)                          | 1     |
-| **Image upload**             | Visitor photos (tattoo references, repair issues) via vision models                             | 2     |
-| **Booking integrations**     | Real availability via APIs (Square, Jane App, Calendly, Google Calendar)                        | 3     |
-| **Intake (minimal)**         | Contact + topic category only for professional packs — no case/health details (§5)              | 3     |
-| **Careers & recruiting**     | Job Q&A, application link                                                                       | 3     |
-| **Internal knowledge**       | Staff-only assistant over private docs, SSO, permissions                                        | 4     |
+**Chat assistant and business page — the first product**
 
-### 4.3 Pack catalog by phase (research counts in brackets)
+| Module | What it does | Phase |
+|---|---|---|
+| **Business page** | The hosted chat page as the business's public page: header, contact buttons, hours, area, services, photos, with the assistant in front (§7.1) | 1 |
+| **Services & products** | A list the owner keeps (name, description, photo, price text, category), shown as cards on the page and used by the assistant in answers | 1 |
+| **Lead capture (requests)** | Contact + pack fields + preferred language; CASL consent for marketing | built |
+| **Urgent request flag** | Pack keywords and questions sort urgent from routine. Urgent → the phone number shown at once, the request marked urgent, the owner emailed immediately (text alert in the phone and SMS phase), plus the safety message (911, gas utility) | 1 |
+| **Quote request** | Guided questions + customer photos; price ranges only from the business's own price rules | 1 |
+| **Service-area check** | Postal code or town checked against the business's service area | 1 |
+| **Booking links** | Buttons and answers that link to the booking tool the business already uses | built (buttons: 1) |
+| **Hours & seasons** | Regular, holiday, seasonal hours; "open now?" on the page and in answers | 1 |
+| **Notices & live status** | Time-limited announcements on the page and in answers (closures, storm delays, "booking tire changeovers now"), auto-translated | 1 |
+| **Human handoff** | Email alert to the owner with the request and the conversation | built |
+| **Knowledge gaps** | Questions the assistant couldn't answer, grouped, with "answer it" | built |
+| **Setup assistant** | Proposes business details, greeting and FAQs from the website (built); interview mode and services from a price list for businesses without a website | 1 |
+| **Image upload** | Customer photos in chat via vision models | built |
+| **Multilingual** | Answers in the customer's language; EN/FR page and admin (§6) | built |
+| **Safety & escalation** | Emergency keywords → urgent message + phone; crisis lines (9-8-8, 911) | 1 |
+| **Page sharing** | QR code (built), friendly link, search-engine basics; own domain | 1 (own domain: 2) |
+| **Job & appointment booking** | Real availability and booking through Google Calendar and Jobber; Housecall Pro, Cal.com and Calendly next | 2 |
+| **Payment and deposit links** | Stripe links in answers and requests | 2 |
+| **Seasonal scripts** | Scheduled switch of greeting, notices and suggested questions (AC → furnace, landscaping → snow removal, winter tires) | 2 |
+| **Maintenance requests** | Tenant requests logged with unit, problem, photos and urgency; the manager is alerted | 2 |
+| **Rental inquiry pre-screening** | Move-in date, unit and the manager's own lawful questions; takes showing requests; never accepts or rejects | 2 |
+| **Intake (minimal)** | Contact + topic category only for professional packs — no case/health details (§5) | 3 |
+| **Clinic booking integrations** | Jane App, Cliniko, Dentrix — depends on API access (§17) | 3 |
+| **Document chaser** | Reminders for missing checklist items; secure upload page; vision check that a file is legible and the right form before staff are alerted | 3 |
+| **Catalog feeds** | Structured feeds (CSV, Shopify, Square) into services & products; later vehicles and listings | 3 |
+| **Careers & recruiting** | Job Q&A, application link | 4 |
+| **Internal knowledge** | Staff-only assistant over private docs, SSO, permissions | 4 |
 
-| Phase          | Sector                                           | Packs → variants                                                                                                                                                                    | Key modules                                                                                                                        | Notes                                                                            |
-| -------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **1 — launch** | Food & Drink                                     | **Restaurant & bar** [86] → casual, fine dining, pub/bar, buffet, takeout · **Café & bakery** [22] → café, bakery/custom cakes, coffee roaster                                      | Menu, reservations & ordering, hours, notices, age gate                                                                            | Largest group; allergens always "confirm with staff"                             |
-| **1 — launch** | Retail                                           | **Retail store** [71] → clothing/outdoor, florist, gift/artisan, hardware, jewellery, books/hobby, **international/specialty food & goods**                                         | Hours, notices, product FAQs (catalog in Phase 2)                                                                                  | Never invent stock or prices                                                     |
-| **1 — launch** | Personal care                                    | **Salon, spa & barber** [16] · **Tattoo & piercing** [6]                                                                                                                            | Booking links, age gate, deposits link                                                                                             | Tattoo: 18+, consultations, aftercare                                            |
-| **1 — launch** | Hospitality & Tourism                            | **Lodging** [18] → motel, B&B, lodge/outfitter, small hotel · **Attractions, tours & recreation** [22] → tours, ski/trails, golf, activity venues                                   | Booking links, notices & conditions, hours & seasons, multilingual                                                                 | Visitors from outside the region → multilingual matters most here                |
-| **1**          | Generic                                          | Fallback for anything else                                                                                                                                                          | Lead capture, handoff, hours                                                                                                       |                                                                                  |
-| **2**          | Food & Drink                                     | **Grocery & market** [12] → farmers market, specialty/ethnic grocery, butcher · **Brewery & producer** [11]                                                                         | Catalog, events, age gate                                                                                                          | Ethnic groceries serve newcomer communities → multilingual showcase              |
-| **2**          | Arts & Events                                    | **Arts, culture & events** [27] → gallery, museum, theatre, festival, music venue                                                                                                   | Events & tickets, donations                                                                                                        | Small budgets → Local plan                                                       |
-| **2**          | Fitness                                          | **Gym & studio** [~6] → gym, yoga, martial arts                                                                                                                                     | Booking links, class schedule                                                                                                      | No health/exercise advice beyond published info                                  |
-| **2**          | Automotive (local)                               | **Auto repair & service shop** → general repair, tires, body/collision, glass, oil change, detailing                                                                                | Booking links, hours & seasons (winter-tire rush), quote request + photos, notices                                                 | No diagnosis guarantees or binding repair prices — "estimate after inspection"   |
-| **2**          | Professional & business services (non-regulated) | **Business services** [21] → marketing agency, IT/web, photography, printing, event planning, security, cleaning                                                                    | Quote request, booking links                                                                                                       | Customer service + quotes                                                        |
-| **2**          | Home & Construction                              | **Trades & home services** → plumbing, HVAC, electrical, cleaning, landscaping, snow removal                                                                                        | Quote request, service-area check, safety & escalation                                                                             | Gas / no heat → urgent escalation                                                |
-| **2**          | Education (small)                                | **Tutoring, language & driving schools, music schools**                                                                                                                             | Programs, schedules, booking                                                                                                       | Language schools fit newcomer demand                                             |
-| **2**          | Community                                        | **Non-profit & settlement services** [8] → social services, newcomer/settlement, youth, community                                                                                   | Multilingual, donations & volunteering, safety & escalation                                                                        | Resource navigation only, minimal personal data                                  |
-| **3**          | Health & Wellness                                | **Clinic** [25] → dental, physio/chiro, vision & hearing, counselling, aesthetics · **Pharmacy** [2]                                                                                | Booking, minimal intake, safety & escalation                                                                                       | **Customer service only** (§5); PHIPA + Canada data residency required first     |
-| **3**          | Legal & Financial                                | **Law firm** [21] · **Accounting & tax** [5] · **Insurance broker** [2] · **Credit union / advisory** [3] · **Immigration consultant**                                              | Booking, minimal intake                                                                                                            | **Customer service only** (§5)                                                   |
-| **3**          | Real Estate                                      | **Brokerage / agent** [5]                                                                                                                                                           | Listings feed, showing booking                                                                                                     | No valuations or legal/financial guidance                                        |
-| **3**          | Automotive (sales)                               | **Car dealership** [8] → new & used cars, powersports/RV/boat                                                                                                                       | Vehicle inventory feed (catalog lookup), test-drive & service booking, trade-in and financing _inquiry_ forms                      | No final prices, trade-in values or financing terms — customer service only (§5) |
-| **4**          | Industrial & Institutions                        | **Mining supply & services** [17], **Engineering** [5], **Manufacturing** [4], **Auto manufacturer & parts maker** [0], **Transportation** [7], **Utilities** [6], **Colleges** [7] | RFQ, careers, internal knowledge, voice; for auto makers: dealer/distributor locator, product specs, warranty & recall info lookup | Business tier; enterprise sales                                                  |
+**Phone and SMS — later phase** (§7.3; order: SMS, then voice)
 
-**Launch packs (Phase 1):** Restaurant & bar, Café & bakery, Retail store, Salon/spa/barber + tattoo,
-Lodging + attractions & tours, Generic. Together ≈ 240 businesses in the research list (over half),
-all owner-run, all low-risk.
+| Module | What it does | Step |
+|---|---|---|
+| **Missed-call text-back** | Texts the caller within seconds of a missed call, with a link to the business page; the conversation continues by SMS | SMS |
+| **Two-way SMS + photos** | The same assistant by text; photos by MMS attached to the request | SMS |
+| **Owner alerts by text** | Urgent requests and summaries texted to the owner or on-call person | SMS |
+| **Reminders & confirmations** | Transactional texts: booking confirmation, reminder, "on our way" | SMS |
+| **Status & pickup alerts** | "Is my car ready?" answered from the shop software; pickup text with a payment link | SMS |
+| **Phone answering** | AI voice agent on the business's local number: greeting with the recording disclosure, answers, takes the details, transfers to a person | Voice |
+| **Emergency transfer & on-call dispatch** | Urgent calls transferred live; repeat calls down the on-call list | Voice |
+| **Call summaries** | Recording, transcript and summary for each call | Voice |
+| **Waitlist backfill & recall** | Offers cancelled slots to the waitlist; recall campaigns to clients who consented (clinics) | SMS |
+
+**Self-serve local-business modules** (built on demand, not on the early-stage path): reservations &
+ordering, menu (vision OCR), age gate, events & tickets, donations & volunteering.
+
+### 4.3 Pack catalog by phase (Northern Ontario research counts in brackets)
+
+| Phase | Sector | Packs → variants | Key modules | Notes |
+|---|---|---|---|---|
+| **1 — first pilots** | Home & Construction | **Trades & home services** → plumbing, HVAC, electrical, roofing, landscaping / snow removal, cleaning | Business page with services, area and past work; urgent request flag, quote request + photos, service-area check, booking link. Later: phone and SMS | Gas smell, carbon monoxide, no heat in winter, flooding → urgent. No diagnosis, no binding prices |
+| **1 — first pilots** | Automotive (local) | **Auto repair & tire shop** → general repair, tire centre, body/collision, glass, oil change, detailing | Business page with services and the price list; tire changeover and repair requests, booking link; Phase 2: seasonal scripts. Later: phone and SMS, status & pickup alerts | "Estimate after inspection" |
+| **1** | Generic | Fallback for anything else | Lead capture, handoff, hours | |
+| **2** | Property | **Property management & rentals** (new pack) → residential property manager, student housing, condo management | Business page with available units; maintenance requests, urgent request flag, rental inquiry pre-screening, showing requests | No tenancy-law advice; collects answers only, never accepts or rejects an applicant |
+| **2** | Professional & business services (non-regulated) | **Business services** [21] → marketing agency, IT/web, photography, printing, event planning, security, cleaning | Quote request, booking | Customer service + quotes |
+| **3** | Health & Wellness | **Clinic** [25] → vet, medspa/aesthetics, dental, physio/chiro, vision & hearing, counselling · **Pharmacy** [2] | Business page with services, team and fees; booking integrations, minimal intake. Later: reminders, waitlist backfill & recall | **Customer service only** (§5); PHIPA + Canada data residency first; vet variant first |
+| **3** | Legal & Financial | **Accounting & tax** [5] · **Law firm** [21] (real-estate law first) · **Immigration consultant** · **Insurance broker** [2] · **Credit union / advisory** [3] | Business page with services, fees and what to bring; minimal intake, document chaser | **Customer service only** (§5) |
+| **3** | Real Estate | **Brokerage / agent** [5] | Listings feed, showing booking, inquiry pre-screening | No valuations or legal/financial guidance |
+| **3** | Automotive (sales) | **Car dealership** [8] → new & used cars, used-car lot, powersports/RV/boat | Vehicle inventory feed, test-drive & service booking, Marketplace inquiry screening, trade-in and financing _inquiry_ forms | No final prices, trade-in values or financing terms |
+| **Self-serve (built)** | Food & Drink, Retail, Personal care, Hospitality & Tourism | **Restaurant & bar** [86] · **Café & bakery** [22] · **Retail store** [71] · **Salon, spa & barber** [16] · **Tattoo & piercing** [6] · **Lodging** [18] · **Attractions, tours & recreation** [22] | Web chat: hours, notices, booking links, menu, age gate | Stay selectable at signup; no outbound sales |
+| **Self-serve (on demand)** | Food & Drink, Arts, Fitness, Education, Community | **Grocery & market** [12] · **Brewery & producer** [11] · **Arts, culture & events** [27] · **Gym & studio** [~6] · **Tutoring, language, driving & music schools** · **Non-profit & settlement services** [8] | Web chat: catalog, events & tickets, donations, multilingual | Released when customers ask |
+| **4** | Industrial & Institutions | **Mining supply & services** [17], **Engineering** [5], **Manufacturing** [4], **Auto manufacturer & parts maker** [0], **Transportation** [7], **Utilities** [6], **Colleges** [7] | RFQ, careers, internal knowledge; for auto makers: dealer/distributor locator, product specs, warranty & recall lookup | Business tier; enterprise sales |
+
+**Early-stage packs:** Trades & home services and Auto repair & tire shop (Phase 1), Property management &
+rentals (Phase 2), Clinic and the professional packs (Phase 3).
+
+**Catalog in code:** `packages/industry-packs` follows this table. A pack has one phase number and the
+operator releases phases in order (`releasedPackPhase`), so the on-demand self-serve packs sit in phase 2
+and become selectable together with Property management. Trades and Auto repair have their own templates
+and workflow libraries; packs without a template use the generic one until theirs is written.
 
 ## 5. Scope policy — customer service, not professional advice
 
@@ -155,6 +262,24 @@ immigration) but applies everywhere (e.g. restaurants: no medical advice about a
 | What happens at a first appointment/consultation, what documents to bring                | Predict outcomes, chances, timelines, amounts                                                         |
 | How to book, reschedule, cancel; forms and links                                         | Recommend treatments, medications, investments, products for a personal situation                     |
 | General info _published by the business_ on its own site                                 | Collect sensitive details (health conditions, case facts, SIN, immigration status, financial details) |
+
+**What the rule means in the early-stage industries**
+
+| Industry | The assistant does | The assistant does not |
+|---|---|---|
+| Trades & home services | Take the details and photos, give price ranges from the business's own price rules, book or escalate | Diagnose the fault; promise a price or arrival time the business hasn't set; give repair steps for gas, electrical or structural work |
+| Auto repair & tire shops | Quote tire and service packages from the shop's list, book a bay, report job status from the shop system | Diagnose from a description; say a car is safe to drive; give a binding repair price |
+| Property management | Log maintenance requests, escalate emergencies, record applicants' answers, book showings | Decide on an application; give tenancy-law advice (rent increases, evictions, deposits); ask more than the manager may lawfully ask |
+| Clinics | Book, reschedule, remind, answer from published information | Discuss symptoms, treatment or results; take health details by phone or text |
+| Accounting, legal, immigration | Reception, file status as recorded by staff, reminders about missing documents | Advise on tax, law or eligibility; accept documents or SINs by SMS/MMS |
+
+**Emergencies, on every channel:** danger to life or property (gas smell, carbon monoxide alarm, fire,
+electrical hazard) → tell the customer to leave and call 911 or the gas utility first, then show the
+business's phone number and alert the owner. The assistant can't call emergency services for anyone and
+says so.
+
+**On every call (later phase):** the greeting says this is an automated assistant on a recorded line, and the caller can
+always ask for a person (transfer during opening hours, callback request otherwise).
 
 **Standard response when advice is requested:** acknowledge → explain the assistant can't give advice → offer
 to book a consultation / request a callback → urgent resources when relevant (911, 9-8-8) → capture name,
@@ -177,6 +302,12 @@ contact, preferred language and a **topic from a fixed list** only.
    for its published content. Get a lawyer to review before Phase 3.
 
 ## 6. Multilingual support
+
+**By channel:** the chat page and the widget answer in the customer's language from day 1, as built; SMS
+will do the same. **Voice (later phase) starts in English, then French**; another language is added to voice only after its speech
+recognition and speech quality pass a test with native speakers. Bilingual EN/FR phone answering with
+automatic detection is a selling point where French is common (Eastern and Northern Ontario, New Brunswick,
+Quebec border towns) and can be sold as an upgrade.
 
 ### 6.1 Language tiers
 
@@ -225,12 +356,60 @@ Glossaries (dish names, brand names) are handled by passing "do not translate" t
 - **Embeddings:** must be strongly multilingual (cross-lingual retrieval); evaluate on Tier 2 languages
 - **Locale formatting:** dates, times, currency via `Intl` APIs
 - **Cost:** non-Latin scripts often use more tokens per message — meter cost per language
-- **Voice (later):** speech-to-text/text-to-speech coverage per language (e.g. Mandarin vs Cantonese, Punjabi)
+- **Voice:** EN, then FR; speech-to-text/text-to-speech coverage checked per language before it is offered
+  (e.g. Mandarin vs Cantonese, Punjabi)
 - **Evals:** 30–50 questions per launch pack per Tier 2 language, sampled native-speaker review
 
 ## 7. Feature scope
 
-### 7.1 Chat surfaces: hosted page, iframe embed, widget
+### 7.1 AI business page — the first product
+
+The hosted chat page (`/c/<public-key>`, built) grows into the business's public page: a page a customer
+can read, with an assistant they can ask. It replaces the website a small business doesn't have or doesn't
+maintain. It is **one designed page, not a website builder**: the layout is fixed and the owner fills it in.
+
+| Part of the page | What it shows | Status |
+|---|---|---|
+| **Header** | Name, logo or photo, one-line description, open or closed now, town or service area | Name, picture and greeting built; the rest Phase 1 |
+| **Contact buttons** | Call, email, directions, book, shop | Booking, ordering and shop links built; buttons Phase 1 |
+| **Assistant** | The chat, front and centre, with suggested questions | Built |
+| **Services & products** | Cards: name, short description, photo, price text ("from $120", "call for a quote"), category. "Ask about this" opens the chat on that item; "Request a quote" or "Book" starts the matching workflow | Phase 1 |
+| **Photos** | Gallery of the business's photos (past work, storefront, team) | Photos built; gallery Phase 1 |
+| **Hours, area, notices** | Opening hours, service area, time-limited notices | Details built; display and notices Phase 1 |
+| **Footer** | Address, licences and insurance if given, languages spoken, privacy note, "Powered by" | Phase 1 |
+
+**Two presets of the same page**
+
+- **Business page** — logo, team, one or more locations.
+- **Personal page** — one person: photo, trade or profession, areas served. For independent contractors
+  and other solo professionals.
+
+**From nothing to a live page**
+
+1. **Sources, any mix:** an old website; a price list or brochure (PDF or photo); photos from the owner's
+   phone; text pasted from a Facebook page; Google Business Profile details (§17); or a **short interview**
+   in which the setup assistant asks the owner a handful of questions and saves the answers as knowledge.
+2. **The setup assistant proposes** the business details, the description, the services or products with
+   the prices found in the sources, a greeting, suggested questions, and the facts customers will ask for
+   that are still missing. As today, nothing is proposed that isn't in the sources or typed by the owner.
+3. **Review and publish** — by the owner, or by us in the done-for-you setup.
+4. **Share:** a friendly link (the business's name instead of a key), the QR code, the "website" field of the
+   Google Business Profile, social profiles, invoices, vehicles. Phase 2: the business's own domain.
+
+**Rules for the page**
+
+- **It works without chatting.** Services, prices, hours, area and contact details are ordinary page
+  content, for the customer who only wants the phone number and for search engines.
+- **It can be found.** The content is in the page's HTML when it loads, with a title, a description and
+  local-business structured data. Only published pages are listed; an owner can keep a page unlisted.
+- **Limited design on purpose.** Templates and brand colour from Appearance (§7.2); no custom pages, CSS
+  or HTML, so every page stays fast, accessible (WCAG 2.1 AA) and mobile-friendly.
+- **One assistant everywhere.** The page, the inline iframe and the widget share the knowledge, the
+  services list and the conversation log. A business with a good website uses the widget and can ignore
+  the page.
+- **Nothing invented.** Prices, stock and availability come only from what the owner entered.
+
+### 7.2 Chat surfaces: hosted page, iframe embed, widget
 
 One chat web app (`apps/chat`) powers every surface. Customers pick what fits their site:
 
@@ -275,20 +454,60 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 - Later: friendly short links (e.g. `/<business-name>`) that survive key rotation, QR scan analytics,
   printable QR flyer templates, WordPress plugin, Shopify app, Wix/Squarespace/Webflow guides
 
-### 7.2 Client admin portal (EN/FR first)
+### 7.3 Phone and SMS — later phase
 
-1. **Onboarding wizard:** sector → pack → variant → website URL → files/menu photos → confirm business
-   profile (hours, phone, booking links, **staff languages**) → choose bot languages → preview → embed code
-2. **Knowledge base:** pages, PDF/DOCX, menu images, Q&A pairs, notes, feeds (Phase 2); per-language
-   versions; **Q&A pairs override everything**
-3. **Notices** with start/end dates, auto-translated
-4. **Playground:** test in any language; "fix this answer" → Q&A pair
-5. **Bot settings:** persona, greeting, languages, hours & seasons, modules, lead fields, handoff contacts,
+Starts after the paid launch, when pilots ask for it (§14). SMS comes first and sends customers to the
+business page; voice follows. The same assistant, knowledge and services list answer on every channel.
+
+**Number and forwarding.** Each business gets a local number in its own area code (519, 613, 705, 905, 250,
+902 …). It keeps its public number and forwards the calls it doesn't answer (no answer, busy, after hours)
+to the assistant's number; some will forward every call. Forwarding codes differ by carrier and by
+landline, mobile or VoIP line, so setup uses a per-carrier sheet and ends with a test call.
+
+| Flow | What happens |
+|---|---|
+| **Missed-call text-back** | A forwarded call isn't completed (the caller hangs up, or the business chose text-back only) → a text within seconds: "Sorry we missed you — this is [Business]'s assistant. What do you need help with?" → the conversation continues by SMS |
+| **Inbound call** | Greeting with the disclosure → understand the request → answer from the business's information → triage → collect name, address or postal code and the problem (photos by a follow-up text) → book, or take a request → summary to the owner |
+| **Emergency** | Urgent rules match → safety message → live transfer to the owner or on-call number; if nobody answers, an urgent text and repeat calls down the on-call list |
+| **Inbound SMS / MMS** | The same assistant by text; photos attached to the request |
+| **Outbound texts** | Replies and transactional messages only: confirmations, reminders, status, missed-call follow-up; STOP handled automatically. No cold outbound texts and no AI sales calls (§12) |
+
+**On a call**
+
+- Greeting (EN/FR): "Thanks for calling [Business]. I'm the automated assistant, on a recorded line — how
+  can I help?"
+- Short spoken answers; names, phone numbers and addresses are read back to confirm; the caller can interrupt.
+- "Talk to a person" always works: transfer during opening hours, callback request otherwise.
+- Limits per business: maximum call length, simultaneous calls (by plan), daily spend cap.
+- Target: the reply starts within about one second.
+
+**For the owner**
+
+- After each call: a text or email summary (who, what, how urgent, booked or not) with a link to the
+  recording and transcript.
+- In the portal: calls and SMS threads in Conversations; requests with the caller's number and photos;
+  phone settings (number, hours, on-call list, transfer rules, greeting).
+- An owner who never opens the portal still gets everything by text or email and in Jobber or the calendar.
+
+### 7.4 Client admin portal (EN/FR first)
+
+1. **Onboarding wizard:** sector → pack → variant → website URL, or "I don't have a website" (interview,
+   price list, photos — §7.1) → confirm business profile (hours, phone, booking links, **staff
+   languages**) and the services list → choose bot languages → preview the page → publish, share link, QR
+   code, embed code
+2. **Business page:** services & products editor (cards, photos, price text, order), page details, business
+   or personal preset, preview, publish or keep unlisted, friendly link
+3. **Knowledge base:** pages, PDF/DOCX, price lists and menu images, Q&A pairs, notes, feeds (Phase 3);
+   per-language versions; **Q&A pairs override everything**
+4. **Notices** with start/end dates, auto-translated
+5. **Playground:** test in any language; "fix this answer" → Q&A pair
+6. **Bot settings:** persona, greeting, languages, hours & seasons, modules, lead fields, handoff contacts,
    custom instructions (scope-checked, §5)
-6. **Inbox** (auto-translated), **Leads**, **Analytics** (incl. languages used, knowledge gaps)
-7. **Install**, **Team & roles**, **Billing & usage** (CAD)
+7. **Inbox** (auto-translated), **Leads**, **Analytics** (page visits, questions, requests, languages used,
+   knowledge gaps)
+8. **Install**, **Team & roles**, **Billing & usage** (CAD)
 
-### 7.3 Operator console
+### 7.5 Operator console
 
 - **Delivered (`/operator` in the admin app):** overview (businesses, assistants, questions,
   refusals, AI cost this month); businesses (search, change plan, suspend/reactivate, usage and cost, members
@@ -306,30 +525,44 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 - Later: a support role with narrower rights (view-only or no plan/policy changes), and showing the business
   its activity log in the admin portal
 - Packs/variants/modules (versioned) with eval results per language
-- **Prospect demo generator:** build a private demo bot from a prospect's public website
+- **Prospect demo generator:** build a private demo page and assistant from a prospect's public
+  information (website, Google listing, Facebook page) to show at the first contact (§2.2)
+- **Done-for-you onboarding checklist** per business: sources collected, page content, services list,
+  photos, owner review, link on the Google listing, go-live
 - System health: ingestion queue, errors, latency, provider fallbacks, scope-classifier triggers
 
 ## 8. Architecture
 
+The phone and SMS parts (the top of the diagram, `apps/voice`, telephony) and the integrations belong to
+later phases; the rest exists today.
+
 ```
-                      ┌──────────────────────────────┐
- Visitor's browser ──►│ chat page / iframe / widget  │       Phone (Phase 3) ──► voice gateway ─┐
-                      └──────────────┬───────────────┘                                          │
-                                     │ HTTPS + SSE                                              │
- Business owner  ──► Admin portal (Next.js) ──┐                                                 │
-                                     ▼        ▼                                                 ▼
-                      ┌──────────────────────────────┐        ┌──────────────────────┐
-                      │ API service (stateless)       │──────►│ LLM gateway           │──► Anthropic / Bedrock / Azure
-                      │ - conversation engine         │        │ chat + translation,   │    Foundry / Vertex / OpenRouter /
-                      │ - scope guard, language layer │        │ routing, fallbacks,   │    OpenAI / Gemini / self-hosted
-                      │ - admin REST API, auth, quotas│        │ metering              │
-                      └───┬──────────┬───────────┬───┘        └──────────────────────┘
-                          ▼          ▼           ▼ enqueue jobs
+ Caller ──► business's number ──(forward missed / after-hours calls)──► Telephony provider (Twilio / Telnyx)
+                                                                          │ audio          │ SMS/MMS and
+                                                                          ▼                │ call-status webhooks
+                                                    Voice orchestrator (speech ↔ text,     │
+                                                    turn-taking; managed first)            │
+                                                                          │                │
+                                                                          ▼                │
+                                                    ┌──────────────────────────┐           │
+                                                    │ Voice service (apps/voice)│           │
+                                                    │ live calls only           │           │
+                                                    └────────────┬─────────────┘           │
+ Visitor's browser ──► chat page / iframe / widget ─┐            │ same engine             │
+ Business owner  ──► Admin portal (Next.js) ────────┤            │ (packages/core)         │
+                                                    ▼            ▼                         ▼
+                      ┌───────────────────────────────────────────────────────────────────────┐      ┌─────────────────────┐
+                      │ API service (stateless)                                               │─────►│ LLM gateway          │──► Anthropic / Bedrock / Azure
+                      │ - conversation engine (web, SMS)     - telephony webhooks (signed)    │      │ chat + translation,  │    Foundry / Vertex / OpenRouter /
+                      │ - scope guard, language layer        - admin REST API, auth, quotas   │      │ routing, fallbacks,  │    OpenAI / Gemini / self-hosted
+                      └───┬──────────┬───────────┬────────────────────────────────────────────┘      │ metering             │
+                          ▼          ▼           ▼ enqueue jobs                                      └─────────────────────┘
                    PostgreSQL     Redis      Queue ──► Worker(s): crawl → parse/OCR → chunk → embed → index;
-                   + pgvector   (rate limit,           pre-translation; feed sync; re-sync; analytics
-                   (RLS)         cache)
-                          ▲
-                          └── Object storage (S3/R2) — uploads, menu images
+                   + pgvector   (rate limit,           outbound texts (text-back, reminders, alerts) with retries;
+                   (RLS)         cache)                integration sync; pre-translation; analytics
+                          ▲                                   │
+                          └── Object storage (S3/R2) —        └──► Integrations: Jobber, Housecall Pro, Google Calendar,
+                              uploads, photos, call recordings     Stripe, later Jane App and shop software
 ```
 
 ### 8.1 Recommended stack (TypeScript end-to-end)
@@ -339,6 +572,7 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 | Monorepo          | pnpm + Turborepo                                                                                                                               |
 | Admin portal      | Next.js + Tailwind + shadcn/ui + i18n (ICU messages, RTL-ready)                                                                                |
 | Chat page + widget | Preact + Vite: one chat page (hosted link / iframe) + a tiny `widget.js` loader, served by the API with per-bot `frame-ancestors`              |
+| Business page     | The API serves the page with the business's content (details, services, hours, notices) already in the HTML, plus structured data; the Preact chat starts on top of it |
 | API               | Fastify (Node), SSE streaming, OpenAPI                                                                                                         |
 | Workers           | Postgres-backed job queue (`FOR UPDATE SKIP LOCKED`) in a worker process; move to BullMQ/SQS if volume requires                               |
 | DB                | PostgreSQL 17 + pgvector + full-text (EN/FR) + `pg_trgm`                                                                                       |
@@ -350,6 +584,9 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 | Embeddings        | `EmbeddingProvider` interface; strongly multilingual model (Voyage AI, Cohere, OpenAI, Bedrock, Azure, Gemini, local)                          |
 | Parsing           | Readability/Cheerio, `unpdf`/`mammoth`, vision-model OCR for menus, Playwright for JS-heavy sites                                              |
 | Storage / hosting | S3 or R2; Vercel (admin) + Fly.io / Render / AWS ECS (API + workers) + Cloudflare CDN/WAF; Canadian region available for later residency needs |
+| Telephony (later) | Twilio or Telnyx behind a `TelephonyProvider` interface: local Canadian numbers, SMS/MMS, call events, signed webhooks |
+| Voice (later)     | Managed orchestrator (Vapi or Retell) with our engine as its model; own pipeline (provider media streams + streaming speech-to-text / text-to-speech) only if cost or control require it |
+| Integrations (Phase 2 on) | Direct connectors in `packages/integrations`: Google Calendar and Jobber first, then Housecall Pro, Stripe payment links, QuickBooks Online (Canadian edition); OAuth tokens encrypted per tenant. Make or n8n is acceptable for a one-off pilot connection |
 | Observability     | Sentry, OpenTelemetry, per-message usage & cost in DB                                                                                          |
 
 > Alternative: Python (FastAPI) backend (LiteLLM for the gateway); chat page and admin stay TypeScript.
@@ -358,19 +595,59 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 
 ```
 traiblazer/
-  apps/       admin/  api/  worker/  widget/  voice/ (Phase 3)
+  apps/
+    admin/            Next.js admin portal                                   (built)
+    api/              Fastify API, chat page + widget.js, telephony webhooks (built; webhooks later)
+    chat/             Preact chat page / business page + widget loader       (built; page Phase 1)
+    worker/           background jobs, outbound texts                        (built; texts later)
+    voice/            live phone calls                                       (later)
   packages/
-    core/             conversation engine, retrieval, prompt builder
-    scope-guard/      scope rule, advice classifier, output check, safe templates
-    i18n/             UI strings (ICU), language registry & tiers, RTL helpers
-    modules/          capability modules
+    core/             conversation engine, tools, retrieval, prompt builder, crawler, job queue
+    llm/              LLM gateway (incl. translate helper), embeddings
     db/               schema, migrations, RLS
-    llm/              LLM gateway (incl. translate helper), embeddings, vector-store interface
-    industry-packs/   sectors/packs/variants YAML + schema
-    integrations/     connectors (Square, Shopify, Calendly, …)
-    shared/
-  infra/  evals/ (per pack × language)  docs/
+    addons/           add-on contract, registry, built-in add-ons
+    appearance/       chat templates and brand colours
+    i18n/             UI strings (ICU), language registry & tiers, RTL helpers
+    industry-packs/   sectors/packs/variants + templates (guidelines, workflows, triage rules)
+    shared/           Zod schemas shared by API and admin
+    telephony/        provider interface (Twilio / Telnyx): numbers, SMS/MMS, call events,
+                      webhook signature checks, number → assistant lookup            (later)
+    integrations/     connectors: Google Calendar, Jobber, Housecall Pro, Stripe, …  (Phase 2)
+    scope-guard/      advice classifier, output check, safe templates                (Phase 1–3)
+  infra/  evals/ (per pack × language × channel)  docs/
 ```
+
+### 8.3 Where phone and SMS will run (later phase)
+
+Everything stays in **this monorepo**. Phone and SMS reuse the engine, the tenant model (RLS), the limits,
+the metering and the admin portal; a second repository would duplicate all of that.
+
+| Part | Where it runs | Why |
+|---|---|---|
+| **SMS / MMS in and out, missed-call text-back** | No new app. Webhook routes in `apps/api` (one Fastify plugin), sending in `apps/worker`, provider code in `packages/telephony` | An inbound text is one short, stateless request: verify the signature, find the assistant by the number, run the engine with `channel: "sms"`, queue the reply. Sending is a job, so retries, rate limits and scheduled reminders reuse the existing queue |
+| **Live phone calls** | A separate deployable, `apps/voice`, in the same monorepo | A call is a long-lived, latency-critical stream. It must survive an API deploy, scale with the number of simultaneous calls (winter-tire season), run close to the carrier, and drain calls before shutting down. A crash or slow admin request in the API must never cut a call |
+| **Shared logic** | `packages/core`, `packages/telephony`, `packages/integrations` | `apps/voice` and `apps/api` stay thin: both call the same engine and tools, so an answer, a booking or a triage rule behaves the same on a call, in a text and in web chat |
+
+**Order of work**
+
+1. **SMS first.** Missed-call text-back needs no voice AI: the forwarded call hits the provider number, the
+   call-status webhook queues a text, and the SMS conversation runs on the existing engine. It can be sold
+   on its own.
+2. **Voice on a managed orchestrator** (Vapi or Retell). The orchestrator handles audio, speech-to-text,
+   text-to-speech and interruptions; `apps/voice` exposes the engine to it as the "brain" and serves its
+   tool calls. Our knowledge, scope rules, tools and metering stay ours.
+3. **Own audio pipeline only if cost or control require it** (provider media streams + streaming
+   speech-to-text and text-to-speech). `apps/voice` is where that code goes; nothing else moves.
+
+**What the engine needs for these channels**
+
+- `sms` and `voice` added to the channel list; replies shaped per channel (SMS: short plain text, links
+  allowed; voice: short spoken sentences, no markdown, numbers and addresses said aloud).
+- A **fast model profile for voice** (Haiku-class or another low-latency model). The default answer model
+  thinks before replying, which is too slow for a live call (§9.2).
+- Tools that take time (calendar lookup) say so first ("one moment while I check the schedule").
+- The caller is identified by phone number instead of a browser visitor ID; limits apply per number.
+- Any failure on a call falls back to voicemail plus a text-back, never to silence.
 
 ## 9. Conversation pipeline
 
@@ -436,10 +713,25 @@ Rough cost per reply (≈4K input, ≈400 output, USD, before caching): Opus 5.5
 Haiku 5.5 ≈ $0.0006 — i.e. ≈ $24 / $12 / $0.60 per 1,000 replies; non-Latin scripts cost more.
 Default profile uses `claude-opus-5-5`; profiles are per plan and per bot — decide the Local plan's profile
 after EN/FR + Tier 2 evals. Cheap model for auxiliary steps (rewrite, translation, scope classifier).
+**Live calls use a separate fast profile** (Haiku 5.5 or another low-latency model): thinking on Opus 5.5
+can't be disabled, so it is too slow for a spoken reply.
 
 Claude adapter notes: `output_config.effort` (`low` for chat); thinking on Opus 5.5 can't be disabled; forced
 `tool_choice` `any`/`tool` rejected on Opus 5.5 / Sonnet 5.5 → `auto` + `strict: true`; no prefill → structured
 outputs; handle `stop_reason: "refusal"` with server-side `fallbacks`; keep cached prefix byte-identical.
+
+### 9.3 SMS and voice turns (later phase)
+
+The same pipeline, with a different way in and a different reply format.
+
+| Step | SMS | Voice |
+|---|---|---|
+| Ingress | Provider webhook to the API; signature verified; assistant found by the number texted; conversation keyed by the customer's number | The provider routes the call to the voice orchestrator; `apps/voice` receives each caller turn as text |
+| Limits | Per number per day and per business; STOP/HELP handled before the engine | Call length, simultaneous calls, daily spend cap |
+| Model | Chat profile | Fast voice profile; the reply is streamed sentence by sentence to speech |
+| Reply | Plain text, short (about 300 characters where possible), links allowed | Short spoken sentences; no markdown, lists or links (a link is sent by text) |
+| Tools | Same tools: knowledge search, request, booking | Same tools plus `transfer_call` and `send_text` ("I'll text you a link to send a photo") |
+| After | Reply queued as a job, with retries | Summary, transcript and recording stored; owner alert queued |
 
 ## 10. Data model (core tables)
 
@@ -461,7 +753,18 @@ All tables carry `tenant_id` with RLS.
 | `leads`                                            | type, fields, preferred_language, consent (CASL), status                                                             |
 | `language_registry`                                | code, tier, script, rtl, enabled UI strings, reviewed status                                                         |
 | `llm_providers`, `model_catalog`, `model_profiles` | credentials (encrypted, BYOK), capabilities, prices, fallbacks                                                       |
+| `phone_numbers` | E.164 number, provider, bot, capabilities (voice / SMS / MMS), forwarding verified, status |
+| `contacts` | phone, name, language, SMS opt-out, marketing consent (CASL) with date and source |
+| `calls` | direction, from/to, status, duration, urgency, outcome, recording and transcript refs, summary, cost |
+| `scheduled_messages` | transactional texts to send (confirmations, reminders, status), run time, status |
+| `integration_connections` | provider, encrypted OAuth tokens, external job / appointment / client IDs |
 | `usage_events`, `subscriptions`, `audit_logs`      | metering, billing, audit                                                                                             |
+
+Phase 1 adds the business page: `catalog_items` holds the services and products shown on it (kind, name,
+description, price text, photo, category, order), and `bots` gains a page slug and page settings. The
+phone and SMS tables (`phone_numbers`, `contacts`, `calls`, `scheduled_messages`) come with the later
+phase, when `conversations.channel` gains `sms` and `voice` (today: `hosted`, `inline`, `widget`, `playground`);
+`usage_events` also meters voice minutes and SMS segments.
 
 ## 11. Ingestion pipeline
 
@@ -478,7 +781,30 @@ All tables carry `tenant_id` with RLS.
 
 - Tenant isolation: RLS + cross-tenant tests in CI
 - **PIPEDA:** privacy policy, consent, access/deletion, breach logging, client DPA
-- **CASL:** opt-in checkbox for marketing follow-up; also check our own outreach to prospects
+- **Public business pages:** the business publishes its own content and is responsible for it (ToS); a
+  page is listed for search engines only once the owner publishes it; no customer data appears on it;
+  requests and conversations stay private to the business.
+- **CASL:** the product sends replies and transactional messages only (missed-call follow-up,
+  confirmations, reminders, status, invoices). Marketing and recall messages need recorded consent. Every
+  text thread honours STOP. Cold outbound SMS blasting is not offered as a feature. Our own prospecting
+  texts and emails are commercial messages too: identification, an opt-out and a consent basis (§2.2).
+- **Automated calls (CRTC):** no AI outbound sales calls. The CRTC rules on automatic dialing-announcing
+  devices require prior express consent for solicitation. Outbound calls are limited to callbacks the
+  customer asked for and emergency dispatch to the business's own on-call contacts.
+- **Recorded calls and AI disclosure (PIPEDA, Quebec Law 25):** the greeting says it is an automated
+  assistant on a recorded line; recordings are used only to serve the customer and improve the service;
+  retention period per business; recordings and transcripts in Canadian storage; access and deletion
+  requests cover them.
+- **SMS sender registration:** follow the provider's current rules for business texting from Canadian local
+  numbers. A2P 10DLC is the US carriers' registration scheme and applies to texts sent to US numbers;
+  Bell, Rogers and Telus filter on their own terms. Confirm with Twilio or Telnyx what Canadian traffic
+  needs (and whether toll-free verification or a short code is required at volume) before the pilots.
+- **Tenant screening (Phase 2):** only the questions a property manager may lawfully ask (provincial
+  human-rights codes and privacy law limit them); answers are recorded, no automated decisions.
+- **Telephony security:** webhook signatures verified; number → business resolved on the server; outbound
+  calls and texts limited to Canada and the US, with daily caps per business (toll fraud, SMS pumping);
+  recordings in private storage behind expiring links.
+- **911:** the assistant can't place an emergency call for a caller; it tells them to hang up and dial 911.
 - **AODA:** WCAG 2.1 AA for widget and admin, in every UI language (incl. RTL)
 - **Scope policy (§5):** locked rule, classifier, output checks, disclaimers, ToS — reviewed by a lawyer before Phase 3
 - **PHIPA (Phase 3, clinics):** Canada-only data + LLM routing, no health details collected, retention limits
@@ -501,33 +827,44 @@ All tables carry `tenant_id` with RLS.
 | Growth | 500–5,000 | Read replicas, caching, more workers, partition `messages`                            |
 | Scale  | 5,000+    | Dedicated vector store; cell-based sharding by tenant/region (incl. Canada-only cell) |
 
-Product expansion via interfaces from day 1: channels (web → voice → SMS/WhatsApp/WeChat), more languages
+Voice scales on its own: `apps/voice` instances follow the number of simultaneous calls, and a managed
+orchestrator caps simultaneous calls per account — check that cap before the winter-tire and tax seasons.
+
+Product expansion via interfaces from day 1: channels (web, SMS, voice → WhatsApp/WeChat), more languages
 (config only), audiences (public → staff), integrations, agency/white-label (local web agencies as resellers),
 public API, AI add-ons (review replies, social posts in multiple languages).
 
 ## 14. Roadmap
 
-| Phase                                       | Duration (1–2 devs) | Deliverables                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0. Foundations**                          | ~1 week             | Monorepo, CI, docker-compose, schema + RLS, auth with orgs, tenant/bot CRUD, i18n framework (ICU, RTL-ready)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **1. MVP — local businesses**               | ~5–6 weeks          | LLM gateway (Anthropic + OpenRouter, fallbacks); ingestion (crawl, PDF/DOCX, menu photos, Q&A, text); engine (hybrid RAG, streaming, citations); **scope guard**; language layer (Tier 1 full, Tier 2/3 answers, query translation, RTL/CJK widget); modules: lead capture, handoff, hours & seasons, notices, booking links, reservations & ordering, menu, age gate, safety; widget + admin (EN/FR); packs: **Restaurant & bar, Café & bakery, Retail, Salon/spa/barber + tattoo, Lodging + attractions, Generic**; metering & limits; evals EN/FR; prospect demo generator |
-| **2. Paid launch**                          | ~5 weeks            | Stripe (CAD); Tier 2 reviewed UI strings + evals; owner inbox auto-translation and pre-translated key facts (both via the LLM); catalog feeds (Shopify, Square, CSV); quote requests + image upload; packs: Grocery & market, Brewery & producer, Arts & events, Fitness, Business services, Trades & home services, **Auto repair & service shop**, Small education, Non-profit & settlement; analytics + knowledge gaps; live inbox; WordPress plugin; more LLM adapters (Bedrock, Azure, Vertex, OpenAI-compatible) + BYOK                                                 |
-| **3. Professional (customer service only)** | ~6–8 weeks          | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; booking integrations (Jane App, Square, Calendly); minimal intake; packs: Clinic, Pharmacy, Law firm, Accounting & tax, Insurance & financial, Immigration consultant, Real estate, **Car dealership** (vehicle inventory feed); **voice/phone channel** (EN first, then Tier 2); SMS/WhatsApp; agency/white-label                                                                                                                                                                  |
-| **4. Business tier**                        | later               | Internal knowledge assistant (SSO, SharePoint/Drive), RFQ, careers; packs: Mining supply, Engineering, Manufacturing, **Auto manufacturer & parts maker**, Transportation, Utilities, Colleges; public API                                                                                                                                                                                                                                                                                                                                                                    |
+Durations are estimates for 1–2 developers.
+
+| Phase | Duration | Deliverables |
+|---|---|---|
+| **0. Foundations** | done | Monorepo, CI, docker-compose, schema + RLS, auth with orgs, tenant/bot CRUD, i18n framework (ICU, RTL-ready) |
+| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestone 1.1 done; the rest ~4–6 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**. **To build:** the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag; quote request with photos; service-area check; setup without a website (interview, price-list upload); scope guard classifier; evals EN/FR; prospect demo page generator; done-for-you onboarding checklist |
+| **2. Paid launch + property management** | ~5–6 weeks | Stripe (CAD; setup fee + monthly plan); own domain for the page; page analytics (visits, questions, requests); booking through **Google Calendar and Jobber**; payment and deposit links; seasonal scripts; pack: **Property management & rentals** (maintenance requests, rental inquiry pre-screening after a privacy check); design-partner clinics and firms; agency white-label and referral tracking; Tier 2 reviewed UI strings |
+| **Later phase — Phone and SMS** | ~6–8 weeks; starts after the paid launch, when pilots ask for it | **SMS first:** telephony (numbers, signed webhooks), missed-call text-back with a link to the business page, two-way SMS/MMS, owner alerts by text, reminders. **Then voice:** voice agent on a managed orchestrator with a fast model profile, emergency transfer, call log (recording, transcript, summary), EN then FR. Housecall Pro; status & pickup alerts from shop software; minutes and SMS metering |
+| **3. Clinics and professional services (customer service only)** | ~6–8 weeks | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; clinic booking integrations (as API access allows); **document chaser** with secure upload and vision check; minimal intake; catalog feeds; packs: Clinic (vet first), Pharmacy, Accounting & tax, Law firm, Immigration consultant, Insurance & financial, Real estate, **Car dealership**; with phone and SMS in place: waitlist backfill & recall |
+| **4. Business tier and self-serve growth** | later | Self-serve local packs on demand (events, menu OCR, WordPress plugin); internal knowledge assistant (SSO, SharePoint/Drive), RFQ, careers; packs: Mining supply, Engineering, Manufacturing, Auto manufacturer & parts maker, Transportation, Utilities, Colleges; public API; WhatsApp |
+
+Phone and SMS are a channel, not an industry phase: they can run before, alongside or after Phase 3. The
+pack phases in code (1–4) follow the industry phases above.
 
 **Phase 1 milestones**
 
 | Milestone | Scope |
 |---|---|
-| **1.1 Chat end-to-end** | Knowledge tables + RLS; LLM gateway (Claude via Anthropic SDK, OpenAI-compatible adapter for OpenRouter & others, offline test provider); background jobs; website crawl, text and Q&A sources; full-text + trigram retrieval (vector search when an embedding provider is configured); query translation for non-EN/FR questions; streaming answers with sources; conversation logging + usage metering; **hosted chat page, inline iframe and floating widget**; admin: knowledge sources, playground, share link & embed codes |
-| 1.2 Modules | Lead capture & handoff (tools), hours & "open now", notices, booking/ordering links, age gate, safety escalation; scope guard classifier |
-| 1.3 Content | PDF/DOCX upload, menu photos (vision OCR), auto-filled business profile; pack content for the 7 launch packs |
-| 1.4 Launch readiness | Evals EN/FR + Tier 2 answers, prospect demo generator, accessibility pass, billing hook-up of plans (web version + QR codes, plan limits, quotas, abuse protection, usage page and operator console with editable plans/policies already delivered) |
+| **1.1 Chat end-to-end** (done) | Knowledge tables + RLS; LLM gateway; background jobs; website crawl, text and Q&A sources; retrieval; streaming answers with sources; conversation logging + usage metering; hosted chat page, inline iframe and floating widget; admin: knowledge sources, playground, share link & embed codes |
+| **1.2 Business page** | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
+| **1.3 Requests for trades and auto shops** | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
+| **1.4 Setup without a website** | Interview mode in the setup assistant; price list and brochure upload (PDF, DOCX, photo with vision OCR); services proposed from the sources; Google listing details if the terms allow (§17) |
+| **1.5 Pilot readiness** | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) |
 
-**MVP success criteria:** signup → working bot in under 15 minutes; ≥ 80 % of real visitor questions
-answered correctly in EN and FR and ≥ 75 % in Tier 2 eval languages; 0 scope-policy failures on adversarial
-evals; p50 time-to-first-token < 1.5 s; 10–20 pilot customers from the launch packs in Thunder Bay, Sudbury
-and Sault Ste. Marie.
+**MVP success criteria:** 10–20 trades and auto businesses with a live page in one or two cities, at least
+half of them with no website or an outdated one before; a page live within one working day of receiving
+the sources; ≥ 80 % of real customer questions answered correctly in EN and FR; every urgent request
+emailed to the owner within one minute; 0 scope-policy failures on adversarial evals; p50 time-to-first-token
+< 1.5 s; at least half of the pilots receive real customer requests through the page every week.
 
 ## 15. Quality & testing
 
@@ -537,28 +874,76 @@ and Sault Ste. Marie.
 - Unit tests (chunking, ranking, prompt builder, pack inheritance, language detection, scope classifier),
   integration tests (ingestion, chat API), cross-tenant isolation tests
 - Widget E2E (Playwright): RTL layout, CJK/Indic rendering, IME input, accessibility checks
-- Production: thumbs up/down, unanswered rate, scope-guard triggers, handoff rate, cost per conversation and per language
+- Business page: content present in the HTML without scripts, valid structured data, unpublished pages not
+  listed, service cards and "open now" correct across time zones, mobile layout, WCAG checks
+- **Voice and SMS evals per pack (later phase):** scripted scenarios (burst pipe, no heat, gas smell, quote request,
+  booking, tire sizes, "is my car ready?") in EN, then FR, with background noise, accents and
+  interruptions. Pass = right triage, right details captured, right booking; latency measured per turn
+- Telephony tests (later phase): forged webhook rejected, STOP/HELP, number → business isolation, missed-call text sent
+  exactly once, fallback when the orchestrator or the model fails
+- Production: thumbs up/down, unanswered rate, scope-guard triggers, handoff rate, cost per conversation and
+  per language; for phone and SMS: text-back time, calls answered, booked or captured rate, transfer rate,
+  cost per call
 
 ## 16. Business model (illustrative, CAD — validate with pilots)
 
-| Plan             | Price         | For                                                                              | Includes                                                                                                    | Phase |
-| ---------------- | ------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----- |
-| Free trial       | $0 (14 days)  | Everyone                                                                         | 1 bot, 50 pages, 100 replies                                                                                | 1     |
-| **Local**        | ~$29–49/mo    | Restaurants, cafés, retail, salons, lodging, tourism, arts, non-profits          | 1 bot, 200 pages, ~1,000 replies, EN/FR + automatic multilingual answers, notices, menu; seasonal pause     | 1     |
-| **Local Plus**   | ~$69–99/mo    | Same, busier or multilingual communities                                         | 2 bots, 1,000 pages, ~3,000 replies, pre-translated key facts, translated inbox, catalog feeds, no branding | 2     |
-| **Professional** | ~$149–249/mo  | Clinics, legal, accounting, real estate, car dealerships (customer service only) | Integrations, minimal intake, Canada residency, scope output checks                                         | 3     |
-| **Business**     | from ~$499/mo | Industrial, institutions                                                         | Internal assistant, SSO, voice, custom integrations                                                         | 4     |
-| **Agency**       | ~$249+/mo     | Local web/marketing agencies                                                     | 10+ client workspaces, white-label                                                                          | 3     |
+**AI business page with assistant — the first offer.** Most owners won't build the page themselves, so the
+default is done-for-you; self-serve stays open for those who want it.
 
-Optional one-time setup service (C$200–500 Local, more for Professional). Overage per extra replies.
+| Offer | Price | For | Includes | Phase |
+|---|---|---|---|---|
+| **Page setup** (one-time, done-for-you) | ~$300–750 | Businesses that want us to build it | Page built from their sources, services list, photos, QR code, Google listing link, review with the owner | 1 |
+| **Business page** (monthly) | ~$49–149 | Trades, auto shops, property managers, solo contractors | Page + assistant + widget, requests with email alerts, a replies allowance, content updates on request | 1–2 |
+| **Self-serve: Free trial** | $0 (14 days) | Everyone | 1 bot, 50 pages, 100 replies | built |
+| **Self-serve: Local** | ~$29–49/mo | Restaurants, cafés, retail, salons, lodging, anyone who sets up alone | 1 bot, 200 pages, ~1,000 replies, EN/FR + automatic multilingual answers; seasonal pause | built |
+| **Self-serve: Local Plus** | ~$69–99/mo | Same, busier or multilingual communities | 2 bots, 1,000 pages, ~3,000 replies, translated inbox, no branding, own domain | 2 |
+| **Agency / white-label** | Wholesale price or revenue share | Local web design and SEO agencies | Client workspaces under the agency's name | 2 |
+| **Referral** | 20 % recurring commission | Bookkeepers, IT managed-service providers | Per introduced customer, while they stay | 2 |
+| **Clinic / Professional** | Set after Phase 2 | Clinics, accounting, legal, immigration | Integrations, Canada residency, scope output checks, document chaser | 3 |
+| **Business** | from ~$499/mo | Industrial, institutions | Internal assistant, SSO, custom integrations | 4 |
+
+- **The pitch:** a page that answers customers and takes requests, live this week, for less than a website,
+  with nothing to maintain.
+- **These prices are a starting assumption.** The playbook's $299–599/month was for a phone dispatcher that
+  captures missed calls. A page with a chat assistant is compared with website builders ($20–40/month) and
+  local web agencies (a one-time build plus upkeep), so it starts lower. Test the price in the pilots;
+  consider the first months free in exchange for a reference.
+
+**Phone and SMS assistant — the later-phase upgrade** (playbook pricing)
+
+| Offer | Price | Includes |
+|---|---|---|
+| **Phone setup & integration** (one-time) | $750–2,000 | Price rules, emergency rules, local number and call forwarding, calendar / Jobber connection, test calls |
+| **Managed phone and SMS assistant** (monthly) | $299–599 | Everything in the business page plan, plus phone answering, texting, an allowance of minutes and texts, monthly tuning, seasonal script changes |
+
+- With a $450 average ticket, one saved call a month pays for it.
+- **Include an allowance, not unlimited use.** Every voice minute and text has a cost. Working assumption
+  to measure: roughly $0.15–0.35 per voice minute on a managed orchestrator.
+
+Plan allowances stay editable in the operator console.
 
 ## 17. Open decisions
 
-1. Backend language: **TypeScript end-to-end** (recommended) vs Python (FastAPI)
-2. Hosting provider and region
-3. Default provider + model per plan — decide after EN/FR + Tier 2 evals
-4. Final Tier 2 language list (proposed: Simplified & Traditional Chinese, Hindi, Punjabi, Urdu, Arabic,
-   Persian, Ukrainian, Tagalog, Spanish) and budget for native-speaker review
-5. Confirm launch packs: Restaurant & bar, Café & bakery, Retail, Salon/spa/barber + tattoo, Lodging + attractions
-6. Indigenous languages: owner-provided phrases + human routing vs. deeper support with community partners
-7. Product name / domain, team size and target launch date
+1. **First city and first industry** for the pilots. Recommended: trades in one Ontario city, and auto shops
+   signed before the spring tire changeover.
+2. **Price of the business page** and of its setup; whether pilots start free in exchange for a reference.
+3. **Friendly link format** (`<our-domain>/<business-name>` or `<business-name>.<our-domain>`) and the
+   product domain; own domains in Phase 2.
+4. **Google listing details:** import through Google's Places API (check terms and cost) or enter by hand.
+5. **How far the page goes.** Recommended: one page with fixed sections. No multi-page sites, blogs or
+   online checkout; link to the shop or booking tool the business already has.
+6. **When phone and SMS start.** Recommended trigger: a set number of paying page customers, or pilots
+   asking for it. Then: telephony provider (Twilio or Telnyx, including Canadian SMS sender rules), managed
+   voice orchestrator (Vapi or Retell) first, allowance and overage, call-recording defaults.
+7. **Integration access** (Phase 2 and later). Confirm each before selling it: Jobber (developer app
+   approval), Housecall Pro (API tied to plan level), ServiceTitan (partner program), Tekmetric / Mitchell1
+   (partner access), Jane App (no general public API known). The fallback is a booking link plus a request
+   to staff.
+8. **Legal review timing:** our own outreach (CASL) and the ToS before the pilots; tenant screening
+   questions before Phase 2; PHIPA measures and the scope policy before Phase 3.
+9. Hosting provider and region.
+10. Default provider + model per plan — decide after EN/FR + Tier 2 evals.
+11. Final Tier 2 language list (proposed: Simplified & Traditional Chinese, Hindi, Punjabi, Urdu, Arabic,
+    Persian, Ukrainian, Tagalog, Spanish) and budget for native-speaker review.
+12. Indigenous languages: owner-provided phrases + human routing vs. deeper support with community partners.
+13. Product name, team size and target launch date.
