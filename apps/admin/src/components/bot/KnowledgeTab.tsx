@@ -1,10 +1,11 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { ApiError, api, type QaPair, type Source } from "@/lib/api";
+import { ApiError, api, type BotDetail, type QaPair, type Source } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { GapsSection } from "./GapsSection";
 import { PhotosSection } from "./PhotosSection";
+import { SetupSection } from "./SetupSection";
 import { SourceDetail } from "./SourceDetail";
 
 const statusColor: Record<Source["status"], string> = {
@@ -14,7 +15,18 @@ const statusColor: Record<Source["status"], string> = {
   failed: "var(--danger)",
 };
 
-export function KnowledgeTab({ base, onGapCount }: { base: string; onGapCount?: (open: number) => void }) {
+export function KnowledgeTab({
+  detail,
+  base,
+  onChange,
+  onGapCount,
+}: {
+  detail: BotDetail;
+  base: string;
+  /** Reloads the assistant after the setup assistant's suggestion is applied. */
+  onChange: () => Promise<void>;
+  onGapCount?: (open: number) => void;
+}) {
   const { t } = useI18n();
   const [sources, setSources] = useState<Source[] | null>(null);
   const [pairs, setPairs] = useState<QaPair[]>([]);
@@ -62,6 +74,14 @@ export function KnowledgeTab({ base, onGapCount }: { base: string; onGapCount?: 
   return (
     <div className="flex flex-col gap-6">
       <GapsSection base={base} onAnswered={load} onCount={onGapCount} />
+      <SetupSection
+        detail={detail}
+        base={base}
+        sourcesReady={sources?.reduce((n, s) => n + (s.status === "ready" ? s.documentCount : 0), 0) ?? 0}
+        onApplied={async () => {
+          await Promise.all([onChange(), load()]);
+        }}
+      />
       <section className="flex flex-col gap-3">
         <div>
           <h3 className="text-lg font-semibold">{t("knowledge.sources")}</h3>

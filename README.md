@@ -59,7 +59,16 @@ Without API keys, chat uses an **offline test provider** that quotes matching se
 business's information, so everything works locally at no cost. Set `ANTHROPIC_API_KEY` (and/or
 `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_BASE_URL`) in `.env` for real answers; see `.env.example`.
 With an Anthropic key the default routes are `claude-opus-5-5` for answers (low effort, server-side
-refusal fallback enabled) and `claude-haiku-5-5` for query rewriting/translation.
+refusal fallback enabled) and `claude-haiku-5-5` for query rewriting/translation. Owner-side jobs (the
+setup assistant) use the chat routes unless `LLM_AGENT_ROUTES` is set.
+
+Reasoning models behind an OpenAI-compatible endpoint (a local Qwen on Ollama, for example) think
+before every reply, which can take most of the time. `OPENAI_COMPATIBLE_REASONING_EFFORT` (and
+`OPENROUTER_REASONING_EFFORT`) set how much: `none`, `minimal`, `low`, `medium`, `high`, `xhigh` or
+`max`. The value is sent with every request to that provider (`reasoning_effort`; OpenRouter gets
+`reasoning.effort`) and nothing is sent when it is unset, because endpoints reject the field for models
+that don't reason. Which values a model honours is up to the endpoint: Ollama applies the ones the
+model supports and falls back to the model's default otherwise.
 
 ## Tools
 
@@ -125,6 +134,29 @@ the marker from the stream (`packages/core/src/chat/markers.ts`, the same filter
   **Not relevant** dismisses it. The tab shows how many are open.
 - Questions from the owner's test chat are flagged but not listed. A question that was also passed to
   staff as a request is listed, but only the request is emailed.
+
+## Setup assistant (onboarding)
+
+Once a business has added its website or some text, the **Knowledge** tab offers **Suggest my setup**:
+the setup assistant reads those pages in the background and proposes how to set the assistant up. The
+owner edits the proposal and applies it; nothing is used before that.
+
+- It proposes the business details (name, phone, email, address, opening hours), a greeting and
+  suggested questions per language, and the questions customers often ask that the information doesn't
+  answer yet. An answer the owner writes to one of those is saved as a Q&A answer.
+- Details are kept only when they are found in the pages the model read: a phone number or email must
+  appear there, and the hours and the address must come with a quote that does. The review shows that
+  quote next to the suggestion. What can't be found is dropped, never guessed.
+- One model call that returns JSON (`packages/core/src/setup/setup.ts`), so it works on any provider; no
+  tool calling is needed. It uses the `agent` routes (`LLM_AGENT_ROUTES`, default: the chat routes), so
+  owner-side jobs can use a different model than live chat. With no model configured it only looks up
+  a phone number and email by pattern.
+- A run is a row in `setup_runs` (RLS) processed by the worker (job `bot.setup`); the portal polls it.
+  Pages are read home page and contact/about/hours pages first, up to `SETUP_MAX_INPUT_CHARS`
+  (default 48,000 characters). An assistant can start 5 runs a day; tokens and cost are recorded as
+  `llm.agent` usage.
+- The **General** tab has the same business details as a form (plus booking and ordering links and the
+  time zone), so they can be changed at any time.
 
 ## Requirements
 

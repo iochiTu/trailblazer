@@ -121,6 +121,22 @@ describe("LLM gateway", () => {
     expect(gateway.routes("chat")).toEqual([{ provider: "anthropic", model: "claude-opus-5-5" }]);
     expect(gateway.routes("aux")).toEqual([{ provider: "anthropic", model: "claude-haiku-5-5" }]);
   });
+
+  it("sends owner-side jobs to the chat routes unless they have their own", async () => {
+    const shared = createGatewayFromEnv({ ANTHROPIC_API_KEY: "test" }).gateway;
+    expect(shared.routes("agent")).toEqual(shared.routes("chat"));
+
+    const own = createGatewayFromEnv({
+      ANTHROPIC_API_KEY: "test",
+      LLM_AGENT_ROUTES: "anthropic:claude-sonnet-5-5",
+    });
+    expect(own.gateway.routes("agent")).toEqual([{ provider: "anthropic", model: "claude-sonnet-5-5" }]);
+    expect(own.gateway.routes("chat")).toEqual([{ provider: "anthropic", model: "claude-opus-5-5" }]);
+    expect(() => createGatewayFromEnv({ LLM_AGENT_ROUTES: "nowhere:m1" })).toThrow(/unknown provider/);
+
+    const offline = createGatewayFromEnv({}).gateway;
+    expect((await offline.complete("agent", request("hello"))).provider).toBe("offline");
+  });
 });
 
 /** Records the last request; can see images. */
@@ -587,6 +603,65 @@ describe("tool calling", () => {
     } finally {
       await server.close();
     }
+  });
+});
+
+describe("reasoning effort on OpenAI-compatible endpoints", () => {
+  const reply = () => [
+    `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", model: "m1", choices: [{ index: 0, delta: { content: "Hi." }, finish_reason: "stop" }] })}\n\n`,
+    "data: [DONE]\n\n",
+  ];
+  const ask: ChatRequest = { system: [], messages: [{ role: "user", content: "Hi" }] };
+
+  it("is sent only when set, in the field the endpoint reads", async () => {
+    const server = await sseServer(reply);
+    try {
+      const options = { apiKey: "x", baseURL: server.url };
+      await run(new OpenAICompatibleProvider("plain", options), ask);
+      await run(new OpenAICompatibleProvider("local", { ...options, reasoningEffort: "none" }), ask);
+      await run(
+        new OpenAICompatibleProvider("router", {
+          ...options,
+          reasoningEffort: "low",
+          reasoningField: "reasoning",
+        }),
+        ask,
+      );
+      const [plain, local, router] = server.bodies as Record<string, unknown>[];
+      expect(plain).not.toHaveProperty("reasoning_effort");
+      expect(plain).not.toHaveProperty("reasoning");
+      expect(local).toMatchObject({ reasoning_effort: "none" });
+      expect(local).not.toHaveProperty("reasoning");
+      expect(router).toMatchObject({ reasoning: { effort: "low" } });
+      expect(router).not.toHaveProperty("reasoning_effort");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("comes from the environment, and a value that isn't one stops startup", async () => {
+    const server = await sseServer(reply);
+    try {
+      const { gateway } = createGatewayFromEnv({
+        OPENAI_COMPATIBLE_BASE_URL: server.url,
+        OPENAI_COMPATIBLE_REASONING_EFFORT: " None ",
+        LLM_CHAT_ROUTES: "openai-compatible:m1",
+        LLM_AUX_ROUTES: "offline:echo",
+      });
+      await gateway.complete("chat", ask);
+      expect(server.bodies[0]).toMatchObject({ reasoning_effort: "none" });
+    } finally {
+      await server.close();
+    }
+    expect(() =>
+      createGatewayFromEnv({
+        OPENAI_COMPATIBLE_BASE_URL: "http://localhost:1/v1",
+        OPENAI_COMPATIBLE_REASONING_EFFORT: "off",
+      }),
+    ).toThrow(/OPENAI_COMPATIBLE_REASONING_EFFORT must be one of none, minimal/);
+    expect(() =>
+      createGatewayFromEnv({ OPENROUTER_API_KEY: "k", OPENROUTER_REASONING_EFFORT: "tiny" }),
+    ).toThrow(/OPENROUTER_REASONING_EFFORT/);
   });
 });
 

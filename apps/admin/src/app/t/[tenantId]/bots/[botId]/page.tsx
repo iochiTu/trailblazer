@@ -139,7 +139,9 @@ export default function BotPage() {
       </div>
 
       <section className="card p-5 sm:p-7" role="tabpanel">
-        {tab === "knowledge" && <KnowledgeTab base={base} onGapCount={setOpenGaps} />}
+        {tab === "knowledge" && (
+          <KnowledgeTab detail={detail} base={base} onChange={load} onGapCount={setOpenGaps} />
+        )}
         {tab === "test" && key && (
           <div className="flex flex-col gap-3">
             <p className="muted text-sm">{t("test.hint")}</p>

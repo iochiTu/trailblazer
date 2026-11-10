@@ -1,6 +1,6 @@
 /**
  * Background worker: polls the Postgres job queue and runs jobs (website crawls, text indexing,
- * add-on effects such as notification emails).
+ * add-on effects such as notification emails, the setup assistant).
  * Several workers can run side by side; jobs are claimed with FOR UPDATE SKIP LOCKED.
  */
 import { hostname } from "node:os";
@@ -12,16 +12,18 @@ import {
   JOB_TYPES,
   type JobRow,
   runAddonEffect,
+  runSetup,
   syncSource,
 } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
-import { createEmbeddingsFromEnv } from "@traiblazer/llm";
+import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
 import { createMailerFromEnv } from "./mailer.js";
 
 const url =
   process.env.DATABASE_APP_URL ?? "postgres://traiblazer_app:traiblazer_app@localhost:5433/traiblazer";
 const { db, close } = createDb(url, { max: 4 });
 const embeddings = createEmbeddingsFromEnv();
+const { gateway } = createGatewayFromEnv();
 const workerId = `${hostname()}:${process.pid}`;
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
 
@@ -40,6 +42,13 @@ async function run(job: JobRow): Promise<void> {
       log("add-on effect", { id: job.id, addonId: payload.addonId, kind: payload.effect.kind, outcome });
       return;
     }
+    case JOB_TYPES.botSetup:
+      await runSetup(
+        { db, gateway, log, inputChars: Number(process.env.SETUP_MAX_INPUT_CHARS) || undefined },
+        job.tenantId,
+        String(job.payload.runId),
+      );
+      return;
     default:
       throw new Error(`Unknown job type: ${job.type}`);
   }

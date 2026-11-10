@@ -20,6 +20,7 @@ import { knowledgeRoutes } from "./routes/knowledge.js";
 import { leadRoutes } from "./routes/leads.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { publicRoutes } from "./routes/public.js";
+import { setupRoutes } from "./routes/setup.js";
 import { tenantRoutes } from "./routes/tenants.js";
 import { usageRoutes } from "./routes/usage.js";
 
@@ -112,6 +113,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => knowledgeRoutes(scope, ctx));
   await app.register(async (scope) => leadRoutes(scope, ctx));
   await app.register(async (scope) => gapRoutes(scope, ctx));
+  await app.register(async (scope) => setupRoutes(scope, ctx));
   await app.register(async (scope) => assetRoutes(scope, ctx));
   await app.register(async (scope) => usageRoutes(scope, ctx));
   await app.register(async (scope) => operatorRoutes(scope, ctx));

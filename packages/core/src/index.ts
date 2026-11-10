@@ -25,3 +25,15 @@ export { extractPage } from "./knowledge/extract.js";
 export { clearSource, indexDocuments, tsvectorSql } from "./knowledge/index-documents.js";
 export { assertPublicUrl, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";
+export {
+  basicSuggestion,
+  buildSetupRequest,
+  extractJson,
+  readSuggestion,
+  runSetup,
+  SETUP_ERRORS,
+  SETUP_LIMITS,
+  type SetupDeps,
+  type SetupPage,
+  selectPages,
+} from "./setup/setup.js";

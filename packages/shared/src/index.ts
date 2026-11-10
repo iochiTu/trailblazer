@@ -270,4 +270,17 @@ export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 export const updateGapSchema = z.object({ status: z.enum(["open", "dismissed"]) });
 export type UpdateGapInput = z.infer<typeof updateGapSchema>;
 
+/**
+ * What the owner keeps from the setup assistant's suggestion, after editing it. Each part is
+ * optional: a part left out isn't changed.
+ */
+export const applySetupSchema = z.object({
+  profile: businessProfileSchema.optional(),
+  greeting: z.record(z.string(), z.string().trim().max(300)).optional(),
+  quickReplies: z.record(z.string(), z.array(z.string().trim().min(1).max(120)).max(6)).optional(),
+  /** Answers the owner wrote to questions their information didn't cover (saved as Q&A answers). */
+  answers: z.array(qaPairSchema).max(10).optional(),
+});
+export type ApplySetupInput = z.infer<typeof applySetupSchema>;
+
 export * from "./plans.js";

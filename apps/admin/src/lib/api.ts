@@ -74,10 +74,60 @@ export interface Bot {
   };
 }
 
+export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+/** Opening periods per day ("HH:MM", 24-hour). A day with none is closed. */
+export type WeeklyHours = Partial<Record<DayKey, { open: string; close: string }[]>>;
+
+/** What the assistant knows about reaching and visiting the business. */
+export interface BusinessProfile {
+  businessName: string | null;
+  phone: string | null;
+  email: string | null;
+  websiteUrl: string | null;
+  address: Record<string, string> | null;
+  timezone: string;
+  hours: WeeklyHours | null;
+  bookingUrl: string | null;
+  orderingUrl: string | null;
+}
+
+/** What the setup assistant proposes after reading the business's information. */
+export interface SetupSuggestion {
+  /** Details found in the information; one that wasn't found is left out. */
+  profile: {
+    businessName?: string;
+    phone?: string;
+    email?: string;
+    websiteUrl?: string;
+    address?: string;
+    hours?: WeeklyHours;
+  };
+  /** The business's own words the hours and address were read from. */
+  evidence: { hours?: string; address?: string };
+  greeting: Record<string, string>;
+  quickReplies: Record<string, string[]>;
+  /** Questions customers often ask that the information doesn't answer. */
+  missing: string[];
+  pagesRead: number;
+  pagesTotal: number;
+  /** No AI model was available: only contact details were looked up. */
+  basic?: boolean;
+}
+
+export interface SetupRun {
+  id: string;
+  status: "pending" | "running" | "ready" | "failed" | "applied";
+  /** Set while the run is ready for review. */
+  suggestion: SetupSuggestion | null;
+  /** Why it failed: no_information, unreadable_reply, model_unavailable or timed_out. */
+  error: string | null;
+  updatedAt: string;
+}
+
 export interface BotDetail {
   bot: Bot;
   keys: { id: string; publicKey: string; allowedOrigins: string[] }[];
-  profile: { businessName: string | null } | null;
+  profile: BusinessProfile | null;
   pack: Pack | null;
   /** What the assistant uses now: its own guidelines and workflows, or its template's. */
   behavior: { guidelines: string; workflows: Workflow[] };

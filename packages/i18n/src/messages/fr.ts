@@ -202,6 +202,59 @@ export const fr: Record<MessageKey, string> = {
   "gaps.answer": "Répondre",
   "gaps.save": "Enregistrer la réponse",
   "gaps.dismiss": "Sans intérêt",
+  "setup.title": "Configurer à partir de vos informations",
+  "setup.intro":
+    "Votre assistant peut lire ce que vous avez ajouté et proposer les coordonnées de votre entreprise, vos heures d'ouverture, un message d'accueil et des questions suggérées. Rien n'est utilisé avant que vous l'ayez vérifié.",
+  "setup.start": "Proposer ma configuration",
+  "setup.again": "Proposer de nouveau",
+  "setup.needInfo": "Ajoutez d'abord votre site Web ou du texte ci-dessous.",
+  "setup.reading":
+    "Lecture de vos informations… Cela peut prendre quelques minutes. Vous pouvez quitter cette page et y revenir.",
+  "setup.limit": "Vous avez déjà lancé ceci plusieurs fois aujourd'hui. Réessayez demain.",
+  "setup.failed.no_information":
+    "Il n'y avait rien à lire. Ajoutez d'abord votre site Web ou du texte ci-dessous.",
+  "setup.failed.unreadable_reply":
+    "La proposition n'a pas pu être préparée cette fois-ci. Veuillez réessayer.",
+  "setup.failed.model_unavailable":
+    "L'assistant n'a pas pu être joint. Veuillez réessayer dans quelques minutes.",
+  "setup.failed.timed_out": "La lecture de vos informations a pris trop de temps. Veuillez réessayer.",
+  "setup.applied": "Appliquée le {date}.",
+  "setup.read":
+    "{total, plural, one {Votre page a été lue.} other {{read} de vos {total} pages ont été lues.}}",
+  "setup.basic":
+    "Aucun modèle d'IA n'est connecté : seules les coordonnées ont été repérées. Connectez un modèle pour obtenir un message d'accueil, des questions suggérées et les heures d'ouverture.",
+  "setup.detailsHint":
+    "Les éléments marqués « Trouvé » viennent de vos informations. Vérifiez-les et complétez ce qui manque.",
+  "setup.nothingFound":
+    "Aucune coordonnée n'a été trouvée dans vos informations. Vous pouvez les saisir ici.",
+  "setup.found": "Trouvé",
+  "setup.evidence": "D'après vos informations :",
+  "setup.use": "Utiliser",
+  "setup.quickRepliesHint": "Une par ligne. Vos informations répondent à chacune.",
+  "setup.missing": "Questions auxquelles vos informations ne répondent pas encore",
+  "setup.missingHint":
+    "Les clients les posent souvent. Écrivez une réponse pour l'ajouter, ou laissez le champ vide pour passer.",
+  "setup.answerPlaceholder": "Votre réponse (facultatif)",
+  "setup.apply": "Appliquer à mon assistant",
+  "setup.discard": "Ignorer",
+  "profile.title": "Coordonnées de l'entreprise",
+  "profile.hint":
+    "Votre assistant s'en sert quand les visiteurs demandent comment vous joindre ou vous rendre visite.",
+  "profile.businessName": "Nom de l'entreprise",
+  "profile.phone": "Téléphone",
+  "profile.email": "Courriel",
+  "profile.websiteUrl": "Site Web",
+  "profile.address": "Adresse",
+  "profile.bookingUrl": "Lien de réservation",
+  "profile.orderingUrl": "Lien de commande en ligne",
+  "profile.hours": "Heures d'ouverture",
+  "profile.hoursHint":
+    "Utilisez le format 24 heures, par exemple 09:00-17:00. Pour deux périodes, écrivez 11:00-14:00, 17:00-21:00. Laissez un jour vide si vous êtes fermé.",
+  "profile.closed": "Fermé",
+  "profile.hoursInvalid": "Vérifiez les heures du {day}.",
+  "profile.timezone": "Fuseau horaire",
+  "profile.timezoneHint": "Sert à indiquer aux visiteurs si vous êtes ouvert en ce moment.",
+  "profile.save": "Enregistrer les coordonnées",
   "qa.title": "Questions-réponses",
   "qa.hint": "Les réponses exactes que vous écrivez ici ont priorité sur tout le reste.",
   "qa.question": "Question",

@@ -154,6 +154,10 @@ export class ThinkFilter {
   }
 }
 
+/** How much a reasoning model thinks before it answers ("none" turns thinking off where the model allows it). */
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 /**
  * Any OpenAI-compatible Chat Completions endpoint: OpenRouter, OpenAI, Azure OpenAI (v1 endpoint),
  * Groq, Mistral, Together, Ollama, vLLM, LM Studio.
@@ -162,11 +166,17 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private readonly client: OpenAI;
   private readonly visionModels: Set<string>;
   private readonly toolModels: Set<string>;
+  private readonly reasoning: Record<string, unknown>;
 
   /**
    * `visionModels` / `toolModels`: models known to accept images / to call tools ("*" for all).
    * Endpoints and models differ, so by default none are assumed to: image requests skip this
    * provider, and requests are sent to it without tools.
+   *
+   * `reasoningEffort`: sent with every request when set, so a reasoning model thinks less (or
+   * not at all) before answering. Off by default: endpoints reject the field for models that
+   * don't reason. `reasoningField` is where the endpoint takes it: OpenAI and Ollama read
+   * `reasoning_effort`, OpenRouter reads `reasoning.effort`.
    */
   constructor(
     readonly id: string,
@@ -176,10 +186,17 @@ export class OpenAICompatibleProvider implements LLMProvider {
       headers?: Record<string, string>;
       visionModels?: string[];
       toolModels?: string[];
+      reasoningEffort?: ReasoningEffort;
+      reasoningField?: "reasoning_effort" | "reasoning";
     },
   ) {
     this.visionModels = new Set(options.visionModels ?? []);
     this.toolModels = new Set(options.toolModels ?? []);
+    this.reasoning = !options.reasoningEffort
+      ? {}
+      : options.reasoningField === "reasoning"
+        ? { reasoning: { effort: options.reasoningEffort } }
+        : { reasoning_effort: options.reasoningEffort };
     this.client = new OpenAI({
       apiKey: options.apiKey,
       baseURL: options.baseURL,
@@ -207,6 +224,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
           ...request.messages.flatMap(toOpenAIMessages),
         ],
         ...(request.tools?.length ? { tools: toOpenAITools(request.tools) } : {}),
+        ...this.reasoning,
       },
       { signal: request.signal },
     );

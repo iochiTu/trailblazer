@@ -7,6 +7,8 @@ export const JOB_TYPES = {
   sourceSync: "source.sync",
   /** Work an add-on asked for during a chat (payload: { botId, addonId, effect }). */
   addonEffect: "addon.effect",
+  /** The setup assistant reads a business's information (payload: { runId }). */
+  botSetup: "bot.setup",
 } as const;
 
 export async function enqueueJob(

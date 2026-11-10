@@ -11,7 +11,11 @@ import {
   type Usage,
 } from "./types.js";
 
-export type Purpose = "chat" | "aux";
+/**
+ * What a request is for: "chat" answers visitors, "aux" is short helper calls (rewriting a search
+ * query), "agent" is owner-side work that runs rarely per business (setting an assistant up).
+ */
+export type Purpose = "chat" | "aux" | "agent";
 
 export interface GatewayResultMeta {
   provider: string;
@@ -31,8 +35,8 @@ export type GatewayEvent =
 
 export interface GatewayOptions {
   providers: LLMProvider[];
-  /** Ordered routes per purpose; later routes are fallbacks. */
-  routes: Record<Purpose, ModelRoute[]>;
+  /** Ordered routes per purpose; later routes are fallbacks. "agent" uses the chat routes when not given. */
+  routes: Record<"chat" | "aux", ModelRoute[]> & { agent?: ModelRoute[] };
   onFallback?: (info: { from: ModelRoute; to: ModelRoute; error: unknown }) => void;
 }
 
@@ -45,8 +49,8 @@ export class LLMGateway {
 
   constructor(private readonly options: GatewayOptions) {
     this.providers = new Map(options.providers.map((p) => [p.id, p]));
-    for (const purpose of ["chat", "aux"] as const) {
-      const routes = options.routes[purpose];
+    for (const purpose of ["chat", "aux", "agent"] as const) {
+      const routes = this.routes(purpose);
       if (!routes.length) throw new Error(`LLM gateway: no routes for "${purpose}"`);
       for (const route of routes) {
         if (!this.providers.has(route.provider)) {
@@ -57,14 +61,12 @@ export class LLMGateway {
   }
 
   routes(purpose: Purpose): ModelRoute[] {
-    return this.options.routes[purpose];
+    return this.options.routes[purpose] ?? this.options.routes.chat;
   }
 
   /** Routes whose model can look at images (in fallback order). */
   visionRoutes(purpose: Purpose): ModelRoute[] {
-    return this.options.routes[purpose].filter((r) =>
-      this.providers.get(r.provider)!.supportsImages(r.model),
-    );
+    return this.routes(purpose).filter((r) => this.providers.get(r.provider)!.supportsImages(r.model));
   }
 
   /** True when at least one route for this purpose accepts images. */
@@ -74,7 +76,7 @@ export class LLMGateway {
 
   /** True when at least one route for this purpose can call tools. */
   supportsTools(purpose: Purpose): boolean {
-    return this.options.routes[purpose].some((r) => this.canCallTools(r));
+    return this.routes(purpose).some((r) => this.canCallTools(r));
   }
 
   private canCallTools(route: ModelRoute): boolean {
@@ -83,7 +85,7 @@ export class LLMGateway {
 
   async *stream(purpose: Purpose, request: ChatRequest): AsyncIterable<GatewayEvent> {
     // Requests with images only go to models that can see them.
-    let routes = hasImages(request.messages) ? this.visionRoutes(purpose) : this.options.routes[purpose];
+    let routes = hasImages(request.messages) ? this.visionRoutes(purpose) : this.routes(purpose);
     if (!routes.length) throw new NoVisionRouteError(purpose);
     // Once a tool loop is under way, only models that call tools can continue it. Before that, a
     // model without tools simply gets the request without them (it answers from the prompt alone).

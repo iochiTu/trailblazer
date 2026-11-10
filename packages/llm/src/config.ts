@@ -2,7 +2,11 @@ import { type EmbeddingProvider, OpenAICompatibleEmbeddings } from "./embeddings
 import { LLMGateway, parseRoutes } from "./gateway.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { OfflineProvider } from "./providers/offline.js";
-import { OpenAICompatibleProvider } from "./providers/openai-compatible.js";
+import {
+  OpenAICompatibleProvider,
+  REASONING_EFFORTS,
+  type ReasoningEffort,
+} from "./providers/openai-compatible.js";
 import type { LLMProvider } from "./types.js";
 
 const list = (value: string | undefined) =>
@@ -10,6 +14,16 @@ const list = (value: string | undefined) =>
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
+/** A reasoning-effort setting from the environment; a value that isn't one stops startup (a typo would be ignored otherwise). */
+function reasoningEffort(name: string, value: string | undefined): ReasoningEffort | undefined {
+  const effort = value?.trim().toLowerCase();
+  if (!effort) return undefined;
+  if (!(REASONING_EFFORTS as readonly string[]).includes(effort)) {
+    throw new Error(`${name} must be one of ${REASONING_EFFORTS.join(", ")} (got "${value}")`);
+  }
+  return effort as ReasoningEffort;
+}
 
 /**
  * Builds the gateway from environment variables.
@@ -19,10 +33,13 @@ const list = (value: string | undefined) =>
  *   OPENAI_COMPATIBLE_BASE_URL   enables provider "openai-compatible" (+ OPENAI_COMPATIBLE_API_KEY)
  *   LLM_CHAT_ROUTES              e.g. "anthropic:claude-opus-5-5,openrouter:<model>"
  *   LLM_AUX_ROUTES               e.g. "anthropic:claude-haiku-5-5"
+ *   LLM_AGENT_ROUTES             owner-side jobs such as setting an assistant up (default: the chat routes)
  *   OPENROUTER_VISION_MODELS     models on that provider that accept images ("*" for all);
  *   OPENAI_COMPATIBLE_VISION_MODELS  Claude models always do, the offline provider never does
  *   OPENROUTER_TOOL_MODELS       models on that provider that can call tools ("*" for all);
  *   OPENAI_COMPATIBLE_TOOL_MODELS    Claude models always can, the offline provider never can
+ *   OPENROUTER_REASONING_EFFORT  how much reasoning models on that provider think before answering:
+ *   OPENAI_COMPATIBLE_REASONING_EFFORT   none, minimal, low, medium, high, xhigh or max. Not sent when unset.
  *
  * Without keys, everything routes to the offline provider so development and tests work.
  */
@@ -40,6 +57,8 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
         headers: { "X-Title": "Traiblazer" },
         visionModels: list(env.OPENROUTER_VISION_MODELS),
         toolModels: list(env.OPENROUTER_TOOL_MODELS),
+        reasoningEffort: reasoningEffort("OPENROUTER_REASONING_EFFORT", env.OPENROUTER_REASONING_EFFORT),
+        reasoningField: "reasoning",
       }),
     );
   }
@@ -50,6 +69,10 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
         baseURL: env.OPENAI_COMPATIBLE_BASE_URL,
         visionModels: list(env.OPENAI_COMPATIBLE_VISION_MODELS),
         toolModels: list(env.OPENAI_COMPATIBLE_TOOL_MODELS),
+        reasoningEffort: reasoningEffort(
+          "OPENAI_COMPATIBLE_REASONING_EFFORT",
+          env.OPENAI_COMPATIBLE_REASONING_EFFORT,
+        ),
       }),
     );
   }
@@ -61,9 +84,10 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
   const aux = parseRoutes(
     env.LLM_AUX_ROUTES ?? (hasAnthropic ? "anthropic:claude-haiku-5-5" : "offline:echo"),
   );
+  const agent = env.LLM_AGENT_ROUTES ? parseRoutes(env.LLM_AGENT_ROUTES) : undefined;
   const offline = [...chat, ...aux].every((r) => r.provider === "offline");
 
-  return { gateway: new LLMGateway({ providers, routes: { chat, aux } }), offline };
+  return { gateway: new LLMGateway({ providers, routes: { chat, aux, agent } }), offline };
 }
 
 /**

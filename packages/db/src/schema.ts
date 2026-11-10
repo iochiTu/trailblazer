@@ -815,6 +815,71 @@ export const messageAttachments = pgTable(
   ],
 );
 
+export const setupStatuses = ["pending", "running", "ready", "failed", "applied"] as const;
+export type SetupStatus = (typeof setupStatuses)[number];
+
+/**
+ * What the setup assistant proposes for a business after reading its information. Nothing here is
+ * in use until the owner reviews it and applies it.
+ */
+export interface SetupSuggestion {
+  /** Business details found in the information. A detail that wasn't found is left out. */
+  profile: {
+    businessName?: string;
+    phone?: string;
+    email?: string;
+    websiteUrl?: string;
+    address?: string;
+    hours?: WeeklyHours;
+  };
+  /** The business's own words that the hours and the address were read from. */
+  evidence: { hours?: string; address?: string };
+  /** A welcome message per language code. */
+  greeting: Record<string, string>;
+  /** Suggested first questions per language code, each answered by the information. */
+  quickReplies: Record<string, string[]>;
+  /** Questions customers often ask that the information doesn't answer. */
+  missing: string[];
+  /** How many pages were read, out of how many the assistant has. */
+  pagesRead: number;
+  pagesTotal: number;
+  /** True when no AI model was available: only contact details were looked up. */
+  basic?: boolean;
+}
+
+/**
+ * A run of the setup assistant for one assistant: it reads the business's information in the
+ * background and stores a suggestion for the owner to review (see `runSetup` in @traiblazer/core).
+ */
+export const setupRuns = pgTable(
+  "setup_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    status: text("status").$type<SetupStatus>().notNull().default("pending"),
+    suggestion: jsonb("suggestion").$type<SetupSuggestion>(),
+    /** Why it failed, in words the owner can read. */
+    error: text("error"),
+    /** The model that wrote the suggestion, and what the run cost. */
+    model: text("model"),
+    costMicros: bigint("cost_micros", { mode: "number" }).notNull().default(0),
+    /** The user who started it. Not a foreign key (kept if the user leaves). */
+    createdBy: uuid("created_by"),
+    ...timestamps,
+  },
+  (t) => [
+    index("setup_runs_bot_created_idx").on(t.tenantId, t.botId, t.createdAt),
+    foreignKey({
+      name: "setup_runs_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const usageEvents = pgTable(
   "usage_events",
   {
@@ -929,5 +994,6 @@ export const rlsTables = [
   "message_attachments",
   "leads",
   "knowledge_gaps",
+  "setup_runs",
   "usage_events",
 ] as const;

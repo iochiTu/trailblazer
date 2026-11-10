@@ -4,6 +4,7 @@ import { getLanguage } from "@traiblazer/i18n";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { ApiError, api, type BotDetail, type Language } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { BusinessDetails } from "./BusinessDetails";
 
 /** Matches the API limit (shared schema): up to 6 suggested questions per language. */
 const MAX_QUICK_REPLIES = 6;
@@ -22,8 +23,8 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 }
 
 /**
- * General settings: names, languages and the texts visitors see (greeting, suggested questions,
- * launcher text). Visual settings live in the Appearance tab.
+ * General settings: the business's details, names, languages and the texts visitors see
+ * (greeting, suggested questions, launcher text). Visual settings live in the Appearance tab.
  */
 export function GeneralTab({
   detail,
@@ -134,164 +135,167 @@ export function GeneralTab({
   }
 
   return (
-    <form className="flex max-w-3xl flex-col gap-8" onSubmit={onSubmit}>
-      <Section title={t("general.names")}>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("general.assistantName")}</span>
-          <input
-            className="input max-w-sm"
-            name="assistantName"
-            maxLength={40}
-            defaultValue={settings.assistantName ?? ""}
-            placeholder={businessName}
-            dir="auto"
-          />
-          <span className="muted text-xs">{t("general.assistantNameHint")}</span>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("general.botName")}</span>
-          <input className="input max-w-sm" name="name" required maxLength={80} defaultValue={bot.name} />
-          <span className="muted text-xs">{t("general.botNameHint")}</span>
-        </label>
-      </Section>
+    <div className="flex flex-col gap-10">
+      <BusinessDetails detail={detail} base={base} onChange={onChange} />
+      <form className="flex max-w-3xl flex-col gap-8" onSubmit={onSubmit}>
+        <Section title={t("general.names")}>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t("general.assistantName")}</span>
+            <input
+              className="input max-w-sm"
+              name="assistantName"
+              maxLength={40}
+              defaultValue={settings.assistantName ?? ""}
+              placeholder={businessName}
+              dir="auto"
+            />
+            <span className="muted text-xs">{t("general.assistantNameHint")}</span>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t("general.botName")}</span>
+            <input className="input max-w-sm" name="name" required maxLength={80} defaultValue={bot.name} />
+            <span className="muted text-xs">{t("general.botNameHint")}</span>
+          </label>
+        </Section>
 
-      <Section title={t("general.languages")} hint={t("general.languagesHint")}>
-        {TIERS.map((tier) => {
-          const list = catalog.filter((l) => l.tier === tier);
-          if (!list.length) return null;
-          return (
-            <fieldset key={tier} className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm">{t(`general.languages.tier${tier}`)}</legend>
-              <div className="flex flex-wrap gap-2">
-                {list.map((lang) => (
-                  <label key={lang.code} className="chip" title={lang.englishName}>
-                    <input
-                      type="checkbox"
-                      checked={enabled.includes(lang.code)}
-                      onChange={(e) => toggle(lang.code, e.target.checked)}
-                    />
-                    <span dir={lang.dir}>{lang.nativeName}</span>
-                    {lang.nativeName !== lang.englishName && (
-                      <span className="muted text-xs">{lang.englishName}</span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          );
-        })}
-
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("general.defaultLanguage")}</span>
-          <select
-            className="input max-w-xs"
-            value={defaultLanguage}
-            onChange={(e) => setDefaultLanguage(e.target.value)}
-          >
-            {ordered.map((code) => (
-              <option key={code} value={code}>
-                {getLanguage(code)?.nativeName ?? code}
-              </option>
-            ))}
-          </select>
-          <span className="muted text-xs">{t("general.defaultLanguageHint")}</span>
-        </label>
-
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={answerOthers}
-            onChange={(e) => setAnswerOthers(e.target.checked)}
-          />
-          <span className="flex flex-col gap-0.5">
-            <span className="font-medium">{t("general.otherLanguages")}</span>
-            <span className="muted text-xs">{t("general.otherLanguagesHint")}</span>
-          </span>
-        </label>
-      </Section>
-
-      <Section title={t("general.messages")}>
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium">{t("general.greeting")}</legend>
-          <span className="muted text-xs">{t("general.greetingHint")}</span>
-          {ordered.map((code) => {
-            const lang = getLanguage(code);
+        <Section title={t("general.languages")} hint={t("general.languagesHint")}>
+          {TIERS.map((tier) => {
+            const list = catalog.filter((l) => l.tier === tier);
+            if (!list.length) return null;
             return (
-              <label key={code} className="flex flex-col gap-1 text-sm">
-                <span>{lang?.nativeName ?? code}</span>
-                <textarea
-                  className="input"
-                  name={`greeting.${code}`}
-                  rows={2}
-                  maxLength={300}
-                  dir={lang?.dir ?? "auto"}
-                  defaultValue={settings.greeting?.[code] ?? ""}
-                />
-              </label>
+              <fieldset key={tier} className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm">{t(`general.languages.tier${tier}`)}</legend>
+                <div className="flex flex-wrap gap-2">
+                  {list.map((lang) => (
+                    <label key={lang.code} className="chip" title={lang.englishName}>
+                      <input
+                        type="checkbox"
+                        checked={enabled.includes(lang.code)}
+                        onChange={(e) => toggle(lang.code, e.target.checked)}
+                      />
+                      <span dir={lang.dir}>{lang.nativeName}</span>
+                      {lang.nativeName !== lang.englishName && (
+                        <span className="muted text-xs">{lang.englishName}</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             );
           })}
-        </fieldset>
 
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium">{t("general.quickReplies")}</legend>
-          <span className="muted text-xs">{t("general.quickRepliesHint", { max: MAX_QUICK_REPLIES })}</span>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t("general.defaultLanguage")}</span>
+            <select
+              className="input max-w-xs"
+              value={defaultLanguage}
+              onChange={(e) => setDefaultLanguage(e.target.value)}
+            >
+              {ordered.map((code) => (
+                <option key={code} value={code}>
+                  {getLanguage(code)?.nativeName ?? code}
+                </option>
+              ))}
+            </select>
+            <span className="muted text-xs">{t("general.defaultLanguageHint")}</span>
+          </label>
+
+          <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
-              checked={showQuickReplies}
-              onChange={(e) => setShowQuickReplies(e.target.checked)}
+              className="mt-1"
+              checked={answerOthers}
+              onChange={(e) => setAnswerOthers(e.target.checked)}
             />
-            {t("general.quickRepliesShow")}
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium">{t("general.otherLanguages")}</span>
+              <span className="muted text-xs">{t("general.otherLanguagesHint")}</span>
+            </span>
           </label>
-          {showQuickReplies &&
-            ordered.map((code) => {
+        </Section>
+
+        <Section title={t("general.messages")}>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm font-medium">{t("general.greeting")}</legend>
+            <span className="muted text-xs">{t("general.greetingHint")}</span>
+            {ordered.map((code) => {
               const lang = getLanguage(code);
               return (
                 <label key={code} className="flex flex-col gap-1 text-sm">
                   <span>{lang?.nativeName ?? code}</span>
                   <textarea
                     className="input"
-                    name={`quickReplies.${code}`}
-                    rows={3}
+                    name={`greeting.${code}`}
+                    rows={2}
+                    maxLength={300}
                     dir={lang?.dir ?? "auto"}
-                    placeholder={defaultQuickReplies(code).join("\n")}
-                    defaultValue={settings.quickReplies?.[code]?.join("\n") ?? ""}
+                    defaultValue={settings.greeting?.[code] ?? ""}
                   />
                 </label>
               );
             })}
-        </fieldset>
+          </fieldset>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("general.launcher")}</span>
-          <span>{t("general.launcherLabel")}</span>
-          <input
-            className="input max-w-xs"
-            name="launcherLabel"
-            maxLength={30}
-            defaultValue={settings.launcherLabel ?? ""}
-            dir="auto"
-          />
-          <span className="muted text-xs">{t("general.launcherLabelHint")}</span>
-        </label>
-      </Section>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm font-medium">{t("general.quickReplies")}</legend>
+            <span className="muted text-xs">{t("general.quickRepliesHint", { max: MAX_QUICK_REPLIES })}</span>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showQuickReplies}
+                onChange={(e) => setShowQuickReplies(e.target.checked)}
+              />
+              {t("general.quickRepliesShow")}
+            </label>
+            {showQuickReplies &&
+              ordered.map((code) => {
+                const lang = getLanguage(code);
+                return (
+                  <label key={code} className="flex flex-col gap-1 text-sm">
+                    <span>{lang?.nativeName ?? code}</span>
+                    <textarea
+                      className="input"
+                      name={`quickReplies.${code}`}
+                      rows={3}
+                      dir={lang?.dir ?? "auto"}
+                      placeholder={defaultQuickReplies(code).join("\n")}
+                      defaultValue={settings.quickReplies?.[code]?.join("\n") ?? ""}
+                    />
+                  </label>
+                );
+              })}
+          </fieldset>
 
-      <div className="flex items-center gap-3">
-        <button className="btn" type="submit" disabled={busy}>
-          {t("common.save")}
-        </button>
-        {saved && (
-          <span className="text-sm" role="status" style={{ color: "var(--accent)" }}>
-            {t("common.saved")}
-          </span>
-        )}
-        {error && (
-          <span className="error text-sm" role="alert">
-            {error}
-          </span>
-        )}
-      </div>
-    </form>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">{t("general.launcher")}</span>
+            <span>{t("general.launcherLabel")}</span>
+            <input
+              className="input max-w-xs"
+              name="launcherLabel"
+              maxLength={30}
+              defaultValue={settings.launcherLabel ?? ""}
+              dir="auto"
+            />
+            <span className="muted text-xs">{t("general.launcherLabelHint")}</span>
+          </label>
+        </Section>
+
+        <div className="flex items-center gap-3">
+          <button className="btn" type="submit" disabled={busy}>
+            {t("common.save")}
+          </button>
+          {saved && (
+            <span className="text-sm" role="status" style={{ color: "var(--accent)" }}>
+              {t("common.saved")}
+            </span>
+          )}
+          {error && (
+            <span className="error text-sm" role="alert">
+              {error}
+            </span>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }
