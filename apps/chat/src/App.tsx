@@ -305,6 +305,8 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
       ? ui(lang, "greetingNamed", { name: appearance.assistantName, business: config.businessName })
       : ui(lang, "greeting", { business: config.businessName }));
   const quickReplies = config.quickReplies[lang] ?? config.quickReplies[lang === "fr" ? "fr" : "en"] ?? [];
+  // Add-on buttons: only plain web links (the API validates them; this is defence in depth).
+  const links = (config.links ?? []).filter((l) => /^https?:\/\//i.test(l.url));
   const palette = paletteFor(appearance.color, appearance.theme);
   const avatarBesideReplies = appearance.theme === "friendly" || appearance.theme === "bold";
 
@@ -390,6 +392,24 @@ export function App({ publicKey, mode, pageUrl, preview = false }: AppProps) {
           )}
         </div>
       </header>
+
+      {links.length > 0 && (
+        <nav class="tb-links" aria-label={config.businessName}>
+          {links.map((link) => (
+            <a
+              key={link.id}
+              class="tb-link"
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              dir="auto"
+            >
+              <span aria-hidden="true">{link.icon === "shop" ? "🛍️" : "↗"}</span>
+              {link.label ?? ui(lang, link.icon === "shop" ? "linkShop" : "linkOpen")}
+            </a>
+          ))}
+        </nav>
+      )}
 
       <div class="tb-log" ref={logRef} role="log" aria-live="polite" aria-relevant="additions">
         {assistantRow(undefined, "tb-msg tb-assistant", <Markdown text={greeting} />)}

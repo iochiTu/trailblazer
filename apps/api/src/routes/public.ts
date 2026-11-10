@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { activeAddons, addonChatLinks } from "@traiblazer/addons";
 import {
   AVATAR_ICONS,
   type AvatarIcon,
@@ -15,6 +16,7 @@ import {
 import { type ChatImage, runChat } from "@traiblazer/core";
 import {
   type BotSettings,
+  botAddons,
   bots,
   businessProfiles,
   conversations,
@@ -128,7 +130,18 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .from(businessProfiles)
         .where(eq(businessProfiles.botId, bot.id))
         .limit(1);
-      return { ...resolved, bot, profile: profile ?? null };
+      const addons = activeAddons(
+        await tx
+          .select({
+            addonId: botAddons.addonId,
+            enabled: botAddons.enabled,
+            config: botAddons.config,
+            configVersion: botAddons.configVersion,
+          })
+          .from(botAddons)
+          .where(eq(botAddons.botId, bot.id)),
+      );
+      return { ...resolved, bot, profile: profile ?? null, addons };
     });
   }
 
@@ -195,7 +208,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get<{ Params: { key: string } }>("/v1/public/bots/:key", async (request, reply) => {
     const found = await loadBot(request.params.key);
     if (!found || found.bot.status === "paused") throw notFound("Assistant");
-    const { bot, profile } = found;
+    const { bot, profile, addons } = found;
     const settings: BotSettings = bot.settings ?? {};
     const template = getTemplate(bot.pack, bot.variant);
     const businessName = profile?.businessName ?? bot.name;
@@ -215,6 +228,17 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         }),
         greeting: settings.greeting ?? {},
         quickReplies: { ...template.quickReplies, ...(settings.quickReplies ?? {}) },
+        // Buttons from add-ons (e.g. "Shop online").
+        links: addonChatLinks(
+          addons,
+          {
+            tenantId: found.tenantId,
+            botId: bot.id,
+            businessName,
+            ownerLanguage: "en",
+          },
+          (msg, data) => request.log.warn(data, msg),
+        ).map(({ id, url, label, icon }) => ({ id, url, label, icon })),
         poweredBy: true,
       },
     };
@@ -324,6 +348,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             gateway: ctx.gateway,
             embeddings: ctx.embeddings,
             log: (msg, data) => request.log.error(data, msg),
+            adminUrl: adminOrigin,
           },
           {
             tenantId: found.tenantId,

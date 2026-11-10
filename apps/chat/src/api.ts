@@ -16,8 +16,18 @@ export interface PublicBotConfig {
   defaultLanguage: string;
   greeting: Record<string, string>;
   quickReplies: Record<string, string[]>;
+  /** Buttons from the business's add-ons (e.g. its online shop). Missing on older API versions. */
+  links?: ChatLink[];
   poweredBy: boolean;
   contact: { phone: string | null; email: string | null };
+}
+
+/** A button from an add-on; `label` null = the translated default for `icon`. */
+export interface ChatLink {
+  id: string;
+  url: string;
+  label: string | null;
+  icon: "shop" | "link";
 }
 
 export interface Citation {

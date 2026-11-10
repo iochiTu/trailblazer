@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { AddonsTab } from "@/components/bot/AddonsTab";
 import { AppearanceTab } from "@/components/bot/AppearanceTab";
 import { ConversationsTab } from "@/components/bot/ConversationsTab";
 import { GeneralTab } from "@/components/bot/GeneralTab";
 import { KnowledgeTab } from "@/components/bot/KnowledgeTab";
+import { RequestsTab } from "@/components/bot/RequestsTab";
 import { ShareTab } from "@/components/bot/ShareTab";
 import { WorkflowsTab } from "@/components/bot/WorkflowsTab";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -14,16 +16,42 @@ import { SupportBanner } from "@/components/SupportBanner";
 import { ApiError, api, type BotDetail } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
-type Tab = "knowledge" | "workflows" | "general" | "appearance" | "test" | "share" | "conversations";
-const TABS: Tab[] = ["knowledge", "workflows", "general", "appearance", "test", "share", "conversations"];
+type Tab =
+  | "knowledge"
+  | "workflows"
+  | "addons"
+  | "general"
+  | "appearance"
+  | "test"
+  | "share"
+  | "requests"
+  | "conversations";
+const TABS: Tab[] = [
+  "knowledge",
+  "workflows",
+  "addons",
+  "general",
+  "appearance",
+  "test",
+  "share",
+  "requests",
+  "conversations",
+];
+const isTab = (value: string | null): value is Tab => TABS.includes(value as Tab);
 
 export default function BotPage() {
   const { tenantId, botId } = useParams<{ tenantId: string; botId: string }>();
   const { t } = useI18n();
   const router = useRouter();
+  // Links can open a tab directly, e.g. ?tab=conversations from a notification email.
+  const requestedTab = useSearchParams().get("tab");
   const [detail, setDetail] = useState<BotDetail | null>(null);
-  const [tab, setTab] = useState<Tab>("knowledge");
+  const [tab, setTab] = useState<Tab>(isTab(requestedTab) ? requestedTab : "knowledge");
   const [testKey, setTestKey] = useState(0);
+  /** Requests waiting for the business, shown on the Requests tab. */
+  const [newRequests, setNewRequests] = useState(0);
+  /** Conversation to open on the Conversations tab (from a request). */
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const base = `/v1/tenants/${tenantId}/bots/${botId}`;
 
   const load = useCallback(async () => {
@@ -37,6 +65,12 @@ export default function BotPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void api<{ newCount: number }>(`${base}/leads?status=new`)
+      .then((d) => setNewRequests(d.newCount))
+      .catch(() => {});
+  }, [base]);
 
   if (!detail) return <p className="muted p-8">{t("common.loading")}</p>;
   const { bot } = detail;
@@ -89,6 +123,9 @@ export default function BotPage() {
             }}
           >
             {t(`bots.tab.${id}`)}
+            {id === "requests" && newRequests > 0 && (
+              <span className="badge badge-accent ms-2">{newRequests}</span>
+            )}
           </button>
         ))}
       </div>
@@ -107,12 +144,25 @@ export default function BotPage() {
           </div>
         )}
         {tab === "workflows" && <WorkflowsTab detail={detail} base={base} onChange={load} />}
+        {tab === "addons" && <AddonsTab base={base} />}
         {tab === "general" && <GeneralTab detail={detail} base={base} onChange={load} />}
         {tab === "appearance" && (
           <AppearanceTab detail={detail} base={base} tenantId={tenantId} onChange={load} />
         )}
         {tab === "share" && <ShareTab detail={detail} base={base} onChange={load} />}
-        {tab === "conversations" && <ConversationsTab base={base} />}
+        {tab === "requests" && (
+          <RequestsTab
+            detail={detail}
+            base={base}
+            onChange={load}
+            onCount={setNewRequests}
+            onOpenConversation={(id) => {
+              setConversationId(id);
+              setTab("conversations");
+            }}
+          />
+        )}
+        {tab === "conversations" && <ConversationsTab base={base} openId={conversationId} />}
       </section>
     </div>
   );

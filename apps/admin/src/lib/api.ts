@@ -5,6 +5,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    /** Field problems from validation errors. */
+    public issues: { path: string; message: string }[] = [],
   ) {
     super(message);
   }
@@ -19,7 +21,9 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? "error", data.message ?? res.statusText);
+  if (!res.ok) {
+    throw new ApiError(res.status, data.error ?? "error", data.message ?? res.statusText, data.issues ?? []);
+  }
   return data as T;
 }
 
@@ -65,6 +69,8 @@ export interface Bot {
     launcherPosition?: "right" | "left";
     /** Answer visitors in languages that aren't turned on (default true). */
     answerOtherLanguages?: boolean;
+    /** Let the assistant take visitors' requests and contact details (default true). */
+    followUps?: boolean;
   };
 }
 
@@ -87,6 +93,60 @@ export interface BotDetail {
   chatUrl: string;
 }
 
+/** Text in the portal's languages (add-on market). */
+export interface Localized {
+  en: string;
+  fr: string;
+}
+
+/** A setting an add-on asks for; the settings form is built from these. */
+export type AddonField =
+  | {
+      key: string;
+      type: "text" | "email" | "url" | "textarea";
+      label: Localized;
+      hint?: Localized;
+      placeholder?: string;
+      required?: boolean;
+      maxLength?: number;
+    }
+  | { key: string; type: "toggle"; label: Localized; hint?: Localized }
+  | {
+      key: string;
+      type: "select";
+      label: Localized;
+      hint?: Localized;
+      options: { value: string; label: Localized }[];
+    };
+
+export type AddonCategory = "notifications" | "commerce" | "booking" | "marketing" | "productivity";
+export type AddonCapability = "prompt" | "chat_links" | "notifications";
+
+/** An add-on in the market (from @traiblazer/addons). */
+export interface AddonCatalogEntry {
+  id: string;
+  version: number;
+  category: AddonCategory;
+  status: "available" | "coming_soon";
+  icon: string;
+  name: Localized;
+  summary: Localized;
+  description: Localized;
+  capabilities: AddonCapability[];
+  fields: AddonField[];
+  defaults: Record<string, unknown>;
+}
+
+/** An add-on installed on an assistant. */
+export interface InstalledAddon {
+  addonId: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  /** "invalid": settings need attention; "unknown": the add-on left the market. */
+  status: "ok" | "invalid" | "unknown";
+  updatedAt: string;
+}
+
 export interface Source {
   id: string;
   type: "website" | "text";
@@ -103,6 +163,25 @@ export interface QaPair {
   question: string;
   answer: string;
   language: string;
+}
+
+export type LeadStatus = "new" | "in_progress" | "done";
+
+/** A request a visitor left with the assistant for the business to follow up on. */
+export interface Lead {
+  id: string;
+  conversationId: string | null;
+  /** "playground" = left while testing the assistant. */
+  channel: string;
+  kind: "callback" | "quote" | "booking" | "question" | "complaint" | "other";
+  status: LeadStatus;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  bestTime: string | null;
+  message: string;
+  language: string | null;
+  createdAt: string;
 }
 
 export interface Conversation {

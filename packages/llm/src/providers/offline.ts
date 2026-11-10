@@ -16,6 +16,11 @@ export class OfflineProvider implements LLMProvider {
     return false;
   }
 
+  /** It can't call tools either; it only ever sees the prompt. */
+  supportsTools(): boolean {
+    return false;
+  }
+
   async *stream(model: string, request: ChatRequest): AsyncIterable<ChatEvent> {
     const last = request.messages.at(-1);
     const question = last ? textOf(last.content) : "";

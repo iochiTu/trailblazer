@@ -1,8 +1,10 @@
 import { costMicros } from "./pricing.js";
 import {
   type ChatEvent,
+  type ChatMessage,
   type ChatRequest,
   hasImages,
+  hasToolBlocks,
   type LLMProvider,
   type ModelRoute,
   type StopReason,
@@ -17,6 +19,8 @@ export interface GatewayResultMeta {
   usage: Usage;
   stopReason: StopReason;
   costMicros: number;
+  /** The assistant turn, when the provider reports it (always for tool-capable routes). */
+  message?: ChatMessage;
 }
 
 export type GatewayEvent = { type: "text"; text: string } | ({ type: "done" } & GatewayResultMeta);
@@ -64,17 +68,35 @@ export class LLMGateway {
     return this.visionRoutes(purpose).length > 0;
   }
 
+  /** True when at least one route for this purpose can call tools. */
+  supportsTools(purpose: Purpose): boolean {
+    return this.options.routes[purpose].some((r) => this.canCallTools(r));
+  }
+
+  private canCallTools(route: ModelRoute): boolean {
+    return this.providers.get(route.provider)!.supportsTools?.(route.model) ?? false;
+  }
+
   async *stream(purpose: Purpose, request: ChatRequest): AsyncIterable<GatewayEvent> {
     // Requests with images only go to models that can see them.
-    const routes = hasImages(request.messages) ? this.visionRoutes(purpose) : this.options.routes[purpose];
+    let routes = hasImages(request.messages) ? this.visionRoutes(purpose) : this.options.routes[purpose];
     if (!routes.length) throw new NoVisionRouteError(purpose);
+    // Once a tool loop is under way, only models that call tools can continue it. Before that, a
+    // model without tools simply gets the request without them (it answers from the prompt alone).
+    const midToolLoop = hasToolBlocks(request.messages);
+    if (midToolLoop) {
+      routes = routes.filter((r) => this.canCallTools(r));
+      if (!routes.length) throw new NoToolRouteError(purpose);
+    }
     let lastError: unknown;
 
     for (const [index, route] of routes.entries()) {
       const provider = this.providers.get(route.provider)!;
+      const routed =
+        request.tools?.length && !this.canCallTools(route) ? { ...request, tools: undefined } : request;
       let emitted = false;
       try {
-        for await (const event of provider.stream(route.model, request) as AsyncIterable<ChatEvent>) {
+        for await (const event of provider.stream(route.model, routed) as AsyncIterable<ChatEvent>) {
           if (event.type === "text") {
             emitted = true;
             yield event;
@@ -86,6 +108,7 @@ export class LLMGateway {
               usage: event.usage,
               stopReason: event.stopReason,
               costMicros: costMicros(route, event.usage),
+              message: event.message,
             };
           }
         }
@@ -118,6 +141,14 @@ export class NoVisionRouteError extends Error {
   constructor(purpose: Purpose) {
     super(`LLM gateway: no "${purpose}" route accepts images`);
     this.name = "NoVisionRouteError";
+  }
+}
+
+/** A tool loop is under way but no configured route can call tools. */
+export class NoToolRouteError extends Error {
+  constructor(purpose: Purpose) {
+    super(`LLM gateway: no "${purpose}" route can call tools`);
+    this.name = "NoToolRouteError";
   }
 }
 

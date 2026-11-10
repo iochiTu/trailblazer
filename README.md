@@ -12,13 +12,14 @@ on a customer's site: hosted chat page, inline iframe, floating widget. See PLAN
 ```
 apps/
   api/              Fastify API: auth, tenants, bots, knowledge, public chat, chat page + widget.js
-  admin/            Next.js admin portal (EN/FR): knowledge, test chat, share & install, conversations
+  admin/            Next.js admin portal (EN/FR): knowledge, test chat, share & install, requests, conversations
   chat/             Preact chat page (hosted link / iframe / widget panel) + widget.js loader
   worker/           Background jobs: website crawling and indexing
 packages/
-  core/             Chat engine, retrieval, prompt (locked platform rules), crawler, job queue
-  llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider
+  core/             Chat engine, tools, retrieval, prompt (locked platform rules), crawler, job queue
+  llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
   db/               Drizzle schema, migrations (incl. row-level security), withTenant()
+  addons/           Add-on market: add-on contract, registry, built-in add-ons (email notifications, online shop)
   i18n/             Language registry (tiers, RTL), UI messages (ICU), language negotiation
   industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)
   shared/           Zod request schemas shared by API and admin
@@ -37,6 +38,21 @@ All three load the same chat page. It is served with `frame-ancestors` limited t
 websites (plus the admin portal), and talks to the API on its own origin. The admin's
 **Share & install** tab shows the ready-to-copy codes.
 
+## Add-ons
+
+Businesses extend an assistant from the **Add-ons** tab (the add-on market). Today: **Email
+notifications** (new conversation, new request from a visitor, unanswered question) and **Online shop** (shop link in answers + a
+"Shop online" button in the chat); a few more are listed as "coming soon".
+
+An add-on is a definition in `packages/addons/src/builtin/` registered in `registry.ts`: id, version,
+category, EN/FR text, settings fields (the portal builds the form from them), a Zod schema, and pure
+hooks: `prompt` (text in the assistant's instructions), `chatLinks` (chat page buttons) and `onEvent`
+(chat events → effects). Hooks never do I/O; effects are queued as `addon.effect` jobs and run by the
+worker, which re-checks the add-on is still on. Installations live in `bot_addons` (RLS); settings are
+re-validated on every save and read, and `version`/`migrate` handle setting changes. Emails go through
+`SMTP_URL`/`MAIL_FROM`; without them the worker logs each email instead. The owner's test chat
+(playground) never triggers notifications.
+
 ## AI providers
 
 Without API keys, chat uses an **offline test provider** that quotes matching sentences from the
@@ -44,6 +60,47 @@ business's information, so everything works locally at no cost. Set `ANTHROPIC_A
 `OPENROUTER_API_KEY`, `OPENAI_COMPATIBLE_BASE_URL`) in `.env` for real answers; see `.env.example`.
 With an Anthropic key the default routes are `claude-opus-5-5` for answers (low effort, server-side
 refusal fallback enabled) and `claude-haiku-5-5` for query rewriting/translation.
+
+## Tools
+
+The assistant can call **tools** while it answers: the model asks for a tool, the chat engine runs it
+on the server under the assistant's own business, and the model continues with the result (up to 3
+rounds per answer). Today there are two:
+
+- `search_knowledge`: look the business's information up again with other words, or once per part of
+  a multi-part question.
+- `request_follow_up`: pass a visitor's request to the business (see **Requests** below).
+
+Catalog lookup and booking will be added the same way.
+
+- A tool is a definition in `packages/core/src/chat/tools/` (registered in `index.ts`): name,
+  description, a Zod schema for its input and `run`. Every call is validated against the schema first; a bad call, an unknown tool or a
+  failing tool becomes an error result the model can recover from, never a failed answer.
+- Tool calling is provider-neutral (`packages/llm`): Claude models always support it; for OpenRouter and
+  OpenAI-compatible endpoints list the models that do in `OPENROUTER_TOOL_MODELS` /
+  `OPENAI_COMPATIBLE_TOOL_MODELS` (`*` for all). Models that can't call tools get the same request
+  without them and answer as before; so does the offline provider.
+- What a tool returns is reference data like the knowledge base, never instructions. Tools used are
+  recorded on the answer (`flags.tools`) and the answer's tokens and cost cover every model call.
+
+## Requests (lead capture and handoff)
+
+When a visitor wants to be called back, asks for a quote or a booking, has a complaint, or asks
+something the assistant can't answer, the assistant takes their name and an email or phone number and
+saves a **request** for the business (`leads` table, RLS). Staff work through requests on the admin's
+**Requests** tab (new → in progress → done, link to the conversation, delete); the tab shows how many
+are new. With the **Email notifications** add-on the owner also gets an email for each one.
+
+- The assistant can pass on only contact details the visitor typed in that conversation; anything else
+  (a guess, or an address found on the business's own pages) is refused and it asks again. At most 3
+  requests per conversation.
+- It saves and notifies; it never books, orders or confirms anything, and says so.
+- Requests left in the owner's test chat are kept (marked "Test") but never emailed.
+- Each assistant can turn this off (`settings.followUps`, the checkbox on the Requests tab). It needs a
+  model that can call tools (see above); without one the assistant gives the business's phone or email
+  as before.
+- Requests are personal data: every member of the business can read them, editors can change or
+  delete them, and the audit log records who did, without the visitor's details.
 
 ## Requirements
 

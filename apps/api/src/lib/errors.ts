@@ -3,6 +3,8 @@ export class HttpError extends Error {
     public readonly statusCode: number,
     public readonly code: string,
     message?: string,
+    /** Field problems, sent like Zod validation errors ({ path, message }). */
+    public readonly issues?: { path: string; message: string }[],
   ) {
     super(message ?? code);
   }

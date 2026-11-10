@@ -10,11 +10,13 @@ import { HttpError } from "./lib/errors.js";
 import { MemoryLimiter } from "./lib/limiter.js";
 import { PlatformConfig } from "./lib/platform.js";
 import { auditSupportChanges, loadUser } from "./plugins/auth.js";
+import { addonRoutes } from "./routes/addons.js";
 import { assetRoutes } from "./routes/assets.js";
 import { authRoutes } from "./routes/auth.js";
 import { botRoutes } from "./routes/bots.js";
 import { catalogRoutes } from "./routes/catalog.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
+import { leadRoutes } from "./routes/leads.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { publicRoutes } from "./routes/public.js";
 import { tenantRoutes } from "./routes/tenants.js";
@@ -82,7 +84,11 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
       });
     }
     if (error instanceof HttpError) {
-      return reply.code(error.statusCode).send({ error: error.code, message: error.message });
+      return reply.code(error.statusCode).send({
+        error: error.code,
+        message: error.message,
+        ...(error.issues ? { issues: error.issues } : {}),
+      });
     }
     const status = (error as { statusCode?: number }).statusCode;
     if (status && status >= 400 && status < 500) {
@@ -100,8 +106,10 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => authRoutes(scope, ctx));
   await app.register(async (scope) => tenantRoutes(scope, ctx));
   await app.register(async (scope) => botRoutes(scope, ctx));
+  await app.register(async (scope) => addonRoutes(scope, ctx));
   await app.register(async (scope) => catalogRoutes(scope, ctx));
   await app.register(async (scope) => knowledgeRoutes(scope, ctx));
+  await app.register(async (scope) => leadRoutes(scope, ctx));
   await app.register(async (scope) => assetRoutes(scope, ctx));
   await app.register(async (scope) => usageRoutes(scope, ctx));
   await app.register(async (scope) => operatorRoutes(scope, ctx));

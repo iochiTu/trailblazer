@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Conversation, type ConversationMessage, type MessageAttachment } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -38,7 +38,7 @@ function Attachment({ src, attachment }: { src: string; attachment: MessageAttac
   );
 }
 
-export function ConversationsTab({ base }: { base: string }) {
+export function ConversationsTab({ base, openId }: { base: string; openId?: string | null }) {
   const { t, language } = useI18n();
   const [list, setList] = useState<Conversation[] | null>(null);
   const [open, setOpen] = useState<{ id: string; messages: ConversationMessage[] } | null>(null);
@@ -49,10 +49,18 @@ export function ConversationsTab({ base }: { base: string }) {
     );
   }, [base]);
 
-  async function show(id: string) {
-    const data = await api<{ messages: ConversationMessage[] }>(`${base}/conversations/${id}`);
-    setOpen({ id, messages: data.messages });
-  }
+  const show = useCallback(
+    async (id: string) => {
+      const data = await api<{ messages: ConversationMessage[] }>(`${base}/conversations/${id}`);
+      setOpen({ id, messages: data.messages });
+    },
+    [base],
+  );
+
+  // Opened from elsewhere (e.g. a request's "View conversation"), even if it isn't in the recent list.
+  useEffect(() => {
+    if (openId) void show(openId).catch(() => {});
+  }, [openId, show]);
 
   if (list === null) return <p className="muted text-sm">{t("common.loading")}</p>;
   if (!list.length) return <p className="muted text-sm">{t("conversations.empty")}</p>;

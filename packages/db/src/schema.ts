@@ -214,6 +214,11 @@ export interface BotSettings {
    * those visitors get answers in the default language.
    */
   answerOtherLanguages?: boolean;
+  /**
+   * Let the assistant take a visitor's contact details and request and pass them to the business
+   * (default true). See `leads`.
+   */
+  followUps?: boolean;
 }
 
 /**
@@ -334,6 +339,38 @@ export const businessProfiles = pgTable(
     index("business_profiles_tenant_id_idx").on(t.tenantId),
     foreignKey({
       name: "business_profiles_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Add-ons installed on an assistant from the add-on market (definitions live in
+ * @traiblazer/addons). `config` is validated by the add-on's schema on every save and read;
+ * `config_version` is the add-on version that saved it, so later versions can migrate it.
+ * Credentials for future integrations (OAuth tokens, API keys) don't belong in `config`: they will
+ * get their own encrypted store, referenced from here.
+ */
+export const botAddons = pgTable(
+  "bot_addons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    addonId: text("addon_id").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+    configVersion: integer("config_version").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("bot_addons_bot_addon_uq").on(t.botId, t.addonId),
+    index("bot_addons_tenant_bot_idx").on(t.tenantId, t.botId),
+    foreignKey({
+      name: "bot_addons_bot_tenant_fk",
       columns: [t.botId, t.tenantId],
       foreignColumns: [bots.id, bots.tenantId],
     }).onDelete("cascade"),
@@ -585,7 +622,63 @@ export interface MessageFlags {
   busy?: boolean;
   /** The visitor sent images but no available model could look at them. */
   imagesUnseen?: boolean;
+  /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
+  tools?: string[];
 }
+
+// ---------------------------------------------------------------------------------------------
+// Requests from visitors (RLS enforced)
+// ---------------------------------------------------------------------------------------------
+
+/** What the visitor wants the business to do. */
+export const leadKinds = ["callback", "quote", "booking", "question", "complaint", "other"] as const;
+export type LeadKind = (typeof leadKinds)[number];
+export const leadStatuses = ["new", "in_progress", "done"] as const;
+export type LeadStatus = (typeof leadStatuses)[number];
+
+/**
+ * A request a visitor left for the business to follow up on ("call me back", "send me a quote"),
+ * saved by the assistant with the contact details the visitor typed. Personal data: shown only to
+ * the business's members, deleted with the assistant, and deletable one by one.
+ */
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /**
+     * Conversation it came from. Not a foreign key: the request is kept if the conversation is
+     * later removed, and reads are tenant-scoped either way.
+     */
+    conversationId: uuid("conversation_id"),
+    /** "playground" = left by the owner while testing; never notified. */
+    channel: text("channel").$type<Channel>().notNull(),
+    kind: text("kind").$type<LeadKind>().notNull(),
+    status: text("status").$type<LeadStatus>().notNull().default("new"),
+    name: text("name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    /** When or how the visitor prefers to be reached, in their words. */
+    bestTime: text("best_time"),
+    /** What the visitor wants, summarised by the assistant for staff. */
+    message: text("message").notNull(),
+    /** Language the visitor was writing in. */
+    language: text("language"),
+    ...timestamps,
+  },
+  (t) => [
+    index("leads_bot_created_idx").on(t.tenantId, t.botId, t.createdAt),
+    index("leads_conversation_idx").on(t.tenantId, t.conversationId),
+    foreignKey({
+      name: "leads_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
 
 /** Reference from a message to an uploaded image; the image data lives in `message_attachments`. */
 export interface AttachmentRef {
@@ -776,6 +869,7 @@ export const rlsTables = [
   "bots",
   "bot_keys",
   "business_profiles",
+  "bot_addons",
   "audit_logs",
   "knowledge_sources",
   "documents",
@@ -785,5 +879,6 @@ export const rlsTables = [
   "conversations",
   "messages",
   "message_attachments",
+  "leads",
   "usage_events",
 ] as const;

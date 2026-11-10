@@ -21,6 +21,8 @@ const list = (value: string | undefined) =>
  *   LLM_AUX_ROUTES               e.g. "anthropic:claude-haiku-5-5"
  *   OPENROUTER_VISION_MODELS     models on that provider that accept images ("*" for all);
  *   OPENAI_COMPATIBLE_VISION_MODELS  Claude models always do, the offline provider never does
+ *   OPENROUTER_TOOL_MODELS       models on that provider that can call tools ("*" for all);
+ *   OPENAI_COMPATIBLE_TOOL_MODELS    Claude models always can, the offline provider never can
  *
  * Without keys, everything routes to the offline provider so development and tests work.
  */
@@ -37,6 +39,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
         baseURL: "https://openrouter.ai/api/v1",
         headers: { "X-Title": "Traiblazer" },
         visionModels: list(env.OPENROUTER_VISION_MODELS),
+        toolModels: list(env.OPENROUTER_TOOL_MODELS),
       }),
     );
   }
@@ -46,6 +49,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
         apiKey: env.OPENAI_COMPATIBLE_API_KEY ?? "none",
         baseURL: env.OPENAI_COMPATIBLE_BASE_URL,
         visionModels: list(env.OPENAI_COMPATIBLE_VISION_MODELS),
+        toolModels: list(env.OPENAI_COMPATIBLE_TOOL_MODELS),
       }),
     );
   }

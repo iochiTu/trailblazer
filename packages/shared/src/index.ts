@@ -124,6 +124,8 @@ export const updateBotSchema = z
         launcherPosition: z.enum(["right", "left"]),
         // Languages: answer visitors in languages that aren't turned on (default) or not.
         answerOtherLanguages: z.boolean(),
+        // Requests: let the assistant take a visitor's contact details and request (default) or not.
+        followUps: z.boolean(),
       })
       .partial(),
   })
@@ -246,5 +248,22 @@ export const businessProfileSchema = z
 export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 
 export const addAllowedOriginSchema = z.object({ origin: httpUrl });
+
+// ---- Add-ons ---------------------------------------------------------------------------------
+
+/**
+ * Install or change an add-on. `config` is merged over the saved settings and then validated by
+ * the add-on's own schema (in @traiblazer/addons), so it is only checked for shape here.
+ */
+export const updateAddonSchema = z.object({
+  enabled: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+export type UpdateAddonInput = z.infer<typeof updateAddonSchema>;
+
+/** Requests visitors left for the business: staff move them through these statuses. */
+export const LEAD_STATUSES = ["new", "in_progress", "done"] as const;
+export const updateLeadSchema = z.object({ status: z.enum(LEAD_STATUSES) });
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 
 export * from "./plans.js";

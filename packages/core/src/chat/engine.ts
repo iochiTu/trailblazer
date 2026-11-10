@@ -1,31 +1,52 @@
 import {
+  type AddonContext,
+  type AddonEvent,
+  activeAddons,
+  addonEffects,
+  addonPrompt,
+  hasEventHandlers,
+} from "@traiblazer/addons";
+import {
   type AttachmentRef,
+  botAddons,
   bots,
   businessProfiles,
   type Channel,
   type Citation,
   conversations,
   type Db,
+  jobs,
   type MessageFlags,
   messageAttachments,
   messages,
   type ReplyImage,
+  tenants,
   usageEvents,
   withTenant,
 } from "@traiblazer/db";
-import type {
-  ChatMessage,
-  ContentBlock,
-  EmbeddingProvider,
-  GatewayResultMeta,
-  ImageMediaType,
-  LLMGateway,
+import {
+  type ChatMessage,
+  type ContentBlock,
+  type EmbeddingProvider,
+  emptyUsage,
+  type GatewayResultMeta,
+  type ImageMediaType,
+  type LLMGateway,
+  toolCallsOf,
 } from "@traiblazer/llm";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { JOB_TYPES } from "../jobs.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
 import { PhotoMarkerFilter } from "./photo-markers.js";
 import { buildSearchQueryPrompt, buildSystemBlocks, parseSearchQueries, photoPromptId } from "./prompt.js";
 import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./retrieval.js";
+import {
+  chatTools,
+  MAX_TOOL_ROUNDS,
+  requestFollowUp,
+  runToolCalls,
+  toToolDefinition,
+} from "./tools/index.js";
 
 export interface ChatDeps {
   db: Db;
@@ -33,6 +54,8 @@ export interface ChatDeps {
   embeddings?: EmbeddingProvider | null;
   now?: () => Date;
   log?: (msg: string, data?: Record<string, unknown>) => void;
+  /** Admin portal origin, for links in add-on notifications. */
+  adminUrl?: string;
 }
 
 /** An image the visitor sent, already validated and stripped of metadata by the API. */
@@ -120,6 +143,27 @@ const BUSY_TEXT: Record<string, string> = {
 /** True for "too many requests" from an AI provider (Anthropic and OpenAI SDK errors carry `status`). */
 export const isCapacityError = (error: unknown) => (error as { status?: number } | null)?.status === 429;
 
+/** Adds one model call's usage and cost to the running total for the answer. */
+function addMeta(total: GatewayResultMeta | undefined, next: GatewayResultMeta): GatewayResultMeta {
+  if (!total) return { ...next, usage: { ...next.usage } };
+  const usage = emptyUsage();
+  for (const key of Object.keys(usage) as (keyof typeof usage)[]) {
+    usage[key] = total.usage[key] + next.usage[key];
+  }
+  // Provider, model and stop reason are the latest call's; tokens and cost cover every call.
+  return { ...next, usage, costMicros: total.costMicros + next.costMicros };
+}
+
+/** Passages from several searches as one list, best first, each passage once. */
+function mergePassages(...lists: Passage[][]): Passage[] {
+  const byKey = new Map<string, Passage>();
+  for (const passage of lists.flat()) {
+    const existing = byKey.get(passage.key);
+    if (!existing || passage.score > existing.score) byKey.set(passage.key, passage);
+  }
+  return [...byKey.values()].sort((a, b) => b.score - a.score);
+}
+
 /** Sources shown under an answer: distinct web pages among the passages, best first. */
 export function citationsFrom(passages: Passage[], max = 3): Citation[] {
   // Only cite pages that matched about as strongly as the best passage; weak matches are context,
@@ -135,6 +179,43 @@ export function citationsFrom(passages: Passage[], max = 3): Citation[] {
     if (out.length >= max) break;
   }
   return out;
+}
+
+/** Chat events for add-ons. The owner's own test chat (playground) never triggers them. */
+function chatEvents(e: {
+  input: ChatInput;
+  conversationId: string;
+  isNew: boolean;
+  message: string;
+  answer: string;
+  language: string | null;
+  flags: MessageFlags;
+}): AddonEvent[] {
+  if (e.input.channel === "playground") return [];
+  const at = new Date();
+  const events: AddonEvent[] = [];
+  if (e.isNew) {
+    events.push({
+      type: "conversation.started",
+      conversationId: e.conversationId,
+      channel: e.input.channel,
+      language: e.language,
+      message: e.message,
+      at,
+    });
+  }
+  // A knowledge gap, not a failed or busy answer (those say nothing about the business's information).
+  if (e.flags.unanswered && !e.flags.error && !e.flags.busy) {
+    events.push({
+      type: "question.unanswered",
+      conversationId: e.conversationId,
+      language: e.language,
+      question: e.message,
+      answer: e.answer,
+      at,
+    });
+  }
+  return events;
 }
 
 /**
@@ -172,6 +253,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             .limit(1)
         )[0]
       : undefined;
+    const isNew = !conversation;
     if (!conversation) {
       [conversation] = await tx
         .insert(conversations)
@@ -265,14 +347,52 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       })
       .where(eq(conversations.id, conversation!.id));
 
-    return { bot, profile: profile ?? null, conversationId: conversation!.id, history, historyImages };
+    // Add-ons installed on this assistant; the owner's language only matters for notifications.
+    const addons = activeAddons(
+      await tx
+        .select({
+          addonId: botAddons.addonId,
+          enabled: botAddons.enabled,
+          config: botAddons.config,
+          configVersion: botAddons.configVersion,
+        })
+        .from(botAddons)
+        .where(eq(botAddons.botId, bot.id)),
+    );
+    const [tenant] = hasEventHandlers(addons)
+      ? await tx
+          .select({ ownerLanguage: tenants.ownerLanguage })
+          .from(tenants)
+          .where(eq(tenants.id, input.tenantId))
+          .limit(1)
+      : [];
+    const addonCtx: AddonContext = {
+      tenantId: input.tenantId,
+      botId: bot.id,
+      businessName: profile?.businessName ?? bot.name,
+      ownerLanguage: tenant?.ownerLanguage === "fr" ? "fr" : "en",
+      adminUrl: deps.adminUrl,
+    };
+
+    return {
+      bot,
+      profile: profile ?? null,
+      conversationId: conversation!.id,
+      isNew,
+      history,
+      historyImages,
+      addons,
+      addonCtx,
+    };
   });
 
   if (!setup) {
     yield { type: "error", code: "unavailable", message: "This assistant is not available right now." };
     return;
   }
-  const { bot, profile, conversationId, history, historyImages } = setup;
+  const { bot, profile, conversationId, isNew, history, historyImages, addons, addonCtx } = setup;
+  const addonLog = (msg: string, data?: Record<string, unknown>) =>
+    deps.log?.(msg, { ...data, botId: bot.id });
   const lang2 = language === "fr" ? "fr" : "en";
   yield { type: "start", conversationId };
 
@@ -319,6 +439,11 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   let answer = "";
   let chatMeta: GatewayResultMeta | undefined;
   let auxMeta: GatewayResultMeta | undefined;
+  /** How many model calls the answer took (more than one when tools were used). */
+  let modelCalls = 0;
+  const toolsUsed = new Set<string>();
+  /** Things tools did that add-ons hear about (e.g. a request the visitor left). */
+  const toolEvents: AddonEvent[] = [];
   let citations: Citation[] = [];
   const flags: MessageFlags = {};
   let offeredPhotos: PhotoPassage[] = [];
@@ -376,7 +501,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       if (!passages.length && !photos.length && queries.length) flags.unanswered = true;
 
       // 4. Stream the answer. Photo markers are taken out of the text; only photos offered in
-      // this prompt can be shown.
+      // this prompt can be shown. The model may stop to call tools (e.g. search again with other
+      // words); their results are added to the conversation and it is asked again.
       const markers = new PhotoMarkerFilter();
       const byPromptId = new Map(offeredPhotos.map((p, i) => [photoPromptId(i), p]));
       const choose = (ids: string[]) => {
@@ -388,35 +514,82 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           }
         }
       };
-      for await (const event of deps.gateway.stream("chat", {
+      const tools = chatTools(bot);
+      const request = {
         system: buildSystemBlocks({
           bot,
           profile,
           passages: passages as Passage[],
           photos: offeredPhotos,
+          addons: addonPrompt(addons, addonCtx, addonLog),
           now: deps.now?.() ?? new Date(),
         }),
-        messages: [...modelHistory, { role: "user", content: current }],
+        tools: tools.map(toToolDefinition),
         maxTokens: 16000,
-        effort: "low",
+        effort: "low" as const,
         signal: input.signal,
-      })) {
-        if (event.type === "text") {
-          const { text, ids } = markers.push(event.text);
-          choose(ids);
-          if (text) {
-            answer += text;
-            yield emit(text);
+      };
+      const turn: ChatMessage[] = [...modelHistory, { role: "user", content: current }];
+      let found = passages as Passage[];
+      // Text written before a tool call and text written after it are separate paragraphs.
+      let gap = "";
+      const write = (text: string): ChatStreamEvent => {
+        answer += gap + text;
+        const event = emit(gap + text);
+        gap = "";
+        return event;
+      };
+
+      for (let round = 0; ; round++) {
+        let meta: GatewayResultMeta | undefined;
+        for await (const event of deps.gateway.stream("chat", { ...request, messages: turn })) {
+          if (event.type === "text") {
+            const { text, ids } = markers.push(event.text);
+            choose(ids);
+            if (text) yield write(text);
+          } else {
+            meta = event;
           }
-        } else {
-          chatMeta = event;
         }
+        const rest = markers.flush();
+        if (rest) yield write(rest);
+        if (!meta) break;
+        modelCalls++;
+        chatMeta = addMeta(chatMeta, meta);
+
+        // Tools run only for a complete turn that asked for them, and only a few rounds per answer.
+        const calls = toolCallsOf(meta.message);
+        if (meta.stopReason !== "tool_use" || !meta.message || !calls.length || round >= MAX_TOOL_ROUNDS) {
+          break;
+        }
+        const ran = await runToolCalls(
+          tools,
+          calls,
+          {
+            db: deps.db,
+            tenantId: input.tenantId,
+            botId: bot.id,
+            conversationId,
+            channel: input.channel,
+            language,
+            embeddings: deps.embeddings,
+            signal: input.signal,
+          },
+          { lastRound: round === MAX_TOOL_ROUNDS - 1, log: deps.log },
+        );
+        for (const name of ran.used) toolsUsed.add(name);
+        toolEvents.push(...ran.events);
+        if (ran.passages.length) {
+          found = mergePassages(found, ran.passages);
+          citations = citationsFrom(found);
+          flags.unanswered = undefined;
+        }
+        turn.push(meta.message, { role: "user", content: ran.results });
+        if (answer.trim()) gap = "\n\n";
       }
-      const rest = markers.flush();
-      if (rest) {
-        answer += rest;
-        yield emit(rest);
-      }
+      if (toolsUsed.size) flags.tools = [...toolsUsed];
+      // A request passed to staff reaches the business as a request, not also as a knowledge gap.
+      if (toolsUsed.has(requestFollowUp.name)) flags.unanswered = undefined;
 
       if (chatMeta?.stopReason === "refusal" || (!answer.trim() && !shownPhotos.length)) {
         shownPhotos.length = 0;
@@ -486,7 +659,29 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           kind,
           quantity: meta.usage.inputTokens + meta.usage.outputTokens,
           costMicros: meta.costMicros,
-          metadata: { provider: meta.provider, model: meta.model, ...meta.usage },
+          metadata: {
+            provider: meta.provider,
+            model: meta.model,
+            ...meta.usage,
+            ...(kind === "llm.chat" && modelCalls > 1 ? { modelCalls, tools: [...toolsUsed] } : {}),
+          },
+        })),
+      );
+    }
+
+    // Add-on effects (e.g. notification emails) run later in the worker, queued with the answer.
+    // The owner's own test chat never notifies, whatever happened in it.
+    const events = [
+      ...chatEvents({ input, conversationId, isNew, message, answer, language, flags }),
+      ...(input.channel === "playground" ? [] : toolEvents),
+    ];
+    const effects = events.flatMap((event) => addonEffects(addons, event, addonCtx, addonLog));
+    if (effects.length) {
+      await tx.insert(jobs).values(
+        effects.map(({ addonId, effect }) => ({
+          tenantId: input.tenantId,
+          type: JOB_TYPES.addonEffect,
+          payload: { botId: bot.id, addonId, effect },
         })),
       );
     }

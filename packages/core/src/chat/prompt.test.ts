@@ -73,3 +73,16 @@ describe("response guidelines and workflows in the prompt", () => {
     expect(text).not.toContain("<workflows>");
   });
 });
+
+describe("add-ons in the prompt", () => {
+  it("adds the add-ons' text as business information, and nothing when there is none", () => {
+    const blocks = (addons: string | null) =>
+      buildSystemBlocks({ bot: bot({}), profile: null, passages: [], addons, now: new Date() });
+    const text = blocks("## Online shop\nOnline shop: https://shop.example.com")[1]!.text;
+    expect(text).toContain("<add_ons>\n## Online shop\nOnline shop: https://shop.example.com\n</add_ons>");
+    expect(blocks(null)[1]!.text).not.toContain("<add_ons>");
+    expect(blocks(null)[0]!.text).toContain(
+      "Answer only from <business_profile>, <add_ons> and <knowledge>.",
+    );
+  });
+});

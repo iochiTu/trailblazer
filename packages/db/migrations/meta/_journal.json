@@ -134,6 +134,34 @@
       "when": 1794190646823,
       "tag": "0018_knowledge_images_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794209642797,
+      "tag": "0019_bot_addons",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794209643263,
+      "tag": "0020_bot_addons_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794282030260,
+      "tag": "0021_leads",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794282030799,
+      "tag": "0022_leads_rls",
+      "breakpoints": true
     }
   ]
 }

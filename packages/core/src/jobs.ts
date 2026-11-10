@@ -3,7 +3,11 @@ import { eq, sql } from "drizzle-orm";
 
 export type JobRow = typeof jobs.$inferSelect;
 
-export const JOB_TYPES = { sourceSync: "source.sync" } as const;
+export const JOB_TYPES = {
+  sourceSync: "source.sync",
+  /** Work an add-on asked for during a chat (payload: { botId, addonId, effect }). */
+  addonEffect: "addon.effect",
+} as const;
 
 export async function enqueueJob(
   db: Db,
