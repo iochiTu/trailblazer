@@ -208,23 +208,23 @@ function actionsHtml(data: PageData): string {
   const buttons: string[] = [];
   if (data.phone) {
     buttons.push(
-      `<a class="tbp-action tbp-action-primary" href="${esc(telHref(data.phone))}">${icon("call")}<span>${t("call")}</span></a>`,
+      `<a class="tbp-action tbp-action-primary" data-action="call" href="${esc(telHref(data.phone))}">${icon("call")}<span>${t("call")}</span></a>`,
     );
   }
   const booking = webUrl(data.bookingUrl);
   if (booking)
     buttons.push(
-      `<a class="tbp-action" href="${esc(booking)}" ${external}>${icon("book")}<span>${t("book")}</span></a>`,
+      `<a class="tbp-action" data-action="book" href="${esc(booking)}" ${external}>${icon("book")}<span>${t("book")}</span></a>`,
     );
   if (data.email) {
     buttons.push(
-      `<a class="tbp-action" href="mailto:${esc(data.email)}">${icon("email")}<span>${t("email")}</span></a>`,
+      `<a class="tbp-action" data-action="email" href="mailto:${esc(data.email)}">${icon("email")}<span>${t("email")}</span></a>`,
     );
   }
   if (data.address) {
     const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.address)}`;
     buttons.push(
-      `<a class="tbp-action" href="${esc(maps)}" ${external}>${icon("directions")}<span>${t("directions")}</span></a>`,
+      `<a class="tbp-action" data-action="directions" href="${esc(maps)}" ${external}>${icon("directions")}<span>${t("directions")}</span></a>`,
     );
   }
   for (const link of data.links) {
@@ -232,13 +232,13 @@ function actionsHtml(data: PageData): string {
     if (!url) continue;
     const label = link.label ? esc(link.label) : t(link.icon === "shop" ? "shop" : "link");
     buttons.push(
-      `<a class="tbp-action" href="${esc(url)}" ${external}>${icon(link.icon === "shop" ? "shop" : "link")}<span dir="auto">${label}</span></a>`,
+      `<a class="tbp-action" data-action="link" href="${esc(url)}" ${external}>${icon(link.icon === "shop" ? "shop" : "link")}<span dir="auto">${label}</span></a>`,
     );
   }
   const website = webUrl(data.websiteUrl);
   if (website)
     buttons.push(
-      `<a class="tbp-action" href="${esc(website)}" ${external}>${icon("website")}<span>${t("website")}</span></a>`,
+      `<a class="tbp-action" data-action="website" href="${esc(website)}" ${external}>${icon("website")}<span>${t("website")}</span></a>`,
     );
   return buttons.length
     ? `<nav class="tbp-actions" aria-label="${t("contact")}">${buttons.join("")}</nav>`
@@ -258,7 +258,7 @@ function itemHtml(data: PageData, item: PageItem): string {
   if (item.action === "book") {
     buttons.push(
       booking
-        ? `<a class="tbp-btn tbp-btn-primary" href="${esc(booking)}" target="_blank" rel="noopener noreferrer">${esc(t("book"))}</a>`
+        ? `<a class="tbp-btn tbp-btn-primary" data-action="book" href="${esc(booking)}" target="_blank" rel="noopener noreferrer">${esc(t("book"))}</a>`
         : askButton(t("book"), t("bookMessage", name), true),
     );
   }

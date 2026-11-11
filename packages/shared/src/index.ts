@@ -286,6 +286,16 @@ export const chatImageSchema = z.object({
   data: z.base64().max(Math.ceil((MAX_CHAT_IMAGE_BYTES * 4) / 3) + 4),
 });
 
+/** Contact buttons on the business page whose taps are counted (same list as the page_stats columns). */
+export const PAGE_ACTIONS = ["call", "book", "email", "directions", "website", "link"] as const;
+export type PageAction = (typeof PAGE_ACTIONS)[number];
+
+/** A tap on a contact button of the business page, sent by the page itself (no visitor data). */
+export const pageEventSchema = z.object({
+  publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
+  action: z.enum(PAGE_ACTIONS),
+});
+
 export const publicChatSchema = z
   .object({
     publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),

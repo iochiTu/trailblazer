@@ -2,7 +2,8 @@
 
 > Working name taken from the project folder. Status: **web chat platform and AI business page built
 > (Phase 1, milestones 1.1–1.3 — see README); setup without a website (1.4) built except Google
-> listing details (open decision §17.4); next: pilot readiness (1.5); phone and SMS not started**.
+> listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics built;
+> phone and SMS not started**.
 > **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
 > the hosted chat page works as the business's website, for businesses that have no site or an outdated
 > one (§7.1). Phone and SMS move to a later phase. The audience is unchanged from v5.
@@ -382,7 +383,9 @@ maintain. It is **one designed page, not a website builder**: the layout is fixe
 Built as: the API renders the page into the chat app's HTML (`apps/api/src/page/`), the chat app mounts
 in it; friendly link `<chat-domain>/<slug>` (path form chosen for now, open decision §17.3 can still
 move it to a subdomain); `catalog_items` and `notices` tables (RLS). Not yet: `robots.txt` / sitemap,
-page text in Tier 2 languages (page is EN or FR by the default language), page statistics (1.5).
+page text in Tier 2 languages (page is EN or FR by the default language). Page statistics (1.5): daily
+views and contact-button taps in `page_stats` (RLS, totals only), shown with questions and requests on
+the admin's Business page tab.
 
 **Two presets of the same page**
 
@@ -754,6 +757,7 @@ All tables carry `tenant_id` with RLS.
 | `notices`                                          | text + translations, starts_at, ends_at                                                                              |
 | `knowledge_sources`, `documents`, `chunks`         | language per document/chunk, embedding, tsvector, trigram                                                            |
 | `source_files`                                     | an uploaded price list or brochure waiting to be read (private; removed once its text is on the source)             |
+| `page_stats`                                       | daily business page views and contact-button taps per assistant (totals only, no visitor data)                       |
 | `qa_pairs`                                         | question variants, answer, **translations** (machine / owner-reviewed flag)                                          |
 | `catalog_items`                                    | kind, name, description, price text, category, photo, main button, order, shown (built); structured attributes (Phase 3 feeds) |
 | `conversations`, `messages`                        | channel, **language**, original + translated text, citations, scope flags, model/provider, tokens, cost              |
@@ -866,7 +870,7 @@ pack phases in code (1–4) follow the industry phases above.
 | **1.2 Business page** (done) | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
 | **1.3 Requests for trades and auto shops** (done) | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
 | **1.4 Setup without a website** (done, except Google listing details) | Services and products, with prices, and the page description proposed from the sources and added to the page after the owner's review; price list and brochure upload (PDF with a text layer, DOCX, photo read by a vision model) as a knowledge source; interview mode (industry questions, EN/FR, answers saved as a knowledge source). **Waiting:** Google listing details, on open decision §17.4. Not covered yet: scanned PDFs (upload photos of the pages instead) and correcting the text read from a file |
-| **1.5 Pilot readiness** | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) |
+| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** page views, contact-button taps, questions and requests per day on the Business page tab |
 
 **MVP success criteria:** 10–20 trades and auto businesses with a live page in one or two cities, at least
 half of them with no website or an outdated one before; a page live within one working day of receiving

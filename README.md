@@ -5,8 +5,8 @@ for the product plan and roadmap.
 
 **Status:** Phase 1, milestones 1.1 (chat end-to-end), 1.2 (business page) and 1.3 (requests for
 trades and auto shops: urgent triage and alerts, request details and photos, service-area check, call
-and book buttons), and most of 1.4 (setup without a website: services and prices proposed from the
-sources, price-list and brochure upload, interview) — knowledge sources
+and book buttons), most of 1.4 (setup without a website: services and prices proposed from the
+sources, price-list and brochure upload, interview), and the first part of 1.5 (page statistics) — knowledge sources
 (website crawl, text, Q&A, uploaded price lists and brochures, interview answers), retrieval, streaming answers with sources, multi-provider LLM gateway,
 three ways to put the chat on a customer's site (business page, inline iframe, floating widget), and
 the business page itself: services and products, notices, gallery, hours, friendly link, search-engine
@@ -72,6 +72,14 @@ on phones. `?embed=…` (iframe, widget, test chat) still gets the plain chat.
 - Edited on the admin's **Business page** tab, with a live preview (`/c/<key>?preview=1` in an iframe:
   works before publishing, chats are logged as tests). Page text is English or French (the
   assistant's default language); the chat on it still answers in the visitor's language.
+- **Page statistics** ("How your page is doing" on the Business page tab, 7/30/90 days): page views
+  and taps on the contact buttons (`page_stats`, RLS: daily totals per assistant in the reporting time
+  zone, nothing about the visitor), next to the questions visitors asked (page and website chat) and
+  the requests they left, both without the owner's tests. A view is a top-level browser load of the
+  published page (active assistant, web version on): not `?embed`, not `?preview=1`, not prefetches
+  or robots (`isPersonVisit` in `apps/api/src/lib/page-stats.ts`). The buttons carry `data-action`;
+  the chat app sends taps with `navigator.sendBeacon` to `POST /v1/public/page-events` (same origin,
+  30 per minute per address). API: `GET /v1/tenants/:t/bots/:b/page-stats?days=30`.
 
 ## Add-ons
 

@@ -22,24 +22,41 @@ function niceMax(value: number): number {
 const parseDay = (date: string) => new Date(`${date}T12:00:00`);
 
 /**
- * Questions per day: one series, so no legend (the title names it). Thin bars (≤ 24px) grow from
+ * One count per day: one series, so no legend (the title names it). Thin bars (≤ 24px) grow from
  * one baseline with a rounded data end; hairline gridlines; each day is a focusable hit target
  * with a tooltip; a table view carries the same numbers for screen readers and exact reading.
  */
-export function DailyChart({ data }: { data: DailyPoint[] }) {
+export function DailyBars<T extends { date: string }>({
+  title,
+  data,
+  value,
+  tooltip,
+  columns,
+  empty,
+}: {
+  title: string;
+  data: T[];
+  /** The bar's height. */
+  value: (point: T) => number;
+  tooltip: (point: T, date: Date) => string;
+  /** Columns of the table view after the date. */
+  columns: { label: string; value: (point: T) => number }[];
+  /** Shown instead of the chart while every day is zero. */
+  empty: string;
+}) {
   const { t, language } = useI18n();
   const [active, setActive] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
-  const max = niceMax(Math.max(...data.map((d) => d.questions), 0));
+  const max = niceMax(Math.max(...data.map(value), 0));
   const ticks = [max, max / 2, 0];
   const fmtNumber = new Intl.NumberFormat(language);
   const fmtShort = new Intl.DateTimeFormat(language, { month: "short", day: "numeric" });
-  const total = data.reduce((sum, d) => sum + d.questions, 0);
+  const total = data.reduce((sum, d) => sum + value(d), 0);
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-medium">{t("usage.daily")}</h3>
+        <h3 className="font-medium">{title}</h3>
         <button
           type="button"
           className="muted text-sm underline-offset-4 hover:underline"
@@ -50,7 +67,7 @@ export function DailyChart({ data }: { data: DailyPoint[] }) {
       </div>
 
       {total === 0 ? (
-        <p className="muted text-sm">{t("usage.noData")}</p>
+        <p className="muted text-sm">{empty}</p>
       ) : (
         <div className="flex gap-2" aria-hidden={showTable}>
           {/* Y axis: clean ticks in text tokens */}
@@ -77,15 +94,11 @@ export function DailyChart({ data }: { data: DailyPoint[] }) {
             <ul
               className="relative m-0 flex h-40 list-none items-end p-0"
               style={{ gap: 2 }}
-              aria-label={t("usage.daily")}
+              aria-label={title}
               onMouseLeave={() => setActive(null)}
             >
               {data.map((d, i) => {
-                const label = t("usage.dayTooltip", {
-                  date: parseDay(d.date),
-                  questions: d.questions,
-                  conversations: d.conversations,
-                });
+                const label = tooltip(d, parseDay(d.date));
                 return (
                   <li key={d.date} className="relative flex h-full flex-1">
                     {/* Hit target = the whole day column (bigger than the bar); focusable for keyboards. */}
@@ -97,11 +110,11 @@ export function DailyChart({ data }: { data: DailyPoint[] }) {
                       onFocus={() => setActive(i)}
                       onBlur={() => setActive(null)}
                     >
-                      {d.questions > 0 && (
+                      {value(d) > 0 && (
                         <span
                           className="block w-full max-w-6 rounded-t bg-[var(--chart)]"
                           style={{
-                            height: `${(d.questions / max) * 100}%`,
+                            height: `${(value(d) / max) * 100}%`,
                             opacity: active === null || active === i ? 1 : 0.55,
                           }}
                         />
@@ -136,16 +149,22 @@ export function DailyChart({ data }: { data: DailyPoint[] }) {
             <thead className="muted text-start">
               <tr>
                 <th className="py-1 text-start font-normal">{t("usage.date")}</th>
-                <th className="py-1 text-end font-normal">{t("usage.questions")}</th>
-                <th className="py-1 text-end font-normal">{t("usage.conversations")}</th>
+                {columns.map((c) => (
+                  <th key={c.label} className="py-1 text-end font-normal">
+                    {c.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="tabular-nums">
               {[...data].reverse().map((d) => (
                 <tr key={d.date} className="border-t border-[var(--border)]">
                   <td className="py-1">{fmtShort.format(parseDay(d.date))}</td>
-                  <td className="py-1 text-end">{fmtNumber.format(d.questions)}</td>
-                  <td className="py-1 text-end">{fmtNumber.format(d.conversations)}</td>
+                  {columns.map((c) => (
+                    <td key={c.label} className="py-1 text-end">
+                      {fmtNumber.format(c.value(d))}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -153,5 +172,25 @@ export function DailyChart({ data }: { data: DailyPoint[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Questions per day on the usage page. */
+export function DailyChart({ data }: { data: DailyPoint[] }) {
+  const { t } = useI18n();
+  return (
+    <DailyBars
+      title={t("usage.daily")}
+      data={data}
+      value={(d) => d.questions}
+      tooltip={(d, date) =>
+        t("usage.dayTooltip", { date, questions: d.questions, conversations: d.conversations })
+      }
+      columns={[
+        { label: t("usage.questions"), value: (d) => d.questions },
+        { label: t("usage.conversations"), value: (d) => d.conversations },
+      ]}
+      empty={t("usage.noData")}
+    />
   );
 }

@@ -37,6 +37,7 @@ import {
   MAX_CHAT_IMAGE_BYTES,
   MAX_CHAT_IMAGES,
   PAGE_SLUG_RE,
+  pageEventSchema,
   publicChatSchema,
   RESERVED_PAGE_SLUGS,
 } from "@traiblazer/shared";
@@ -47,6 +48,7 @@ import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guar
 import { HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
 import { prepareChatImage } from "../lib/images.js";
+import { countPageEvent, isPersonVisit } from "../lib/page-stats.js";
 import { renderBusinessPage, renderChatOnly, schemaTypeFor } from "../page/render.js";
 import { pageLanguage } from "../page/strings.js";
 import { publicAssetUrl } from "./assets.js";
@@ -117,6 +119,7 @@ const UNAVAILABLE_PAGE = `<!doctype html><html lang="en"><head><meta charset="ut
  *   POST /v1/public/chat             send a message (optionally with images); the answer streams
  *                                    back as server-sent events
  *   GET  /v1/public/conversations/:id?key&visitorId   restore a visitor's conversation
+ *   POST /v1/public/page-events      a tap on a contact button of the business page (counted)
  */
 export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db, config } = ctx;
@@ -214,9 +217,17 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const template = await readFile(path.join(distDir, "index.html"), "utf8").catch(() => null);
     if (!template) throw new HttpError(503, "unavailable", "Chat page is not built (run pnpm build)");
 
+    const preview = request.query.preview === "1";
     const html = request.query.embed
       ? renderChatOnly(template, publicKey)
-      : await businessPage(template, found, publicKey, request.query.preview === "1", request);
+      : await businessPage(template, found, publicKey, preview, request);
+
+    // Page statistics: a person opening the published page (not the owner's preview or a robot).
+    if (!request.query.embed && !preview && found.bot.status === "active" && isPersonVisit(request.headers)) {
+      await countPageEvent(db, found.tenantId, found.botId, "views").catch((error) =>
+        request.log.warn(error, "page view not counted"),
+      );
+    }
 
     const ancestors = ["'self'", adminOrigin, ...found.allowedOrigins].join(" ");
     reply.header(
@@ -520,6 +531,22 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         res.end();
         await admission.release();
       }
+    },
+  );
+
+  app.post(
+    "/v1/public/page-events",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, bodyLimit: 1024 },
+    async (request, reply) => {
+      assertSameOrigin(request.headers.origin);
+      const parsed = pageEventSchema.safeParse(request.body);
+      // Nothing for the page to do with an answer: it only says whether the tap was counted.
+      if (!parsed.success) return reply.code(400).send({ error: "invalid", message: "Unknown event" });
+      const found = await loadBot(parsed.data.publicKey);
+      if (found?.bot.status === "active" && found.bot.hostedPageEnabled) {
+        await countPageEvent(db, found.tenantId, found.botId, parsed.data.action);
+      }
+      return reply.code(204).send();
     },
   );
 

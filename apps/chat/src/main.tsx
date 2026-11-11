@@ -43,6 +43,19 @@ if (onPage) {
       chat.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   });
+
+  // Page statistics: count taps on the contact buttons (Call, Book, Directions…). Only which button,
+  // never who; the owner's preview isn't counted.
+  if (!preview) {
+    document.addEventListener("click", (event) => {
+      const action = (event.target as Element | null)
+        ?.closest?.("a[data-action]")
+        ?.getAttribute("data-action");
+      if (!action) return;
+      const body = new Blob([JSON.stringify({ publicKey, action })], { type: "application/json" });
+      navigator.sendBeacon?.("/v1/public/page-events", body);
+    });
+  }
 }
 
 render(

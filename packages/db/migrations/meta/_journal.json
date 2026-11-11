@@ -225,6 +225,20 @@
       "when": 1794363316615,
       "tag": "0031_source_files_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794398138125,
+      "tag": "0032_page_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794398145185,
+      "tag": "0033_page_stats_rls",
+      "breakpoints": true
     }
   ]
 }
