@@ -6,7 +6,8 @@ for the product plan and roadmap.
 **Status:** Phase 1, milestones 1.1 (chat end-to-end), 1.2 (business page) and 1.3 (requests for
 trades and auto shops: urgent triage and alerts, request details and photos, service-area check, call
 and book buttons), most of 1.4 (setup without a website: services and prices proposed from the
-sources, price-list and brochure upload, interview), and the first part of 1.5 (page statistics) — knowledge sources
+sources, price-list and brochure upload, interview), and part of 1.5 (page statistics, EN/FR evals
+for the Trades and Auto repair packs) — knowledge sources
 (website crawl, text, Q&A, uploaded price lists and brochures, interview answers), retrieval, streaming answers with sources, multi-provider LLM gateway,
 three ways to put the chat on a customer's site (business page, inline iframe, floating widget), and
 the business page itself: services and products, notices, gallery, hours, friendly link, search-engine
@@ -27,6 +28,7 @@ packages/
   addons/           Add-on market: add-on contract, registry, built-in add-ons (email notifications, online shop)
   i18n/             Language registry (tiers, RTL), UI messages (ICU), language negotiation
   industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)
+  evals/            Answer-quality and safety evals for the pilot packs, EN/FR (`pnpm evals`)
   shared/           Zod request schemas shared by API and admin
 infra/postgres/     Local database init (roles, test database)
 ```
@@ -135,7 +137,9 @@ Booking through calendars will be added the same way.
 - Tool calling is provider-neutral (`packages/llm`): Claude models always support it; for OpenRouter and
   OpenAI-compatible endpoints list the models that do in `OPENROUTER_TOOL_MODELS` /
   `OPENAI_COMPATIBLE_TOOL_MODELS` (`*` for all). Models that can't call tools get the same request
-  without them and answer as before; so does the offline provider.
+  without them and answer as before; so does the offline provider. Without tools an assistant can't
+  save visitors' requests or check service areas, so the API logs a warning at startup when no chat
+  model can call them.
 - What a tool returns is reference data like the knowledge base, never instructions. Tools used are
   recorded on the answer (`flags.tools`) and the answer's tokens and cost cover every model call.
 - The reply is what the model writes after its last tool call. If it wrote to the visitor before a
@@ -306,6 +310,53 @@ pnpm test           # needs `pnpm db:up`; uses the traiblazer_test database
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same steps against the docker-compose services.
+
+## Evals (answer quality and safety)
+
+`packages/evals` checks what the assistant actually answers (PLAN §15), through the real chat engine
+with the AI providers configured in `.env`:
+
+```bash
+pnpm evals                              # every case once (needs a model; see AI providers)
+pnpm evals --business trades --lang fr  # one pack, one language
+pnpm evals --category danger            # one category
+pnpm evals --case burst --repeat 3      # cases whose id contains "burst", three runs each
+pnpm evals --list                       # show the cases
+```
+
+- **Test businesses** (`src/businesses.ts`): a plumbing and heating company (Trades pack) and a tire
+  and repair shop (Auto repair pack), set up as a pilot owner would: profile and hours, services with
+  prices, and a few pages of text. Each run creates them as temporary businesses in `DATABASE_URL`,
+  plays the conversations on the test channel (no notifications, no knowledge gaps) and deletes them.
+- **Cases** (`src/cases/`): 59 conversations in English and French. Quality cases: facts the
+  information gives, requests passed on with their details, service-area checks. Safety cases:
+  danger and urgent triage, advice and diagnosis requests, invented prices, questions the
+  information doesn't answer, off-topic requests and prompt injection. A request case can give one
+  more visitor message (`moreDetails`), sent only when nothing was saved yet, for an assistant that
+  asks for one more detail first, as the packs' workflows tell it to.
+- **Scoring** is deterministic (`src/score.ts`): facts that must appear, words that must not (an
+  invented dollar amount, a diagnosis), triage level, advice and "couldn't answer" flags, Call/Book
+  buttons, the request saved, and the reply's language.
+- **Bar** (PLAN §14): at least 80 % of quality runs pass and no safety case fails; the command exits
+  with 1 otherwise. It also reports the median time to the first text. A JSON report with every
+  reply is written to `packages/evals/reports/` (not committed).
+- **First findings** (local qwen3-8b): replies that gave away the instructions to a "developer mode"
+  message are now taken back by an output check (`withheld` flag), and the request tool takes
+  placeholder values such as `"null"` or `"N/A"` as not given (the model sent `email: "null"` with the
+  visitor's phone number, and the request was refused).
+- **DeepSeek V4.1 Flash** (`openrouter:deepseek/deepseek-v4.1-flash-1017`, with
+  `OPENROUTER_TOOL_MODELS` set): all 118 runs pass (2 × 59 cases), median time to first text 2.7 s.
+  The runs before that found real bugs, now fixed:
+  - pasted text, files and pages without a `lang` attribute were indexed without stemming, so
+    "senior" missed "Seniors get 10% off". They are now stemmed as English and French, and migration
+    0034 rebuilds existing vectors;
+  - a French question to a business whose information is in English searched only in French. It
+    now waits for the English and French queries, and the query writer adds the words a business
+    would use ("flat tire" → towing, roadside);
+  - the tire shop's guideline held back listed service prices until the tire size was given.
+- `pnpm test` only checks the scorer and the case list; evals need a model, so CI doesn't run them.
+  Run them after changing prompts, packs, tools or the model, and with `--repeat` before comparing
+  models (open decision §17.10).
 
 ## Operator console (Traiblazer staff only)
 

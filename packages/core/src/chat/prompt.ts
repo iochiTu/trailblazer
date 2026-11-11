@@ -285,6 +285,7 @@ export function buildSearchQueryPrompt(history: { role: string; content: string 
       {
         text: `You turn a website visitor's latest message into search queries for a business's knowledge base, which is written in English and French, and you sort the message.
 Resolve references to the earlier conversation so each query stands alone. Keep names and numbers.
+The search matches words, so after the key words add a few other words the business's own text might use for the same thing (for "flat tire on the highway": tire, puncture, breakdown, towing, roadside). Keep each query under 15 words.
 Reply with exactly three lines and nothing else:
 EN: <short English search query>
 FR: <short French search query>

@@ -43,6 +43,7 @@ import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
 import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
 import { MarkerFilter } from "./markers.js";
+import { revealsInstructions, WITHHELD_TEXT } from "./output-check.js";
 import { buildSearchQueryPrompt, buildSystemBlocks, parseSearchQueries, photoPromptId } from "./prompt.js";
 import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./retrieval.js";
 import { chatTools, MAX_TOOL_ROUNDS, runToolCalls, toToolDefinition } from "./tools/index.js";
@@ -549,7 +550,12 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           signal: input.signal,
         });
       let queries = message ? [message] : [];
-      if (history.length || (message && !isEnOrFr(language))) {
+      // English or French that isn't the business's main language (a French question to a business
+      // whose information is in English): the answer waits for the queries in both languages, as
+      // keyword search can't match across languages.
+      const mainLanguage = bot.defaultLanguage.toLowerCase().split("-")[0];
+      const otherLanguage = Boolean(message) && isEnOrFr(language) && language !== mainLanguage;
+      if (history.length || (message && !isEnOrFr(language)) || otherLanguage) {
         const aux = await analyze();
         auxMeta = aux;
         queries = parseSearchQueries(aux.text, message || IMAGE_ONLY_TEXT).filter(
@@ -640,11 +646,24 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       }
       /** An earlier round of this answer already wrote to the visitor. */
       let wroteEarlier = false;
+      /**
+       * The reply gave away the instructions or tools (see output-check.ts): it was taken back, and
+       * the rest of the model's output is read (for its usage) but never shown.
+       */
+      let withheld = false;
+      function* checkDisclosure(): Generator<ChatStreamEvent> {
+        if (!withheld && revealsInstructions(answer)) {
+          withheld = true;
+          yield* retract();
+        }
+      }
 
       for (let round = 0; ; round++) {
         let meta: GatewayResultMeta | undefined;
         for await (const event of deps.gateway.stream("chat", { ...request, messages: turn })) {
-          if (event.type === "text") {
+          if (withheld) {
+            if (event.type !== "text" && event.type !== "reset") meta = event;
+          } else if (event.type === "text") {
             const { text, ids, gaps, actions } = markers.push(event.text);
             if (wroteEarlier && text.trim()) {
               yield* retract();
@@ -653,7 +672,10 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             choose(ids);
             for (const action of actions) addAction(action);
             gapTopic ??= gaps[0] ?? null;
-            if (text) yield write(text);
+            if (text) {
+              yield write(text);
+              yield* checkDisclosure();
+            }
           } else if (event.type === "reset") {
             markers.flush();
             if (answer) yield* retract();
@@ -662,10 +684,14 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           }
         }
         const rest = markers.flush();
-        if (rest) yield write(rest);
+        if (rest && !withheld) {
+          yield write(rest);
+          yield* checkDisclosure();
+        }
         if (!meta) break;
         modelCalls++;
         chatMeta = addMeta(chatMeta, meta);
+        if (withheld) break;
 
         // Tools run only for a complete turn that asked for them, and only a few rounds per answer.
         const calls = toolCallsOf(meta.message);
@@ -696,6 +722,11 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         }
         turn.push(meta.message, { role: "user", content: ran.results });
         wroteEarlier = Boolean(answer.trim());
+      }
+      if (withheld) {
+        flags.withheld = true;
+        yield write(WITHHELD_TEXT[lang2]);
+        citations = [];
       }
       if (toolsUsed.size) flags.tools = [...toolsUsed];
       // The assistant marked this reply: the business's information didn't have the answer.

@@ -18,7 +18,44 @@ export const MAX_REQUEST_PHOTOS = 6;
 
 const emailSchema = z.email().max(254);
 const digits = (text: string) => text.replace(/\D/g, "");
-const clean = (value: string | null | undefined) => value?.replace(/\s+/g, " ").trim() || null;
+/**
+ * What models write in a field they have nothing for ("null", "N/A", "none", "aucun"…), instead
+ * of leaving it out. Compared lower case, without accents or a final full stop.
+ */
+const PLACEHOLDERS = new Set([
+  "null",
+  "undefined",
+  "none",
+  "n/a",
+  "na",
+  "nil",
+  "unknown",
+  "not provided",
+  "not given",
+  "not specified",
+  "-",
+  "--",
+  "?",
+  "aucun",
+  "aucune",
+  "non fourni",
+  "non precise",
+  "inconnu",
+  "s.o",
+  "sans objet",
+]);
+
+/** The value with spaces tidied; null when empty or a placeholder for "nothing". */
+const clean = (value: string | null | undefined) => {
+  const text = value?.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const key = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\.$/, "");
+  return PLACEHOLDERS.has(key) ? null : text;
+};
 
 /**
  * True when the visitor typed this contact detail themselves in the conversation. Contact details
@@ -108,8 +145,11 @@ After it succeeds, tell the visitor their request was passed on and the business
     }),
 
     async run(input, ctx) {
-      const email = clean(input.email)?.toLowerCase() ?? null;
-      const phone = clean(input.phone);
+      // Without an "@" or a digit it isn't an attempt at an address or number: treat as not given.
+      const rawEmail = clean(input.email);
+      const email = rawEmail?.includes("@") ? rawEmail.toLowerCase() : null;
+      const rawPhone = clean(input.phone);
+      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : null;
       if (!email && !phone) {
         return {
           isError: true,

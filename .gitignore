@@ -18,6 +18,7 @@ next-env.d.ts
 coverage/
 test-results/
 playwright-report/
+packages/evals/reports/
 blob-report/
 
 # ---- Logs ----------------------------------------------------------------------------------

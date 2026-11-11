@@ -21,6 +21,11 @@ if (offline) {
   app.log.warn(
     "No LLM API key configured: chat answers come from the offline test provider (set ANTHROPIC_API_KEY).",
   );
+} else if (!gateway.supportsTools("chat")) {
+  // Tools are dropped for models not listed as able to call them, so this fails silently otherwise.
+  app.log.warn(
+    "No chat model can call tools: assistants can't save visitors' requests or check service areas. List the model in OPENROUTER_TOOL_MODELS or OPENAI_COMPATIBLE_TOOL_MODELS.",
+  );
 }
 if (!redis) app.log.warn("REDIS_URL not set: rate limits are kept per server (fine for one server).");
 

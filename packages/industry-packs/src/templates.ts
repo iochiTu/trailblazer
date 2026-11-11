@@ -265,7 +265,7 @@ const templates: Record<string, IndustryTemplate> = {
     ),
     variantGuidelines: {
       tires:
-        "Before talking about tire prices, ask for the tire size printed on the sidewall or the vehicle's year, make and model.",
+        "Before talking about the price of new tires, ask for the tire size printed on the sidewall or the vehicle's year, make and model. Prices the shop lists for a service (a changeover, storage, mounting and balancing) can be given right away.",
       "body-collision":
         "For collision repairs, ask whether an insurance claim is involved. Don't say what an insurer will cover.",
       glass:
@@ -346,9 +346,9 @@ const templates: Record<string, IndustryTemplate> = {
         name: "Seasonal tire changeover",
         when: "The visitor wants winter or summer tires put on, or asks about a tire changeover.",
         steps: [
+          "If they ask what it costs, first give the changeover prices from the business's information, if they're listed (for example on rims, or mounted and balanced).",
           "Ask for the year, make and model, and whether the tires are already on rims.",
           "Ask whether the tires are stored at the shop or they'll bring them.",
-          "Give changeover prices from the business's information if they're listed.",
           "Mention how far ahead the shop is booking only if the information says so.",
         ],
         finish:

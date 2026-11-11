@@ -16,7 +16,8 @@
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @traiblazer/db generate",
     "db:migrate": "pnpm --filter @traiblazer/db migrate",
-    "db:seed": "pnpm --filter @traiblazer/api seed"
+    "db:seed": "pnpm --filter @traiblazer/api seed",
+    "evals": "pnpm --filter @traiblazer/evals eval"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",

@@ -815,6 +815,11 @@ export interface MessageFlags {
   unanswered?: boolean;
   /** The model or the fallback chain declined. */
   refused?: boolean;
+  /**
+   * The model's reply gave away its instructions or tools (a visitor tried to get them): it was
+   * replaced with a short "I can only help with questions about this business".
+   */
+  withheld?: boolean;
   error?: boolean;
   /** Every AI provider route was at capacity; the visitor was asked to try again shortly. */
   busy?: boolean;

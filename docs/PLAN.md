@@ -2,7 +2,7 @@
 
 > Working name taken from the project folder. Status: **web chat platform and AI business page built
 > (Phase 1, milestones 1.1–1.3 — see README); setup without a website (1.4) built except Google
-> listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics built;
+> listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics and EN/FR evals built;
 > phone and SMS not started**.
 > **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
 > the hosted chat page works as the business's website, for businesses that have no site or an outdated
@@ -827,7 +827,10 @@ phase, when `conversations.channel` gains `sms` and `voice` (today: `hosted`, `i
   provider is at capacity. Refusals are counted and shown on the admin **Usage** page (monthly meter, daily
   chart, by assistant/channel, estimated AI cost for owners/admins). Later: Cloudflare Turnstile on suspicious
   traffic, email alerts at 80 % / 100 %.
-- Prompt injection: retrieved content and visitor text are data; server-side tool validation; works in all languages
+- Prompt injection: retrieved content and visitor text are data; server-side tool validation; works in all languages. Output check
+  (built): a reply that gives away the instructions or tools (prompt section tags, internal tool names,
+  rule headings) is taken back and replaced with "I can only help with questions about this business"
+  (`withheld` flag; `packages/core/src/chat/output-check.ts`)
 - Uploads: type detected from the content, size limits, private storage; an uploaded price list or
   brochure is deleted once its text is read (built). Malware scan: not built
 
@@ -870,7 +873,7 @@ pack phases in code (1–4) follow the industry phases above.
 | **1.2 Business page** (done) | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
 | **1.3 Requests for trades and auto shops** (done) | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
 | **1.4 Setup without a website** (done, except Google listing details) | Services and products, with prices, and the page description proposed from the sources and added to the page after the owner's review; price list and brochure upload (PDF with a text layer, DOCX, photo read by a vision model) as a knowledge source; interview mode (industry questions, EN/FR, answers saved as a knowledge source). **Waiting:** Google listing details, on open decision §17.4. Not covered yet: scanned PDFs (upload photos of the pages instead) and correcting the text read from a file |
-| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** page views, contact-button taps, questions and requests per day on the Business page tab |
+| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** page views, contact-button taps, questions and requests per day on the Business page tab; evals (`packages/evals`, `pnpm evals`): 59 EN/FR cases for a plumbing company and a tire shop, scored on facts, triage, advice, invented prices, unanswered questions, requests and scope; DeepSeek V4.1 Flash (the planned production model, via OpenRouter) passes all of them, median first text 2.7 s (target 1.5 s) |
 
 **MVP success criteria:** 10–20 trades and auto businesses with a live page in one or two cities, at least
 half of them with no website or an outdated one before; a page live within one working day of receiving
@@ -882,7 +885,10 @@ emailed to the owner within one minute; 0 scope-policy failures on adversarial e
 
 - **Evals per pack × language:** golden Q&A in EN/FR + Tier 2 languages; adversarial scope cases (advice
   requests, emergencies, invented prices/stock, allergens) in every Tier 1–2 language; run on every prompt,
-  pack or model change
+  pack or model change. **Built for Trades and Auto repair in EN/FR** (`packages/evals`): deterministic
+  checks through the real chat engine; bar = 80 % of quality runs and no safety failure. Search runs
+  on keywords alone unless embeddings are configured (`EMBEDDINGS_*`). Not yet: other
+  packs, Tier 2 languages, a model-graded check of free-form answers
 - Unit tests (chunking, ranking, prompt builder, pack inheritance, language detection, scope classifier),
   integration tests (ingestion, chat API), cross-tenant isolation tests
 - Widget E2E (Playwright): RTL layout, CJK/Indic rendering, IME input, accessibility checks

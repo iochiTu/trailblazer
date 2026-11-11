@@ -1,0 +1,24 @@
+{
+  "name": "@traiblazer/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Answer-quality and safety evals for the industry packs (PLAN §15), run against the real chat engine.",
+  "scripts": {
+    "eval": "tsx --env-file-if-exists=../../.env src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@traiblazer/core": "workspace:*",
+    "@traiblazer/db": "workspace:*",
+    "@traiblazer/llm": "workspace:*",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "5.1.0"
+  }
+}

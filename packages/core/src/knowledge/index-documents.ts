@@ -29,8 +29,16 @@ export function tsConfigFor(language: string | null | undefined): string {
   return map[base ?? ""] ?? "simple";
 }
 
-/** Full-text vector: language-agnostic tokens plus stemmed tokens for the document's language. */
+/**
+ * Full-text vector: language-agnostic tokens plus stemmed tokens for the document's language.
+ * Text of unknown language (pasted text, files, pages without a lang attribute) is stemmed as both
+ * English and French, so "senior" still finds "Seniors get 10% off". Keep in step with migration
+ * 0034, which rebuilt the vectors of chunks indexed before.
+ */
 export function tsvectorSql(text: string, language: string | null | undefined) {
+  if (!language?.trim()) {
+    return sql`to_tsvector('simple', ${text}) || to_tsvector('english', ${text}) || to_tsvector('french', ${text})`;
+  }
   return sql`to_tsvector('simple', ${text}) || to_tsvector(${tsConfigFor(language)}::regconfig, ${text})`;
 }
 
