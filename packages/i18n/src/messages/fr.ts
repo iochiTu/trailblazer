@@ -594,6 +594,34 @@ export const fr: Record<MessageKey, string> = {
   "notices.scheduled": "Commence le {date}",
   "notices.ended": "Terminé",
   "notices.limit": "Vous avez atteint la limite d'avis. Supprimez-en un pour en ajouter un autre.",
+  "pageStats.title": "Comment se porte votre page",
+  "pageStats.hint":
+    "Les visites de votre page, les touches sur ses boutons de contact et ce que les visiteurs ont demandé à votre assistant.",
+  "pageStats.period": "Période",
+  "pageStats.days": "{days, number} jours",
+  "pageStats.views": "Vues de la page",
+  "pageStats.taps": "Touches de contact",
+  "pageStats.tapsNote": "Appeler, Réserver, Courriel, Itinéraire et autres boutons",
+  "pageStats.questions": "Questions posées",
+  "pageStats.questionsNote":
+    "Sur votre page et votre site, en {conversations, plural, one {# conversation} other {# conversations}}",
+  "pageStats.requests": "Demandes laissées",
+  "pageStats.urgentNote": "{urgent, plural, one {# urgente} other {# urgentes}}",
+  "pageStats.daily": "Vues de la page par jour ({days, number} derniers jours)",
+  "pageStats.dayTooltip":
+    "{date, date, medium} : {views, plural, one {# vue} other {# vues}}, {taps, plural, one {# touche de contact} other {# touches de contact}}",
+  "pageStats.noViews":
+    "Aucune vue pour l'instant. Partagez le lien ou le code QR de votre page pour accueillir vos premiers visiteurs.",
+  "pageStats.byButton": "Touches par bouton",
+  "pageStats.noTaps": "Aucune touche pour l'instant.",
+  "pageStats.action.call": "Appeler",
+  "pageStats.action.book": "Réserver",
+  "pageStats.action.email": "Courriel",
+  "pageStats.action.directions": "Itinéraire",
+  "pageStats.action.website": "Site Web",
+  "pageStats.action.link": "Boutique et autres liens",
+  "pageStats.privacy":
+    "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Vos propres aperçus et essais ne sont pas inclus.",
   "page.preview.title": "Aperçu",
   "page.preview.hint":
     "Votre page telle que les visiteurs la voient. Les conversations ici sont enregistrées comme tests.",

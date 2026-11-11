@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   customType,
+  date,
   foreignKey,
   index,
   integer,
@@ -721,6 +722,41 @@ export const notices = pgTable(
   ],
 );
 
+/** Contact buttons on the business page whose taps are counted (see `page_stats`). */
+export const pageActions = ["call", "book", "email", "directions", "website", "link"] as const;
+export type PageAction = (typeof pageActions)[number];
+
+/**
+ * Daily counts for the business page: views of the page and taps on its contact buttons. Totals
+ * only, by day in the reporting time zone: no visitor, address or device is recorded.
+ */
+export const pageStats = pgTable(
+  "page_stats",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    day: date("day", { mode: "string" }).notNull(),
+    views: integer("views").notNull().default(0),
+    call: integer("call").notNull().default(0),
+    book: integer("book").notNull().default(0),
+    email: integer("email").notNull().default(0),
+    directions: integer("directions").notNull().default(0),
+    website: integer("website").notNull().default(0),
+    /** Add-on buttons (online shop and other links). */
+    link: integer("link").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: "page_stats_pk", columns: [t.tenantId, t.botId, t.day] }),
+    foreignKey({
+      name: "page_stats_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const conversations = pgTable(
   "conversations",
   {
@@ -1193,6 +1229,7 @@ export const rlsTables = [
   "knowledge_images",
   "catalog_items",
   "notices",
+  "page_stats",
   "conversations",
   "messages",
   "message_attachments",

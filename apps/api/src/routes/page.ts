@@ -1,15 +1,17 @@
 import { createHash } from "node:crypto";
-import { assets, bots, catalogItems, notices, withTenant } from "@traiblazer/db";
+import { assets, bots, catalogItems, notices, pageStats, withTenant } from "@traiblazer/db";
 import {
   CATALOG_LIMIT,
   catalogPhotoSchema,
   createCatalogItemSchema,
   NOTICE_LIMIT,
   noticeSchema,
+  PAGE_ACTIONS,
+  REPORTING_TIME_ZONE,
   reorderCatalogSchema,
   updateCatalogItemSchema,
 } from "@traiblazer/shared";
-import { and, asc, count, eq, max } from "drizzle-orm";
+import { and, asc, count, eq, gte, max, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
@@ -18,6 +20,7 @@ import { isUuid } from "../lib/ids.js";
 import { prepareChatImage } from "../lib/images.js";
 import { requireTenantRole } from "../plugins/auth.js";
 import { publicAssetUrl } from "./assets.js";
+import { lastDates } from "./usage.js";
 
 type BotParams = { Params: { tenantId: string; botId: string } };
 type ItemParams = { Params: { tenantId: string; botId: string; itemId: string } };
@@ -28,6 +31,7 @@ const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
  * The business page's own content (PLAN §7.1), edited in the admin portal:
  *   /v1/tenants/:tenantId/bots/:botId/catalog        services and products (cards on the page)
  *   /v1/tenants/:tenantId/bots/:botId/notices        time-limited announcements
+ *   /v1/tenants/:tenantId/bots/:botId/page-stats     views, contact taps, questions and requests
  * Page details (description, service area, credentials) are part of the business profile, and the
  * friendly link and layout are assistant settings (PATCH the assistant).
  */
@@ -243,6 +247,79 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
         return row!;
       });
       return { item: withPhotoUrl(item) };
+    },
+  );
+
+  // ---- Statistics ---------------------------------------------------------------------------
+
+  /**
+   * How the page is doing over the last `days` days (by day in the reporting time zone): page views
+   * and taps on its contact buttons, questions visitors asked the assistant (on the page and on the
+   * business's website) and requests they left. The owner's own tests are left out.
+   */
+  app.get<BotParams & { Querystring: { days?: string } }>(
+    `${base}/page-stats`,
+    { preHandler: requireTenantRole(db, "viewer") },
+    async (request) => {
+      const { tenantId, botId } = request.params;
+      const days = Math.min(Math.max(Number(request.query.days) || 30, 7), 90);
+      const dates = lastDates(days);
+      const first = dates[0]!;
+      const tz = REPORTING_TIME_ZONE;
+      const since = sql`(${first}::date::timestamp at time zone ${tz})`;
+
+      const report = await forBot(tenantId, botId, async (tx) => {
+        const page = await tx
+          .select()
+          .from(pageStats)
+          .where(and(eq(pageStats.botId, botId), gte(pageStats.day, first)));
+        const chats = await tx.execute<{ day: string; questions: number; conversations: number }>(sql`
+          select to_char(m.created_at at time zone ${tz}, 'YYYY-MM-DD') as day,
+                 count(*)::int as questions,
+                 count(distinct m.conversation_id)::int as conversations
+          from messages m join conversations c on c.id = m.conversation_id
+          where c.bot_id = ${botId} and c.channel <> 'playground' and m.role = 'user'
+            and m.created_at >= ${since}
+          group by 1`);
+        const requests = await tx.execute<{ day: string; requests: number; urgent: number }>(sql`
+          select to_char(created_at at time zone ${tz}, 'YYYY-MM-DD') as day,
+                 count(*)::int as requests,
+                 count(*) filter (where urgent)::int as urgent
+          from leads
+          where bot_id = ${botId} and channel <> 'playground' and created_at >= ${since}
+          group by 1`);
+        return { page, chats, requests };
+      });
+
+      const pageByDay = new Map(report.page.map((r) => [r.day, r]));
+      const chatsByDay = new Map(report.chats.map((r) => [r.day, r]));
+      const requestsByDay = new Map(report.requests.map((r) => [r.day, r]));
+      const taps = Object.fromEntries(
+        PAGE_ACTIONS.map((action) => [action, report.page.reduce((sum, r) => sum + r[action], 0)]),
+      ) as Record<(typeof PAGE_ACTIONS)[number], number>;
+      const sum = <T>(rows: T[], pick: (row: T) => number) => rows.reduce((n, r) => n + pick(r), 0);
+
+      return {
+        days,
+        totals: {
+          views: sum(report.page, (r) => r.views),
+          taps,
+          questions: sum(report.chats, (r) => r.questions),
+          conversations: sum(report.chats, (r) => r.conversations),
+          requests: sum(report.requests, (r) => r.requests),
+          urgentRequests: sum(report.requests, (r) => r.urgent),
+        },
+        daily: dates.map((date) => {
+          const page = pageByDay.get(date);
+          return {
+            date,
+            views: page?.views ?? 0,
+            taps: page ? PAGE_ACTIONS.reduce((n, action) => n + page[action], 0) : 0,
+            questions: chatsByDay.get(date)?.questions ?? 0,
+            requests: requestsByDay.get(date)?.requests ?? 0,
+          };
+        }),
+      };
     },
   );
 

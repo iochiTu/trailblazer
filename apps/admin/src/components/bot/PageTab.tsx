@@ -6,6 +6,7 @@ import { ApiError, api, type BotDetail, type BusinessProfile } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { CatalogSection } from "./CatalogSection";
 import { NoticesSection } from "./NoticesSection";
+import { PageStatsSection } from "./PageStatsSection";
 import { QrCode } from "./QrCode";
 
 /** A friendly link proposed from the business's name (the API has the final say). */
@@ -308,8 +309,8 @@ function DetailsSection({
 }
 
 /**
- * The business page (PLAN §7.1): publish it, its friendly link and layout, page details, services
- * and products, notices, and a live preview.
+ * The business page (PLAN §7.1): publish it, its friendly link and layout, how it is doing, page
+ * details, services and products, notices, and a live preview.
  */
 export function PageTab({
   detail,
@@ -337,6 +338,7 @@ export function PageTab({
     <div className="flex flex-col gap-8">
       <p className="muted max-w-3xl text-sm">{t("page.intro")}</p>
       <PublishSection detail={detail} base={base} pageUrl={pageUrl} onChange={changed} />
+      <PageStatsSection base={base} />
       <DetailsSection detail={detail} base={base} onSaved={changed} />
       <CatalogSection base={base} onSaved={refresh} />
       <NoticesSection base={base} onSaved={refresh} />

@@ -116,6 +116,24 @@ export interface CatalogItem {
   photoUrl: string | null;
 }
 
+/** Contact buttons on the business page whose taps are counted. */
+export type PageAction = "call" | "book" | "email" | "directions" | "website" | "link";
+
+/** How the business page is doing over the last `days` days (counts only). */
+export interface PageStats {
+  days: number;
+  totals: {
+    views: number;
+    taps: Record<PageAction, number>;
+    /** Questions visitors asked the assistant (page and website chat; tests left out). */
+    questions: number;
+    conversations: number;
+    requests: number;
+    urgentRequests: number;
+  };
+  daily: { date: string; views: number; taps: number; questions: number; requests: number }[];
+}
+
 /** A time-limited announcement on the page and in answers. */
 export interface Notice {
   id: string;
