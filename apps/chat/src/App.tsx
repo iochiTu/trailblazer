@@ -12,6 +12,7 @@ import {
   type ReplyPhoto,
   streamChat,
 } from "./api";
+import { Icon } from "./Icon";
 import { ImageError, imageFiles, MAX_IMAGES, type PendingImage, prepareImage } from "./images";
 import { Markdown } from "./markdown";
 import { conversationStore, languageStore, visitorId } from "./storage";
@@ -146,6 +147,14 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [messages]);
+
+  // The message box grows with what is typed (up to the height set in the styles).
+  useEffect(() => {
+    const box = inputRef.current;
+    if (!box) return;
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  }, [input, config]);
 
   const language = config?.languages.find((l) => l.code === lang);
   const dir = language?.dir ?? "ltr";
@@ -338,21 +347,16 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
   // Add-on buttons: only plain web links (the API validates them; this is defence in depth).
   const links = (config.links ?? []).filter((l) => /^https?:\/\//i.test(l.url));
   const palette = paletteFor(appearance.color, appearance.theme);
-  const avatarBesideReplies = appearance.theme === "friendly" || appearance.theme === "bold";
+  const empty = messages.length === 0;
 
-  const assistantRow = (key: string | undefined, className: string, children: ComponentChildren) =>
-    avatarBesideReplies ? (
-      <div key={key} class="tb-row">
-        <Avatar avatar={appearance.avatar} size={28} />
-        <div class={className} dir="auto">
-          {children}
-        </div>
-      </div>
-    ) : (
-      <div key={key} class={className} dir="auto">
+  const assistantRow = (key: string | undefined, className: string, children: ComponentChildren) => (
+    <div key={key} class="tb-row">
+      <Avatar avatar={appearance.avatar} size={28} />
+      <div class={className} dir="auto">
         {children}
       </div>
-    );
+    </div>
+  );
 
   return (
     <div
@@ -374,57 +378,60 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
         </div>
       )}
       <header class="tb-header">
-        <div class="tb-title">
-          <Avatar avatar={appearance.avatar} size={appearance.theme === "bold" ? 52 : 36} />
-          <div class="tb-names">
-            <strong dir="auto">{appearance.assistantName}</strong>
-            {named && (
-              <span class="tb-subtitle" dir="auto">
-                {config.businessName}
-              </span>
+        <div class="tb-header-inner">
+          <div class="tb-title">
+            <Avatar avatar={appearance.avatar} size={appearance.theme === "bold" && !onPage ? 48 : 34} />
+            <div class="tb-names">
+              <strong dir="auto">{appearance.assistantName}</strong>
+              {named && (
+                <span class="tb-subtitle" dir="auto">
+                  {config.businessName}
+                </span>
+              )}
+            </div>
+          </div>
+          <div class="tb-header-actions">
+            {config.languages.length > 1 && (
+              <select
+                class="tb-lang"
+                aria-label={ui(lang, "language")}
+                value={lang}
+                onChange={(e) => changeLanguage((e.target as HTMLSelectElement).value)}
+              >
+                {config.languages.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.nativeName}
+                  </option>
+                ))}
+              </select>
+            )}
+            {!empty && (
+              <button
+                type="button"
+                class="tb-icon"
+                onClick={newConversation}
+                aria-label={ui(lang, "newChat")}
+                title={ui(lang, "newChat")}
+              >
+                <Icon name="newChat" />
+              </button>
+            )}
+            {mode === "widget" && (
+              <button
+                type="button"
+                class="tb-icon"
+                aria-label={ui(lang, "close")}
+                onClick={() => window.parent.postMessage({ type: "tb:close" }, "*")}
+              >
+                <Icon name="close" size={20} />
+              </button>
             )}
           </div>
         </div>
-        <div class="tb-header-actions">
-          {config.languages.length > 1 && (
-            <select
-              class="tb-lang"
-              aria-label={ui(lang, "language")}
-              value={lang}
-              onChange={(e) => changeLanguage((e.target as HTMLSelectElement).value)}
-            >
-              {config.languages.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.nativeName}
-                </option>
-              ))}
-            </select>
-          )}
-          {messages.length > 0 && (
-            <button
-              type="button"
-              class="tb-icon"
-              onClick={newConversation}
-              aria-label={ui(lang, "newChat")}
-              title={ui(lang, "newChat")}
-            >
-              ↺
-            </button>
-          )}
-          {mode === "widget" && (
-            <button
-              type="button"
-              class="tb-icon"
-              aria-label={ui(lang, "close")}
-              onClick={() => window.parent.postMessage({ type: "tb:close" }, "*")}
-            >
-              ×
-            </button>
-          )}
-        </div>
       </header>
 
-      {links.length > 0 && (
+      {/* The business page already shows these buttons in its header. */}
+      {links.length > 0 && !onPage && (
         <nav class="tb-links" aria-label={config.businessName}>
           {links.map((link) => (
             <a
@@ -435,7 +442,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
               rel="noopener noreferrer"
               dir="auto"
             >
-              <span aria-hidden="true">{link.icon === "shop" ? "🛍️" : "↗"}</span>
+              <Icon name={link.icon === "shop" ? "shop" : "link"} size={15} />
               {link.label ?? ui(lang, link.icon === "shop" ? "linkShop" : "linkOpen")}
             </a>
           ))}
@@ -443,196 +450,206 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
       )}
 
       <div class="tb-log" ref={logRef} role="log" aria-live="polite" aria-relevant="additions">
-        {assistantRow(undefined, "tb-msg tb-assistant", <Markdown text={greeting} />)}
-        {messages.map((m) => {
-          const className = `tb-msg tb-${m.role}${m.error ? " tb-error" : ""}${m.notice ? " tb-notice" : ""}`;
-          if (m.role === "user") {
-            return (
-              <div key={m.id} class={className} dir="auto">
-                {m.attachments?.map((a, i) => (
-                  <span key={i} class="tb-file" title={a.name}>
-                    <span aria-hidden="true">📎</span> <bdi>{a.name}</bdi>
-                  </span>
-                ))}
-                {m.content && <p>{m.content}</p>}
+        <div class="tb-thread">
+          {empty ? (
+            // Before the first question: a welcome with the greeting and the suggested questions.
+            <div class="tb-welcome">
+              <Avatar avatar={appearance.avatar} size={64} />
+              <div class="tb-welcome-text" data-long={greeting.length > 140 ? "" : undefined} dir="auto">
+                <Markdown text={greeting} />
               </div>
-            );
-          }
-          return assistantRow(
-            m.id,
-            className,
-            <>
-              {m.content ? (
-                <Markdown text={m.content} />
-              ) : (
-                <span class="tb-typing" role="img" aria-label={ui(lang, "thinking")}>
-                  <i />
-                  <i />
-                  <i />
-                </span>
-              )}
-              {m.images && m.images.length > 0 && (
-                <div class="tb-photos">
-                  {m.images.map((photo) => (
-                    <a key={photo.url} href={photo.url} target="_blank" rel="noopener noreferrer">
-                      <img src={photo.url} alt={photo.alt} loading="lazy" />
-                    </a>
+              {quickReplies.length > 0 && (
+                <div class="tb-chips">
+                  {quickReplies.map((q) => (
+                    <button key={q} type="button" class="tb-chip" onClick={() => void send(q)} dir="auto">
+                      {q}
+                    </button>
                   ))}
                 </div>
               )}
-              {m.actions && m.actions.length > 0 && (
-                <div class="tb-actions">
-                  {m.actions
-                    .filter((a) => (a.kind === "call" ? /^tel:/.test(a.href) : /^https?:\/\//i.test(a.href)))
-                    .map((a) =>
-                      a.kind === "call" ? (
-                        <a key={a.kind} class="tb-action tb-action-call" href={a.href}>
-                          <span aria-hidden="true">📞</span>
-                          {config.contact.phone
-                            ? ui(lang, "actionCall", { phone: config.contact.phone })
-                            : ui(lang, "actionCallPlain")}
-                        </a>
-                      ) : (
-                        <a
-                          key={a.kind}
-                          class="tb-action"
-                          href={a.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <span aria-hidden="true">📅</span>
-                          {ui(lang, "actionBook")}
-                        </a>
-                      ),
-                    )}
+            </div>
+          ) : (
+            assistantRow(undefined, "tb-msg tb-assistant", <Markdown text={greeting} />)
+          )}
+          {messages.map((m) => {
+            const className = `tb-msg tb-${m.role}${m.error ? " tb-error" : ""}${m.notice ? " tb-notice" : ""}`;
+            if (m.role === "user") {
+              return (
+                <div key={m.id} class={className} dir="auto">
+                  {m.attachments?.map((a, i) => (
+                    <span key={i} class="tb-file" title={a.name}>
+                      <Icon name="image" size={14} /> <bdi>{a.name}</bdi>
+                    </span>
+                  ))}
+                  {m.content && <p>{m.content}</p>}
                 </div>
-              )}
-              {!m.pending && m.citations.length > 0 && (
-                <div class="tb-sources">
-                  <span>{ui(lang, "sources")}:</span>
-                  {m.citations.map((c) =>
-                    c.url ? (
-                      <a key={c.url} href={c.url} target="_blank" rel="noopener noreferrer nofollow">
-                        {c.title ?? new URL(c.url).pathname}
+              );
+            }
+            return assistantRow(
+              m.id,
+              className,
+              <>
+                {m.content ? (
+                  <Markdown text={m.content} />
+                ) : (
+                  <span class="tb-typing" role="img" aria-label={ui(lang, "thinking")}>
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                )}
+                {m.images && m.images.length > 0 && (
+                  <div class="tb-photos">
+                    {m.images.map((photo) => (
+                      <a key={photo.url} href={photo.url} target="_blank" rel="noopener noreferrer">
+                        <img src={photo.url} alt={photo.alt} loading="lazy" />
                       </a>
-                    ) : null,
-                  )}
-                </div>
-              )}
-            </>,
-          );
-        })}
-        {messages.length === 0 && quickReplies.length > 0 && (
-          <div class="tb-chips">
-            {quickReplies.map((q) => (
-              <button key={q} type="button" class="tb-chip" onClick={() => void send(q)} dir="auto">
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
+                    ))}
+                  </div>
+                )}
+                {m.actions && m.actions.length > 0 && (
+                  <div class="tb-actions">
+                    {m.actions
+                      .filter((a) =>
+                        a.kind === "call" ? /^tel:/.test(a.href) : /^https?:\/\//i.test(a.href),
+                      )
+                      .map((a) =>
+                        a.kind === "call" ? (
+                          <a key={a.kind} class="tb-action tb-action-call" href={a.href}>
+                            <Icon name="call" size={16} />
+                            {config.contact.phone
+                              ? ui(lang, "actionCall", { phone: config.contact.phone })
+                              : ui(lang, "actionCallPlain")}
+                          </a>
+                        ) : (
+                          <a
+                            key={a.kind}
+                            class="tb-action"
+                            href={a.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Icon name="book" size={16} />
+                            {ui(lang, "actionBook")}
+                          </a>
+                        ),
+                      )}
+                  </div>
+                )}
+                {!m.pending && m.citations.some((c) => c.url) && (
+                  <div class="tb-sources">
+                    <span>{ui(lang, "sources")}</span>
+                    {m.citations.map((c) =>
+                      c.url ? (
+                        <a key={c.url} href={c.url} target="_blank" rel="noopener noreferrer nofollow">
+                          {c.title ?? new URL(c.url).pathname}
+                        </a>
+                      ) : null,
+                    )}
+                  </div>
+                )}
+              </>,
+            );
+          })}
+        </div>
       </div>
 
-      {urgent && (
-        <div class="tb-urgent" data-level={urgent.level} role="alert">
-          <strong>{ui(lang, urgent.level === "danger" ? "dangerTitle" : "urgentTitle")}</strong>
-          {urgent.level === "danger" && <p class="tb-urgent-text">{ui(lang, "dangerText")}</p>}
-          {urgent.phone && /\d/.test(urgent.phone) ? (
-            <>
-              <p class="tb-urgent-text">{ui(lang, "urgentText", { business: config.businessName })}</p>
-              <a class="tb-action tb-action-call" href={`tel:${urgent.phone.replace(/[^\d+]/g, "")}`}>
-                <span aria-hidden="true">📞</span>
-                {ui(lang, "actionCall", { phone: urgent.phone })}
-              </a>
-            </>
-          ) : null}
-        </div>
-      )}
-      {(images.length > 0 || imageError) && (
-        <div class="tb-attachments">
-          {imageError && (
-            <p class="tb-attach-error" role="alert">
-              {imageError}
-            </p>
-          )}
-          {images.map((image) => (
-            <span key={image.id} class="tb-file tb-file-pending" title={image.name}>
-              <span aria-hidden="true">📎</span> <bdi>{image.name}</bdi>
-              <button
-                type="button"
-                class="tb-file-remove"
-                aria-label={ui(lang, "removeImage", { name: image.name })}
-                onClick={() => setImages((list) => list.filter((i) => i.id !== image.id))}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <form
-        class="tb-composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(input);
-        }}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/*"
-          multiple
-          hidden
-          onChange={(e) => {
-            const target = e.target as HTMLInputElement;
-            void addImages(Array.from(target.files ?? []));
-            target.value = "";
+      <div class="tb-dock">
+        {urgent && (
+          <div class="tb-urgent" data-level={urgent.level} role="alert">
+            <strong>{ui(lang, urgent.level === "danger" ? "dangerTitle" : "urgentTitle")}</strong>
+            {urgent.level === "danger" && <p class="tb-urgent-text">{ui(lang, "dangerText")}</p>}
+            {urgent.phone && /\d/.test(urgent.phone) ? (
+              <>
+                <p class="tb-urgent-text">{ui(lang, "urgentText", { business: config.businessName })}</p>
+                <a class="tb-action tb-action-call" href={`tel:${urgent.phone.replace(/[^\d+]/g, "")}`}>
+                  <Icon name="call" size={16} />
+                  {ui(lang, "actionCall", { phone: urgent.phone })}
+                </a>
+              </>
+            ) : null}
+          </div>
+        )}
+        <form
+          class="tb-composer"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(input);
           }}
-        />
-        <button
-          type="button"
-          class="tb-attach"
-          aria-label={ui(lang, "attach")}
-          title={ui(lang, "attach")}
-          disabled={busy || images.length >= MAX_IMAGES}
-          onClick={() => fileRef.current?.click()}
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"
+          {(images.length > 0 || imageError) && (
+            <div class="tb-attachments">
+              {imageError && (
+                <p class="tb-attach-error" role="alert">
+                  {imageError}
+                </p>
+              )}
+              {images.map((image) => (
+                <span key={image.id} class="tb-file tb-file-pending" title={image.name}>
+                  <Icon name="image" size={14} /> <bdi>{image.name}</bdi>
+                  <button
+                    type="button"
+                    class="tb-file-remove"
+                    aria-label={ui(lang, "removeImage", { name: image.name })}
+                    onClick={() => setImages((list) => list.filter((i) => i.id !== image.id))}
+                  >
+                    <Icon name="close" size={13} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div class="tb-composer-row">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/*"
+              multiple
+              hidden
+              onChange={(e) => {
+                const target = e.target as HTMLInputElement;
+                void addImages(Array.from(target.files ?? []));
+                target.value = "";
+              }}
             />
-          </svg>
-        </button>
-        <textarea
-          ref={inputRef}
-          rows={1}
-          dir="auto"
-          maxLength={2000}
-          value={input}
-          placeholder={ui(lang, "placeholder")}
-          aria-label={ui(lang, "placeholder")}
-          onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-        />
-        <button
-          type="submit"
-          class="tb-send"
-          disabled={busy || (!input.trim() && !images.length)}
-          aria-label={ui(lang, "send")}
-        >
-          {dir === "rtl" ? "←" : "→"}
-        </button>
-      </form>
-      <footer class="tb-footer">
-        <span>{ui(lang, "disclaimer")}</span>
-        {config.poweredBy && <span>{ui(lang, "poweredBy")}</span>}
-      </footer>
+            <button
+              type="button"
+              class="tb-attach"
+              aria-label={ui(lang, "attach")}
+              title={ui(lang, "attach")}
+              disabled={busy || images.length >= MAX_IMAGES}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Icon name="attach" size={20} />
+            </button>
+            <textarea
+              ref={inputRef}
+              rows={1}
+              dir="auto"
+              maxLength={2000}
+              value={input}
+              placeholder={ui(lang, "placeholder")}
+              aria-label={ui(lang, "placeholder")}
+              onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+            />
+            <button
+              type="submit"
+              class="tb-send"
+              disabled={busy || (!input.trim() && !images.length)}
+              aria-label={ui(lang, "send")}
+              title={ui(lang, "send")}
+            >
+              <Icon name="send" size={20} />
+            </button>
+          </div>
+        </form>
+        <footer class="tb-footer">
+          <span>{ui(lang, "disclaimer")}</span>
+          {config.poweredBy && <span>{ui(lang, "poweredBy")}</span>}
+        </footer>
+      </div>
     </div>
   );
 }
