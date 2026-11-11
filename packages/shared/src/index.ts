@@ -460,4 +460,46 @@ export const applySetupSchema = z.object({
 });
 export type ApplySetupInput = z.infer<typeof applySetupSchema>;
 
+// ---- Prospect demos (operator console) --------------------------------------------------------
+
+/**
+ * A demo page for a business that isn't a customer yet, built from its public information: its
+ * website, and text pasted from its Google listing or Facebook page. At least one is needed.
+ */
+export const createDemoSchema = z
+  .object({
+    businessName: z.string().trim().min(1).max(120),
+    pack: z.string().trim().min(1).max(60),
+    variant: z.string().trim().min(1).max(60).nullish(),
+    /** Language of the page and of the assistant's first greeting; the chat answers in both. */
+    language: z.enum(["en", "fr"]).default("en"),
+    websiteUrl: httpUrl.nullish(),
+    text: z
+      .string()
+      .trim()
+      .max(50_000)
+      .nullish()
+      .transform((value) => value || null),
+    /** The operator's own note (contact, where the lead came from). Never shown on the page. */
+    note: z
+      .string()
+      .trim()
+      .max(500)
+      .nullish()
+      .transform((value) => value || null),
+  })
+  .refine((demo) => demo.websiteUrl || demo.text, {
+    path: ["websiteUrl"],
+    message: "Add the business's website, or paste text from its Google listing or Facebook page",
+  });
+export type CreateDemoInput = z.infer<typeof createDemoSchema>;
+
+/** Hands a demo over to the owner's account (which must already exist). */
+export const handOverDemoSchema = z.object({
+  email: z
+    .email()
+    .max(254)
+    .transform((e) => e.toLowerCase()),
+});
+
 export * from "./plans.js";

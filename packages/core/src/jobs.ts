@@ -11,6 +11,8 @@ export const JOB_TYPES = {
   botSetup: "bot.setup",
   /** Emails the business about an urgent request right away (payload: { botId, leadId }). */
   urgentAlert: "request.urgent_alert",
+  /** Fills a prospect demo page in once its sources are read (payload: { demoId }). */
+  demoBuild: "demo.build",
 } as const;
 
 /** Job priorities: higher runs first. */

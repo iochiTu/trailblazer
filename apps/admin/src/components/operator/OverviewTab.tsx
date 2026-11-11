@@ -52,6 +52,12 @@ export function OverviewTab() {
         <StatTile label="Refused by limits" value={fmtNumber(overview.refused)} note={month} />
         <StatTile label="AI cost" value={fmtUsd(overview.costMicros)} note={month} />
       </div>
+      {overview.demos > 0 && (
+        <p className="muted text-sm">
+          Plus {fmtNumber(overview.demos)} prospect {overview.demos === 1 ? "demo" : "demos"}, not counted
+          above ({fmtUsd(overview.demoCostMicros)} AI cost this month).
+        </p>
+      )}
 
       <div className="card overflow-x-auto p-5">
         <h2 className="mb-3 text-lg font-medium">Businesses by plan</h2>

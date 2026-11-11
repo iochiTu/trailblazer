@@ -6,8 +6,12 @@
 import { hostname } from "node:os";
 import {
   type AddonEffectPayload,
+  buildDemo,
   claimNextJob,
   completeJob,
+  DEMO_RETRY_MS,
+  type DemoBuildPayload,
+  enqueueJob,
   failJob,
   JOB_TYPES,
   type JobRow,
@@ -32,6 +36,8 @@ const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
 const log = (msg: string, data: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ time: new Date().toISOString(), msg, ...data }));
 const mailer = createMailerFromEnv(process.env, log);
+/** Most text of a business's pages the setup assistant reads (default in @traiblazer/core). */
+const setupInputChars = Number(process.env.SETUP_MAX_INPUT_CHARS) || undefined;
 /** Admin portal origin, for links in urgent alerts. */
 const adminUrl = process.env.ADMIN_ORIGIN ? new URL(process.env.ADMIN_ORIGIN).origin : undefined;
 
@@ -52,9 +58,27 @@ async function run(job: JobRow): Promise<void> {
       log("urgent alert", { id: job.id, leadId: payload.leadId, outcome });
       return;
     }
+    case JOB_TYPES.demoBuild: {
+      const payload = job.payload as unknown as DemoBuildPayload;
+      const outcome = await buildDemo(
+        { db, gateway, log, inputChars: setupInputChars },
+        job.tenantId,
+        payload,
+      );
+      // Its sources are still being read: look again shortly.
+      if (outcome === "waiting") {
+        await enqueueJob(db, {
+          tenantId: job.tenantId,
+          type: JOB_TYPES.demoBuild,
+          payload: { ...payload },
+          runAt: new Date(Date.now() + DEMO_RETRY_MS),
+        });
+      } else log("demo build", { id: job.id, demoId: payload.demoId, outcome });
+      return;
+    }
     case JOB_TYPES.botSetup:
       await runSetup(
-        { db, gateway, log, inputChars: Number(process.env.SETUP_MAX_INPUT_CHARS) || undefined },
+        { db, gateway, log, inputChars: setupInputChars },
         job.tenantId,
         String(job.payload.runId),
       );

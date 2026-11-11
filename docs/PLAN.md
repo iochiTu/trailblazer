@@ -2,7 +2,7 @@
 
 > Working name taken from the project folder. Status: **web chat platform and AI business page built
 > (Phase 1, milestones 1.1–1.3 — see README); setup without a website (1.4) built except Google
-> listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics and EN/FR evals built;
+> listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics, EN/FR evals and the prospect demo generator built;
 > phone and SMS not started**.
 > **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
 > the hosted chat page works as the business's website, for businesses that have no site or an outdated
@@ -534,8 +534,11 @@ landline, mobile or VoIP line, so setup uses a per-carrier sheet and ends with a
 - Later: a support role with narrower rights (view-only or no plan/policy changes), and showing the business
   its activity log in the admin portal
 - Packs/variants/modules (versioned) with eval results per language
-- **Prospect demo generator:** build a private demo page and assistant from a prospect's public
-  information (website, Google listing, Facebook page) to show at the first contact (§2.2)
+- **Prospect demo generator (built):** build a private demo page and assistant from a prospect's
+  public information (website, text pasted from its Google listing or Facebook page) to show at the
+  first contact (§2.2). The console's Demos tab fills the page in with the setup assistant, shows a
+  demo notice on it, keeps it out of search engines, counts views, chats and requests, and hands the
+  business over to the owner's account when they sign up. Google listing import still waits on §17.4
 - **Done-for-you onboarding checklist** per business: sources collected, page content, services list,
   photos, owner review, link on the Google listing, go-live
 - System health: ingestion queue, errors, latency, provider fallbacks, scope-classifier triggers
@@ -748,7 +751,8 @@ All tables carry `tenant_id` with RLS.
 
 | Table                                              | Key fields                                                                                                           |
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `tenants`                                          | name, plan, status, owner_language, data_region, created_at                                                          |
+| `tenants`                                          | name, kind (business / demo), plan, status, owner_language, data_region, created_at                                  |
+| `demos`                                            | a prospect demo built by operators: its business, status, operator's note, who built it, who it was handed over to (platform table) |
 | `users`, `memberships`                             | role, ui_language                                                                                                    |
 | `bots`                                             | audience, pack + variant + version, persona, **languages[]** (enabled), default_language, model_profile_id, settings |
 | `bot_modules`, `bot_keys`                          | module config; public key, allowed origins, rate limits                                                              |
@@ -856,7 +860,7 @@ Durations are estimates for 1–2 developers.
 | Phase | Duration | Deliverables |
 |---|---|---|
 | **0. Foundations** | done | Monorepo, CI, docker-compose, schema + RLS, auth with orgs, tenant/bot CRUD, i18n framework (ICU, RTL-ready) |
-| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.3 done; the rest ~2–4 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag with immediate email, quote requests with photos and industry fields, service-area check, call and book buttons, scope guard (keyword rules + auxiliary model). **To build:** setup without a website (interview, price-list upload); evals EN/FR; prospect demo page generator; done-for-you onboarding checklist |
+| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.3 done; the rest ~2–4 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag with immediate email, quote requests with photos and industry fields, service-area check, call and book buttons, scope guard (keyword rules + auxiliary model). Setup without a website (interview, price list and brochure upload, services proposed from the sources); page statistics; evals EN/FR; prospect demo page generator. **To build:** done-for-you onboarding checklist; accessibility pass; Google listing details (§17.4) |
 | **2. Paid launch + property management** | ~5–6 weeks | Stripe (CAD; setup fee + monthly plan); own domain for the page; page analytics (visits, questions, requests); booking through **Google Calendar and Jobber**; payment and deposit links; seasonal scripts; pack: **Property management & rentals** (maintenance requests, rental inquiry pre-screening after a privacy check); design-partner clinics and firms; agency white-label and referral tracking; Tier 2 reviewed UI strings |
 | **Later phase — Phone and SMS** | ~6–8 weeks; starts after the paid launch, when pilots ask for it | **SMS first:** telephony (numbers, signed webhooks), missed-call text-back with a link to the business page, two-way SMS/MMS, owner alerts by text, reminders. **Then voice:** voice agent on a managed orchestrator with a fast model profile, emergency transfer, call log (recording, transcript, summary), EN then FR. Housecall Pro; status & pickup alerts from shop software; minutes and SMS metering |
 | **3. Clinics and professional services (customer service only)** | ~6–8 weeks | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; clinic booking integrations (as API access allows); **document chaser** with secure upload and vision check; minimal intake; catalog feeds; packs: Clinic (vet first), Pharmacy, Accounting & tax, Law firm, Immigration consultant, Insurance & financial, Real estate, **Car dealership**; with phone and SMS in place: waitlist backfill & recall |
@@ -873,7 +877,7 @@ pack phases in code (1–4) follow the industry phases above.
 | **1.2 Business page** (done) | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
 | **1.3 Requests for trades and auto shops** (done) | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
 | **1.4 Setup without a website** (done, except Google listing details) | Services and products, with prices, and the page description proposed from the sources and added to the page after the owner's review; price list and brochure upload (PDF with a text layer, DOCX, photo read by a vision model) as a knowledge source; interview mode (industry questions, EN/FR, answers saved as a knowledge source). **Waiting:** Google listing details, on open decision §17.4. Not covered yet: scanned PDFs (upload photos of the pages instead) and correcting the text read from a file |
-| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** page views, contact-button taps, questions and requests per day on the Business page tab; evals (`packages/evals`, `pnpm evals`): 59 EN/FR cases for a plumbing company and a tire shop, scored on facts, triage, advice, invented prices, unanswered questions, requests and scope; DeepSeek V4.1 Flash (the planned production model, via OpenRouter) passes all of them, median first text 2.7 s (target 1.5 s) |
+| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** page views, contact-button taps, questions and requests per day on the Business page tab; prospect demo page generator (operator console, Demos tab); evals (`packages/evals`, `pnpm evals`): 59 EN/FR cases for a plumbing company and a tire shop, scored on facts, triage, advice, invented prices, unanswered questions, requests and scope; DeepSeek V4.1 Flash (the planned production model, via OpenRouter) passes all of them, median first text 2.7 s (target 1.5 s) |
 
 **MVP success criteria:** 10–20 trades and auto businesses with a live page in one or two cities, at least
 half of them with no website or an outdated one before; a page live within one working day of receiving

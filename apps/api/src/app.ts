@@ -15,6 +15,7 @@ import { assetRoutes } from "./routes/assets.js";
 import { authRoutes } from "./routes/auth.js";
 import { botRoutes } from "./routes/bots.js";
 import { catalogRoutes } from "./routes/catalog.js";
+import { demoRoutes } from "./routes/demos.js";
 import { gapRoutes } from "./routes/gaps.js";
 import { interviewRoutes } from "./routes/interview.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
@@ -121,6 +122,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => assetRoutes(scope, ctx));
   await app.register(async (scope) => usageRoutes(scope, ctx));
   await app.register(async (scope) => operatorRoutes(scope, ctx));
+  await app.register(async (scope) => demoRoutes(scope, ctx));
   await app.register(async (scope) => publicRoutes(scope, ctx));
 
   return app;

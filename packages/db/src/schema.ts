@@ -85,10 +85,19 @@ export const plans = pgTable("plans", {
 export const tenantStatuses = ["active", "suspended"] as const;
 export type TenantStatus = (typeof tenantStatuses)[number];
 
+/**
+ * "demo": a page operators built from a prospect's public information to show at first contact
+ * (see `demos`). It has no members, its page carries a demo notice and is never listed by search
+ * engines. It becomes a "business" when it is handed over to the owner's account.
+ */
+export const tenantKinds = ["business", "demo"] as const;
+export type TenantKind = (typeof tenantKinds)[number];
+
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  kind: text("kind").$type<TenantKind>().notNull().default("business"),
   plan: text("plan")
     .notNull()
     .default("trial")
@@ -134,6 +143,42 @@ export const platformSettings = pgTable("platform_settings", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * building: sources are being read and the page filled in; ready: review it, then share the link;
+ * needs_information: nothing could be read from the sources; failed: the setup assistant couldn't
+ * run (the page exists, with the name only); handed_over: now the owner's business.
+ */
+export const demoStatuses = ["building", "ready", "needs_information", "failed", "handed_over"] as const;
+export type DemoStatus = (typeof demoStatuses)[number];
+
+/**
+ * Prospect demos (operator console): one row per demo page built for a business that isn't a
+ * customer yet. Platform table, read and written by operators and the worker only; everything the
+ * demo contains lives in its own tenant (kind "demo"), under row-level security like any business.
+ */
+export const demos = pgTable(
+  "demos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .unique()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    status: text("status").$type<DemoStatus>().notNull().default("building"),
+    /** Why it isn't ready: "no_information", or the setup assistant's error code. */
+    error: text("error"),
+    /** The operator's own note (who to contact, where the lead came from). Never shown on the page. */
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    /** Account the business was handed over to. */
+    handedOverTo: text("handed_over_to"),
+    handedOverAt: timestamp("handed_over_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("demos_created_idx").on(t.createdAt)],
+);
 
 /** Who changed what in the operator console (plans, policies, business plan/status). */
 export const operatorAuditLogs = pgTable(

@@ -384,6 +384,35 @@ pnpm --filter @traiblazer/api superadmin revoke dev@example.com
 pnpm --filter @traiblazer/api superadmin list
 ```
 
+### Prospect demos
+
+The console's **Demos** tab builds a demo page for a business that isn't a customer yet, to show at
+the first contact (PLAN §2.2): enter its name and industry, its website and/or text pasted from what
+it publishes about itself (Google listing, Facebook page, price list), and the page is filled in
+within a minute or so.
+
+- A demo is a business of kind `demo` (`tenants.kind`) with **no members**, plus a row in `demos`
+  (platform table: status, the operator's note, who built it). Everything on it lives in its own
+  tenant under row-level security, like any business.
+- **How it is built:** the sources are read like any knowledge source (website crawl with robots.txt,
+  pasted text), then the worker job `demo.build` runs the setup assistant and applies its whole
+  suggestion: business details, hours, description, services with prices, greeting and suggested
+  questions (`packages/core/src/demo/build.ts`). The setup assistant's rule still holds: nothing is
+  kept that isn't in the sources. Nobody reviews the suggestion first, so **review the page before
+  sharing the link** ("Review & edit" opens it with support access); "Build again" reads the sources
+  again without repeating services already on the page.
+- **Private:** the page shows a notice ("Demo page prepared for … It isn't public"), is never listed by
+  search engines whatever its settings, and has no friendly link: only people with the `/c/<key>` link
+  can open it. No notification emails are sent.
+- **Was it opened?** The list shows page views, chats and requests for each demo (the operator's own
+  preview and test chats aren't counted). Demos are kept out of the Businesses list and the overview
+  counts; their AI cost is shown apart.
+- **Hand over:** when the owner has signed up, "Hand over" makes their account the owner (same
+  limit on businesses per account as usual), the business becomes an ordinary one and the notice
+  comes off. The assistant stays a draft, so the page is listed only once the owner activates it.
+- **Delete** removes the demo business and everything in it. Statuses: building, ready, nothing to
+  read (`needs_information`), couldn't fill the page in (`failed`), handed over.
+
 ## Multi-tenancy and security model
 
 - Every tenant-owned table has `tenant_id` and a Postgres **row-level security** policy
