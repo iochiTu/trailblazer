@@ -179,6 +179,33 @@ export const fr: Record<MessageKey, string> = {
   "knowledge.textContent": "Texte (heures, politiques, menu, FAQ…)",
   "knowledge.add": "Ajouter",
   "knowledge.type.text": "Texte collé",
+  "knowledge.type.file": "Fichier téléversé",
+  "knowledge.type.interview": "Vos réponses à l'entrevue",
+  "knowledge.editAnswers": "Modifier les réponses",
+  "interview.title": "Pas de site Web? Répondez à quelques questions",
+  "interview.intro":
+    "Présentez votre entreprise à votre assistant dans vos propres mots. Passez les questions que vous voulez. Vos réponses sont ajoutées aux informations de votre assistant, et l'assistant de configuration peut ensuite proposer votre page et vos services à partir de celles-ci.",
+  "interview.start": "Répondre aux questions",
+  "interview.edit": "Modifier mes réponses",
+  "interview.answered": "{count, plural, one {# question répondue.} other {# questions répondues.}}",
+  "interview.save": "Enregistrer les réponses",
+  "interview.saved": "Enregistré. Votre assistant utilise vos réponses d'ici quelques secondes.",
+  "interview.next":
+    "Ensuite, utilisez « Proposer ma configuration » ci-dessus pour en tirer votre page et vos services.",
+  "knowledge.addFile": "Téléverser une liste de prix ou un dépliant",
+  "knowledge.fileHint":
+    "Un PDF, un document Word (.docx) ou une photo, jusqu'à 5 Mo. Son texte est lu une seule fois et ajouté aux informations de votre assistant. Le fichier lui-même n'est ni conservé ni montré à qui que ce soit.",
+  "knowledge.file": "Fichier",
+  "knowledge.fileTitle": "Titre (facultatif)",
+  "knowledge.upload": "Téléverser",
+  "knowledge.uploading": "Téléversement…",
+  "knowledge.fileTooBig": "Ce fichier dépasse 5 Mo.",
+  "knowledge.fileUnreadable": "Cette photo n'a pas pu être ouverte. Essayez une photo JPEG ou PNG.",
+  "knowledge.viewText": "Voir le texte",
+  "knowledge.fileText": "Texte lu dans {name}",
+  "knowledge.fileTextHint":
+    "Votre assistant répond à partir de ce texte. Vérifiez-le, surtout les prix. Si quelque chose a été mal lu, supprimez ce fichier et collez plutôt le bon texte.",
+  "knowledge.fileNoText": "Rien n'a encore été lu dans ce fichier.",
   "knowledge.viewEdit": "Voir / modifier",
   "knowledge.view": "Voir les pages",
   "knowledge.pagesRead": "Pages lues sur ce site Web",
@@ -193,7 +220,8 @@ export const fr: Record<MessageKey, string> = {
   "knowledge.status.processing": "Lecture…",
   "knowledge.status.ready": "Prête",
   "knowledge.status.failed": "Échec",
-  "knowledge.empty": "Aucune source. Ajoutez votre site Web ou collez du texte pour commencer.",
+  "knowledge.empty":
+    "Aucune source. Ajoutez votre site Web, téléversez une liste de prix ou collez du texte pour commencer.",
   "gaps.title": "Questions restées sans réponse",
   "gaps.hint":
     "Des visiteurs ont posé ces questions et la réponse n'était pas dans vos informations. Ajoutez une réponse : votre assistant l'utilisera désormais.",
@@ -204,15 +232,16 @@ export const fr: Record<MessageKey, string> = {
   "gaps.dismiss": "Sans intérêt",
   "setup.title": "Configurer à partir de vos informations",
   "setup.intro":
-    "Votre assistant peut lire ce que vous avez ajouté et proposer les coordonnées de votre entreprise, vos heures d'ouverture, un message d'accueil et des questions suggérées. Rien n'est utilisé avant que vous l'ayez vérifié.",
+    "Votre assistant peut lire ce que vous avez ajouté et proposer les coordonnées de votre entreprise, vos heures d'ouverture, les services et produits de votre page, un message d'accueil et des questions suggérées. Rien n'est utilisé avant que vous l'ayez vérifié.",
   "setup.start": "Proposer ma configuration",
   "setup.again": "Proposer de nouveau",
-  "setup.needInfo": "Ajoutez d'abord votre site Web ou du texte ci-dessous.",
+  "setup.needInfo":
+    "Ajoutez d'abord votre site Web, une liste de prix ou du texte, ou répondez aux questions ci-dessous.",
   "setup.reading":
     "Lecture de vos informations… Cela peut prendre quelques minutes. Vous pouvez quitter cette page et y revenir.",
   "setup.limit": "Vous avez déjà lancé ceci plusieurs fois aujourd'hui. Réessayez demain.",
   "setup.failed.no_information":
-    "Il n'y avait rien à lire. Ajoutez d'abord votre site Web ou du texte ci-dessous.",
+    "Il n'y avait rien à lire. Ajoutez d'abord votre site Web, une liste de prix ou du texte ci-dessous.",
   "setup.failed.unreadable_reply":
     "La proposition n'a pas pu être préparée cette fois-ci. Veuillez réessayer.",
   "setup.failed.model_unavailable":
@@ -222,7 +251,7 @@ export const fr: Record<MessageKey, string> = {
   "setup.read":
     "{total, plural, one {Votre page a été lue.} other {{read} de vos {total} pages ont été lues.}}",
   "setup.basic":
-    "Aucun modèle d'IA n'est connecté : seules les coordonnées ont été repérées. Connectez un modèle pour obtenir un message d'accueil, des questions suggérées et les heures d'ouverture.",
+    "Aucun modèle d'IA n'est connecté : seules les coordonnées ont été repérées. Connectez un modèle pour obtenir vos services, un message d'accueil, des questions suggérées et les heures d'ouverture.",
   "setup.detailsHint":
     "Les éléments marqués « Trouvé » viennent de vos informations. Vérifiez-les et complétez ce qui manque.",
   "setup.nothingFound":
@@ -231,6 +260,11 @@ export const fr: Record<MessageKey, string> = {
   "setup.evidence": "D'après vos informations :",
   "setup.use": "Utiliser",
   "setup.quickRepliesHint": "Une par ligne. Vos informations répondent à chacune.",
+  "setup.page": "Votre page d'entreprise",
+  "setup.services": "Services et produits trouvés dans vos informations",
+  "setup.servicesHint":
+    "Décochez ce que vous ne voulez pas sur votre page et corrigez le reste. Un prix n'est indiqué que si vos informations le donnent. Les photos et l'ordre se règlent dans l'onglet Page d'entreprise.",
+  "setup.serviceKeep": "Ajouter {name} à ma page",
   "setup.missing": "Questions auxquelles vos informations ne répondent pas encore",
   "setup.missingHint":
     "Les clients les posent souvent. Écrivez une réponse pour l'ajouter, ou laissez le champ vide pour passer.",

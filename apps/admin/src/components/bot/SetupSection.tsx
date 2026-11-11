@@ -26,7 +26,7 @@ const unfinished = (run: SetupRun | null) => run?.status === "pending" || run?.s
 
 /**
  * The setup assistant on the Knowledge tab: reads what the business added and suggests its
- * details, opening hours, greeting and suggested questions. The owner edits the suggestion and
+ * details, opening hours, page description, services and products, greeting and suggested questions. The owner edits the suggestion and
  * applies it; nothing is used before that.
  */
 export function SetupSection({
@@ -187,7 +187,19 @@ function Review({
   const [invalidDay, setInvalidDay] = useState<DayKey | null>(null);
   const greetingCodes = bot.languages.filter((code) => suggestion.greeting[code]);
   const questionCodes = bot.languages.filter((code) => suggestion.quickReplies[code]?.length);
-  const [use, setUse] = useState({ details: true, greeting: true, quickReplies: true });
+  const [use, setUse] = useState({ details: true, page: true, greeting: true, quickReplies: true });
+  // Each proposed service or product, editable, with a tick for the ones to add to the page.
+  const [services, setServices] = useState(() =>
+    (suggestion.services ?? []).map((item) => ({
+      ...item,
+      description: item.description ?? "",
+      priceText: item.priceText ?? "",
+      keep: true,
+    })),
+  );
+  const editService = (index: number, change: Partial<(typeof services)[number]>) =>
+    setServices((list) => list.map((item, i) => (i === index ? { ...item, ...change } : item)));
+  const hasPage = Boolean(suggestion.profile.description) || services.length > 0;
   const toggle = (part: keyof typeof use) => (
     <label className="flex items-center gap-2 text-sm">
       <input
@@ -211,6 +223,20 @@ function Review({
       // Only the details shown here; links and the time zone are left as they are.
       const { bookingUrl: _b, orderingUrl: _o, timezone: _t, ...profile } = result.profile;
       body.profile = profile;
+    }
+    if (use.page) {
+      const description = String(data.get("description") ?? "").trim();
+      if (description) body.profile = { ...(body.profile as object | undefined), description };
+      const kept = services
+        .filter((item) => item.keep && item.name.trim())
+        .map(({ kind, name, description: about, priceText, category }) => ({
+          kind,
+          name: name.trim(),
+          description: about.trim() || null,
+          priceText: priceText.trim() || null,
+          category: category ?? null,
+        }));
+      if (kept.length) body.services = kept;
     }
     if (use.greeting) {
       body.greeting = Object.fromEntries(
@@ -266,6 +292,81 @@ function Review({
           />
         )}
       </fieldset>
+
+      {hasPage && (
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-1 font-semibold">{t("setup.page")}</legend>
+          {toggle("page")}
+          {use.page && suggestion.profile.description && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">{t("page.description")}</span>
+              <textarea
+                className="input"
+                name="description"
+                rows={2}
+                maxLength={300}
+                dir="auto"
+                defaultValue={suggestion.profile.description}
+              />
+              <span className="muted text-xs">{t("page.descriptionHint")}</span>
+            </label>
+          )}
+          {use.page && services.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">{t("setup.services")}</span>
+              <span className="muted text-sm">{t("setup.servicesHint")}</span>
+              <ul className="flex flex-col divide-y divide-[var(--border)]">
+                {services.map((item, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the list is never reordered
+                  <li key={index} className="flex items-start gap-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="mt-2.5"
+                      checked={item.keep}
+                      aria-label={t("setup.serviceKeep", { name: item.name })}
+                      onChange={(e) => editService(index, { keep: e.target.checked })}
+                    />
+                    <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[2fr_1fr]">
+                      <input
+                        className="input"
+                        aria-label={t("catalog.name")}
+                        maxLength={120}
+                        dir="auto"
+                        disabled={!item.keep}
+                        value={item.name}
+                        onChange={(e) => editService(index, { name: e.target.value })}
+                      />
+                      <input
+                        className="input"
+                        aria-label={t("catalog.price")}
+                        placeholder={t("catalog.price")}
+                        maxLength={60}
+                        dir="auto"
+                        disabled={!item.keep}
+                        value={item.priceText}
+                        onChange={(e) => editService(index, { priceText: e.target.value })}
+                      />
+                      <input
+                        className="input sm:col-span-2"
+                        aria-label={t("catalog.description")}
+                        placeholder={t("catalog.description")}
+                        maxLength={500}
+                        dir="auto"
+                        disabled={!item.keep}
+                        value={item.description}
+                        onChange={(e) => editService(index, { description: e.target.value })}
+                      />
+                      <span className="muted text-xs sm:col-span-2" dir="auto">
+                        {[t(`catalog.kind.${item.kind}`), item.category].filter(Boolean).join(" · ")}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </fieldset>
+      )}
 
       {greetingCodes.length > 0 && (
         <fieldset className="flex flex-col gap-3">

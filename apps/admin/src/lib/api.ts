@@ -134,7 +134,18 @@ export interface SetupSuggestion {
     websiteUrl?: string;
     address?: string;
     hours?: WeeklyHours;
+    /** One or two sentences for the top of the business page. */
+    description?: string;
   };
+  /** Services and products found for the business page (absent on older suggestions). */
+  services?: {
+    kind: "service" | "product";
+    name: string;
+    description?: string;
+    /** In the business's own words; left out when its information gives no price. */
+    priceText?: string;
+    category?: string;
+  }[];
   /** The business's own words the hours and address were read from. */
   evidence: { hours?: string; address?: string };
   greeting: Record<string, string>;
@@ -234,13 +245,33 @@ export interface InstalledAddon {
 
 export interface Source {
   id: string;
-  type: "website" | "text";
+  /** file: an uploaded price list or brochure, read into text. */
+  type: "website" | "text" | "file";
   title: string;
   url: string | null;
+  /** Uploaded files: the file's name. */
+  fileName: string | null;
+  /** The setup interview's answers (a text source edited through the interview). */
+  interview?: boolean;
   status: "pending" | "processing" | "ready" | "failed";
   error: string | null;
   documentCount: number;
   lastSyncedAt: string | null;
+}
+
+/** A question of the setup interview, in English and French. */
+export interface InterviewQuestion {
+  key: string;
+  question: { en: string; fr: string };
+  hint: { en: string; fr: string };
+  long?: boolean;
+}
+
+export interface Interview {
+  questions: InterviewQuestion[];
+  answers: Record<string, string>;
+  sourceId: string | null;
+  updatedAt: string | null;
 }
 
 export interface QaPair {

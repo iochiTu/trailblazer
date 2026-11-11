@@ -4,9 +4,23 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ApiError, api, type BotDetail, type QaPair, type Source } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { GapsSection } from "./GapsSection";
-import { PhotosSection } from "./PhotosSection";
+import { InterviewSection } from "./InterviewSection";
+import { PhotosSection, toUploadable } from "./PhotosSection";
 import { SetupSection } from "./SetupSection";
 import { SourceDetail } from "./SourceDetail";
+
+/** Uploaded price lists and brochures: the largest file, and what the file picker offers. */
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const FILE_ACCEPT = ".pdf,.docx,application/pdf,image/png,image/jpeg,image/webp";
+
+/** A file's content as base64 (no `data:` prefix). */
+const toBase64 = (file: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 
 const statusColor: Record<Source["status"], string> = {
   pending: "var(--muted)",
@@ -32,6 +46,8 @@ export function KnowledgeTab({
   const [pairs, setPairs] = useState<QaPair[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [interviewOpen, setInterviewOpen] = useState(false);
 
   const load = useCallback(async () => {
     const [s, q] = await Promise.all([
@@ -66,6 +82,40 @@ export function KnowledgeTab({
     }
   }
 
+  /** Uploads a price list or brochure; a photo is scaled down first, like other photos. */
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const file = data.get("file");
+    if (!(file instanceof File) || !file.size) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const photo = file.type.startsWith("image/");
+      if (!photo && file.size > MAX_FILE_BYTES) {
+        setError(t("knowledge.fileTooBig"));
+        return;
+      }
+      const content = photo ? await toUploadable(file) : await toBase64(file);
+      if (!content) {
+        setError(t("knowledge.fileUnreadable"));
+        return;
+      }
+      const title = String(data.get("title") ?? "").trim();
+      await api(`${base}/sources/file`, {
+        method: "POST",
+        body: { name: file.name, data: content, ...(title ? { title } : {}) },
+      });
+      form.reset();
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.error"));
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function action(path: string, method: "POST" | "DELETE") {
     await api(path, { method });
     await load();
@@ -82,6 +132,7 @@ export function KnowledgeTab({
           await Promise.all([onChange(), load()]);
         }}
       />
+      <InterviewSection base={base} open={interviewOpen} onOpenChange={setInterviewOpen} onSaved={load} />
       <section className="flex flex-col gap-3">
         <div>
           <h3 className="text-lg font-semibold">{t("knowledge.sources")}</h3>
@@ -97,9 +148,14 @@ export function KnowledgeTab({
               <li key={s.id} className="flex flex-col gap-2 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-medium">{s.title}</div>
+                    <div className="font-medium">{s.interview ? t("knowledge.type.interview") : s.title}</div>
                     <div className="muted truncate text-xs" dir="ltr">
-                      {s.url ?? t("knowledge.type.text")}
+                      {s.url ??
+                        (s.interview
+                          ? t("knowledge.type.text")
+                          : s.type === "file"
+                            ? [t("knowledge.type.file"), s.fileName].filter(Boolean).join(" · ")
+                            : t("knowledge.type.text"))}
                     </div>
                     {s.error && <div className="error text-xs">{s.error}</div>}
                   </div>
@@ -111,10 +167,23 @@ export function KnowledgeTab({
                     <button
                       type="button"
                       className="btn btn-ghost py-1"
-                      aria-expanded={openId === s.id}
-                      onClick={() => setOpenId((id) => (id === s.id ? null : s.id))}
+                      aria-expanded={s.interview ? interviewOpen : openId === s.id}
+                      onClick={() => {
+                        if (!s.interview) {
+                          setOpenId((id) => (id === s.id ? null : s.id));
+                          return;
+                        }
+                        setInterviewOpen(true);
+                        document.getElementById("interview")?.scrollIntoView({ behavior: "smooth" });
+                      }}
                     >
-                      {s.type === "text" ? t("knowledge.viewEdit") : t("knowledge.view")}
+                      {s.interview
+                        ? t("knowledge.editAnswers")
+                        : s.type === "text"
+                          ? t("knowledge.viewEdit")
+                          : s.type === "file"
+                            ? t("knowledge.viewText")
+                            : t("knowledge.view")}
                     </button>
                     <button
                       type="button"
@@ -211,6 +280,28 @@ export function KnowledgeTab({
             <div>
               <button className="btn" type="submit">
                 {t("knowledge.add")}
+              </button>
+            </div>
+          </form>
+
+          <form className="panel flex flex-col gap-3 p-4 sm:p-5 md:col-span-2" onSubmit={upload}>
+            <div>
+              <h4 className="font-medium">{t("knowledge.addFile")}</h4>
+              <p className="muted text-sm">{t("knowledge.fileHint")}</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm">
+                {t("knowledge.file")}
+                <input className="input" name="file" type="file" required accept={FILE_ACCEPT} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("knowledge.fileTitle")}
+                <input className="input" name="title" maxLength={200} dir="auto" />
+              </label>
+            </div>
+            <div>
+              <button className="btn" type="submit" disabled={uploading}>
+                {uploading ? t("knowledge.uploading") : t("knowledge.upload")}
               </button>
             </div>
           </form>

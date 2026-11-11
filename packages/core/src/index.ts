@@ -36,6 +36,7 @@ export {
 export * from "./jobs.js";
 export { crawlSite } from "./knowledge/crawl.js";
 export { extractPage } from "./knowledge/extract.js";
+export { FILE_LIMITS, FileReadError, fileSections, readSourceFile } from "./knowledge/files.js";
 export { clearSource, indexDocuments, tsvectorSql } from "./knowledge/index-documents.js";
 export { assertPublicUrl, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";

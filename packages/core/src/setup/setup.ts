@@ -1,18 +1,23 @@
 /**
- * The setup assistant: reads what a business has added (its website pages and notes) and proposes
- * how to set its assistant up: business details, opening hours, a greeting, suggested questions,
- * and the questions its information doesn't answer yet. It runs once per request in the worker and
- * stores a suggestion; nothing changes until the owner reviews and applies it.
+ * The setup assistant: reads what a business has added (its website pages, notes and uploaded
+ * price lists or brochures) and proposes
+ * how to set its assistant and its page up: business details, opening hours, a description, the
+ * services and products it offers, a greeting, suggested questions, and the questions its
+ * information doesn't answer yet. It runs once per request in the worker and stores a suggestion;
+ * nothing changes until the owner reviews and applies it.
  *
  * One model call that returns JSON, so it works on any provider (no tool calling needed). Facts are
  * kept only when they can be found in the pages the model was given: a phone number or email must
- * appear there, and the hours and the address must come with a quote that does.
+ * appear there, the hours and the address must come with a quote that does, a service must be
+ * named there and its price must be written there.
  */
 import {
   bots,
+  catalogItems,
   type Db,
   documents,
   knowledgeSources,
+  type SetupService,
   type SetupSuggestion,
   setupRuns,
   tenants,
@@ -34,6 +39,8 @@ export const SETUP_LIMITS = {
   languages: 4,
   quickReplies: 6,
   missing: 6,
+  /** Services and products proposed in one run. */
+  services: 20,
 } as const;
 
 /** Why a run failed; the portal shows its own text for each. */
@@ -63,14 +70,20 @@ export interface SetupDeps {
 // ---- Choosing what to read -------------------------------------------------------------------
 
 const KEY_PAGE =
-  /contact|about|hours|horaire|location|find-us|visit|a-propos|nous-joindre|faq|menu|service|pricing|tarif/i;
+  /contact|about|hours|horaire|location|find-us|visit|a-propos|nous-joindre|faq|menu|service|pric|prix|rates|tarif/i;
 
-/** Lower is read first: the owner's own notes and the home page, then contact/about/hours pages. */
+/** The owner's own notes ("text:<id>") and uploaded files ("file:<id>") have no web address. */
+const ownWords = (url: string | null) => !url || /^(text|file):/.test(url);
+
+/**
+ * Lower is read first: the owner's own notes and files and the home page, then contact/about/hours
+ * pages.
+ */
 function rank(page: SetupPage): number {
-  if (!page.url || page.url.startsWith("text:")) return 0;
+  if (ownWords(page.url)) return 0;
   let path = "";
   try {
-    path = new URL(page.url).pathname;
+    path = new URL(page.url ?? "").pathname;
   } catch {
     // not a URL: treat as a top-level page
   }
@@ -95,7 +108,7 @@ export function selectPages(pages: SetupPage[], budget: number = SETUP_LIMITS.in
 
 // ---- The request -----------------------------------------------------------------------------
 
-const SETUP_RULES = `You help set up a customer-service chat assistant for a local business. <pages> holds text from the business's own website and notes. Read it and describe the business as one JSON object.
+const SETUP_RULES = `You help set up a customer-service chat assistant for a local business. <pages> holds text from the business's own website, notes and files (such as a price list or a brochure). Read it and describe the business as one JSON object.
 
 # Rules
 - Use only what the pages say. When the pages don't state something, use null (or an empty list). Never guess, and never fill a gap with what is typical for this kind of business.
@@ -114,10 +127,23 @@ const SETUP_RULES = `You help set up a customer-service chat assistant for a loc
     { "mon": [{ "open": "07:00", "close": "16:00" }], "tue": [...], "wed": [...], "thu": [...], "fri": [...], "sat": [...], "sun": [] }
     Use 24-hour "HH:MM". List all seven days; a closed day is []. A day with a break has two entries.
   "hoursQuote": the sentence or lines copied word for word from the pages that give the hours, or null,
+  "description": one or two sentences that say what the business does and where, or null,
+  "services": [up to 20 objects, the most important first]:
+    { "name": the service or product as the business names it, "kind": "service" or "product", "description": one short sentence about it or null, "price": its price copied exactly as the pages give it or null, "category": a short group name or null },
   "greeting": { "<language code>": a welcome message for the chat window in that language },
   "quickReplies": { "<language code>": [3 or 4 short questions] },
   "missing": [up to 6 questions]
 }
+
+# description
+For the top of the business's public page: at most 300 characters, in the default language. Say only what the pages say, in plain words. No praise the pages don't back up (no "best", "trusted", "affordable").
+
+# services
+What a customer can buy, book or ask a quote for, as the pages list it: one entry per service or product, never one per page. Leave the list empty when the pages name none.
+- "name": the business's own name for it, a few words.
+- "description": shorten the pages' own words about it. Add nothing.
+- "price": copy the price text exactly as written, with its qualifier ("from $120", "$95/hour", "call for a quote"). Never work out, convert, round or estimate a price. Use null when the pages give no price for that item.
+- "category": the same short name (such as "Repairs" or "Installations") for items that belong together; null when the business offers only a few things.
 
 # greeting
 One or two friendly sentences (at most 200 characters) that say what the assistant can help with, for each language code in <languages>. Name the business. Don't state facts such as hours or prices.
@@ -140,7 +166,7 @@ export function buildSetupRequest(input: {
 }): ChatRequest {
   const pages = input.pages
     .map((page) => {
-      const where = page.url && !page.url.startsWith("text:") ? ` url="${attr(page.url)}"` : "";
+      const where = page.url && !ownWords(page.url) ? ` url="${attr(page.url)}"` : "";
       return `<page title="${attr(page.title ?? "")}"${where}>\n${page.content}\n</page>`;
     })
     .join("\n\n");
@@ -188,6 +214,10 @@ const text = (value: unknown, max: number): string | undefined => {
   return clean ? clean.slice(0, max) : undefined;
 };
 
+/** The share of a written sentence's longer words that must come from the pages. */
+const SENTENCE_SHARE = 0.7;
+const wordsOf = (value: string) => plain(value).split(" ").filter(Boolean);
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -232,10 +262,33 @@ const strings = (value: unknown, max: number, length: number): string[] =>
  */
 export function readSuggestion(
   reply: Record<string, unknown>,
-  context: { pages: SetupPage[]; languages: string[] },
-): Pick<SetupSuggestion, "profile" | "evidence" | "greeting" | "quickReplies" | "missing"> {
+  context: {
+    pages: SetupPage[];
+    languages: string[];
+    /** Names of the services and products already on the business page: not proposed again. */
+    listed?: string[];
+  },
+): Pick<SetupSuggestion, "profile" | "evidence" | "greeting" | "quickReplies" | "missing" | "services"> {
   const corpus = context.pages.map((page) => `${page.title ?? ""}\n${page.content}`).join("\n");
   const plainCorpus = ` ${plain(corpus)} `;
+  const corpusWords = new Set(plainCorpus.split(" "));
+  /**
+   * True when the pages use these words: all of them for a name (share 1), most of them for a
+   * sentence, which may be reworded but never carries a number the pages don't give.
+   */
+  const worded = (value: string, share: number) => {
+    const all = wordsOf(value);
+    if (all.some((word) => /\p{N}/u.test(word) && !corpusWords.has(word))) return false;
+    // Short words ("a", "the", "et") say nothing about where a sentence came from.
+    const telling = share < 1 ? all.filter((word) => word.length >= 4) : all;
+    const checked = telling.length ? telling : all;
+    return (
+      checked.length > 0 && checked.filter((word) => corpusWords.has(word)).length >= checked.length * share
+    );
+  };
+  /** A name the pages give: its words, or the name itself in scripts written without spaces. */
+  const named = (name: string) =>
+    worded(name, 1) || (/[^\p{Script=Latin}\p{N} ]/u.test(plain(name)) && plainCorpus.includes(plain(name)));
   /** True when the words appear in the pages (in pieces, if the model joined them with "…"). */
   const quoted = (quote: string | undefined) => {
     const parts = (quote ?? "")
@@ -276,6 +329,31 @@ export function readSuggestion(
     evidence.hours = hoursQuote;
   }
 
+  const description = text(reply.description, 300);
+  if (description && worded(description, SENTENCE_SHARE)) profile.description = description;
+
+  const services: SetupService[] = [];
+  const seen = new Set((context.listed ?? []).map(plain));
+  for (const item of Array.isArray(reply.services) ? reply.services : []) {
+    if (services.length >= SETUP_LIMITS.services) break;
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const fields = item as Record<string, unknown>;
+    const name = text(fields.name, 120);
+    if (!name || seen.has(plain(name)) || !named(name)) continue;
+    seen.add(plain(name));
+    const about = text(fields.description, 300);
+    const price = text(fields.price, 60);
+    const category = text(fields.category, 60);
+    services.push({
+      kind: fields.kind === "product" ? "product" : "service",
+      name,
+      ...(about && worded(about, SENTENCE_SHARE) ? { description: about } : {}),
+      // A price is kept only as the pages write it, whole.
+      ...(price && plain(price) && plainCorpus.includes(` ${plain(price)} `) ? { priceText: price } : {}),
+      ...(category ? { category } : {}),
+    });
+  }
+
   const greeting: Record<string, string> = {};
   const quickReplies: Record<string, string[]> = {};
   const perLanguage = (value: unknown) =>
@@ -290,6 +368,7 @@ export function readSuggestion(
   return {
     profile,
     evidence,
+    services,
     greeting,
     quickReplies,
     missing: strings(reply.missing, SETUP_LIMITS.missing, 300).filter((question) => question.length >= 3),
@@ -335,8 +414,18 @@ export async function runSetup(deps: SetupDeps, tenantId: string, runId: string)
       .where(and(eq(knowledgeSources.botId, bot.id), eq(knowledgeSources.type, "website")))
       .orderBy(knowledgeSources.createdAt)
       .limit(1);
+    const listed = await tx
+      .select({ name: catalogItems.name })
+      .from(catalogItems)
+      .where(eq(catalogItems.botId, bot.id));
     await tx.update(setupRuns).set({ status: "running", error: null }).where(eq(setupRuns.id, runId));
-    return { bot, businessName: tenant?.name ?? bot.name, pages, website: website?.url ?? null };
+    return {
+      bot,
+      businessName: tenant?.name ?? bot.name,
+      pages,
+      website: website?.url ?? null,
+      listed: listed.map((item) => item.name),
+    };
   });
   if (!loaded) return;
   const { bot } = loaded;
@@ -358,6 +447,7 @@ export async function runSetup(deps: SetupDeps, tenantId: string, runId: string)
       suggestion = {
         profile: basicSuggestion(pages),
         evidence: {},
+        services: [],
         greeting: {},
         quickReplies: {},
         missing: [],
@@ -392,7 +482,7 @@ export async function runSetup(deps: SetupDeps, tenantId: string, runId: string)
         reply = rest.stopReason === "refusal" ? null : extractJson(replyText);
       }
       if (!reply) throw new SetupFailure(SETUP_ERRORS.unreadable);
-      suggestion = { ...readSuggestion(reply, { pages, languages }), ...read };
+      suggestion = { ...readSuggestion(reply, { pages, languages, listed: loaded.listed }), ...read };
     }
     // The address of the website the owner added needs no model.
     if (loaded.website) {

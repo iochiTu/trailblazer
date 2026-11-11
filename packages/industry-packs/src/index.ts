@@ -407,6 +407,7 @@ export function isSelectable(
   return pack.variants.some((x) => x.slug === variant);
 }
 
+export { getInterview, INTERVIEW_LIMITS, type InterviewQuestion } from "./interview.js";
 export {
   getTemplate,
   hasTemplate,

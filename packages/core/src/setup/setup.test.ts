@@ -1,5 +1,6 @@
 import {
   bots,
+  catalogItems,
   createDb,
   type DbHandle,
   knowledgeSources,
@@ -144,7 +145,14 @@ describe("setup assistant: reading", () => {
       },
       { pages, languages: ["en"] },
     );
-    expect(suggestion).toEqual({ profile: {}, evidence: {}, greeting: {}, quickReplies: {}, missing: [] });
+    expect(suggestion).toEqual({
+      profile: {},
+      evidence: {},
+      services: [],
+      greeting: {},
+      quickReplies: {},
+      missing: [],
+    });
 
     // A quote the model stitched together from two places still counts; unusable times don't.
     const stitched = readSuggestion(
@@ -163,6 +171,79 @@ describe("setup assistant: reading", () => {
       sat: [{ open: "08:00", close: "14:00" }],
       sun: [],
     });
+  });
+
+  it("proposes the services the pages name, with prices only as the pages write them", () => {
+    const shop: SetupPage[] = [
+      {
+        url: "text:prices",
+        title: "Price list",
+        content:
+          "Lakehead Auto & Tire, Thunder Bay. Family-run repair shop on Memorial Avenue.\n" +
+          "Seasonal tire changeover (on rims): $49.99\nTire changeover, mount and balance - from $120\n" +
+          "Oil change with synthetic oil  $89 + tax\nBrake inspection: free with any service\n" +
+          "Wheel alignment. Call for a quote.\nWe also sell winter tires from all major brands.",
+      },
+    ];
+    const suggestion = readSuggestion(
+      {
+        description: "Family-run repair shop on Memorial Avenue in Thunder Bay.",
+        services: [
+          {
+            name: "Seasonal tire changeover (on rims)",
+            kind: "service",
+            price: "$49.99",
+            category: "Tires",
+            description: "Changeover of tires already on rims.",
+          },
+          { name: "Tire changeover, mount and balance", price: "from $120", category: "Tires" },
+          // The page says $89, not $79; and nothing about how long it takes.
+          { name: "Oil change", price: "$79", description: "Oil change with synthetic oil in 30 minutes." },
+          { name: "Wheel alignment", price: "Call for a quote" },
+          { name: "Winter tires", kind: "product", price: null },
+          // Not offered on the pages, already proposed, already on the page, or not a service at all.
+          { name: "Windshield replacement", price: "$120" },
+          { name: "wheel alignment" },
+          { name: "Brake inspection" },
+          { price: "$49.99" },
+          "Detailing",
+        ],
+      },
+      { pages: shop, languages: ["en"], listed: ["Brake Inspection"] },
+    );
+    expect(suggestion.profile.description).toBe("Family-run repair shop on Memorial Avenue in Thunder Bay.");
+    expect(suggestion.services).toEqual([
+      {
+        kind: "service",
+        name: "Seasonal tire changeover (on rims)",
+        description: "Changeover of tires already on rims.",
+        priceText: "$49.99",
+        category: "Tires",
+      },
+      {
+        kind: "service",
+        name: "Tire changeover, mount and balance",
+        priceText: "from $120",
+        category: "Tires",
+      },
+      { kind: "service", name: "Oil change" },
+      { kind: "service", name: "Wheel alignment", priceText: "Call for a quote" },
+      { kind: "product", name: "Winter tires" },
+    ]);
+
+    // A description the pages don't back up is dropped; the list is capped.
+    const many = readSuggestion(
+      {
+        description: "Award-winning dealership with certified master technicians since 1962.",
+        services: Array.from({ length: 30 }, (_, n) => ({ name: `Oil change ${n}` })),
+      },
+      {
+        pages: [{ url: null, title: null, content: `Oil change ${[...Array(30).keys()].join(" ")}` }],
+        languages: ["en"],
+      },
+    );
+    expect(many.profile.description).toBeUndefined();
+    expect(many.services).toHaveLength(SETUP_LIMITS.services);
   });
 
   it("picks out contact details by pattern when there is no model", () => {
@@ -338,6 +419,54 @@ describe("setup assistant: runs", () => {
     expect(provider.requests).toHaveLength(1);
   });
 
+  it("proposes services from the owner's notes, leaving out the ones already on the page", async () => {
+    const [source] = await owner.db
+      .insert(knowledgeSources)
+      .values({ tenantId, botId, type: "text", title: "Menu", status: "ready" })
+      .returning();
+    const menu = "Latte $4.50\nSourdough loaf $8\nCatering for meetings, ask us for a quote.";
+    await withTenant(app.db, tenantId, async (tx) => {
+      await indexDocuments(tx, {
+        tenantId,
+        botId,
+        sourceId: source!.id,
+        removeMissing: true,
+        docs: [
+          {
+            url: `text:${source!.id}`,
+            title: "Menu",
+            language: "en",
+            sections: [{ heading: null, text: menu }],
+            text: menu,
+          },
+        ],
+      });
+      await tx.insert(catalogItems).values({ tenantId, botId, kind: "product", name: "Latte" });
+    });
+    try {
+      const provider = new ScriptedProvider([
+        JSON.stringify({
+          ...goodReply,
+          services: [
+            { name: "Latte", kind: "product", price: "$4.50" },
+            { name: "Sourdough loaf", kind: "product", price: "$8" },
+            { name: "Catering", kind: "service", price: "$15 per person" },
+          ],
+        }),
+      ]);
+      const runId = await startRun();
+      await runSetup({ db: app.db, gateway: gatewayFor(provider) }, tenantId, runId);
+      expect((await getRun(runId)).suggestion!.services).toEqual([
+        { kind: "product", name: "Sourdough loaf", priceText: "$8" },
+        { kind: "service", name: "Catering" },
+      ]);
+      expect(provider.requests[0]!.system[0]!.text).toContain('"services"');
+    } finally {
+      await owner.db.delete(knowledgeSources).where(eq(knowledgeSources.id, source!.id));
+      await owner.db.delete(catalogItems).where(eq(catalogItems.botId, botId));
+    }
+  });
+
   it("asks once more when the reply isn't JSON, then gives up", async () => {
     const recovers = new ScriptedProvider(["Sure! Let me think about that.", JSON.stringify(goodReply)]);
     const first = await startRun();
@@ -378,6 +507,7 @@ describe("setup assistant: runs", () => {
         websiteUrl: "https://cafe.example",
       },
       evidence: {},
+      services: [],
       greeting: {},
       quickReplies: {},
       missing: [],

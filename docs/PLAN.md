@@ -1,8 +1,8 @@
 # Traiblazer — Multi-Tenant AI Business Page and Chat Assistant Platform for Small Businesses
 
 > Working name taken from the project folder. Status: **web chat platform and AI business page built
-> (Phase 1, milestones 1.1–1.3 — see README); next: setup without a website (1.4); phone and
-> SMS not started**.
+> (Phase 1, milestones 1.1–1.3 — see README); setup without a website (1.4) built except Google
+> listing details (open decision §17.4); next: pilot readiness (1.5); phone and SMS not started**.
 > **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
 > the hosted chat page works as the business's website, for businesses that have no site or an outdated
 > one (§7.1). Phone and SMS move to a later phase. The audience is unchanged from v5.
@@ -190,7 +190,7 @@ Sector            e.g. Food & Drink
 | **Notices & live status** | Time-limited announcements on the page and in answers (closures, storm delays, "booking tire changeovers now"), auto-translated | built (the assistant translates in answers; page shows the owner's text) |
 | **Human handoff** | Email alert to the owner with the request and the conversation | built |
 | **Knowledge gaps** | Questions the assistant couldn't answer, grouped, with "answer it" | built |
-| **Setup assistant** | Proposes business details, greeting and FAQs from the website (built); interview mode and services from a price list for businesses without a website | 1 |
+| **Setup assistant** | Proposes business details, the page description, services and products with the prices found in the sources, greeting and FAQs from the website, notes, uploaded price lists or brochures and the interview answers (built) | built |
 | **Image upload** | Customer photos in chat via vision models | built |
 | **Multilingual** | Answers in the customer's language; EN/FR page and admin (§6) | built |
 | **Safety & escalation** | Emergency keywords → urgent message + phone; crisis lines (9-8-8, 911) | built |
@@ -753,6 +753,7 @@ All tables carry `tenant_id` with RLS.
 | `business_profile`                                 | hours & seasons, contact, booking/ordering URLs, **staff_languages[]**                                               |
 | `notices`                                          | text + translations, starts_at, ends_at                                                                              |
 | `knowledge_sources`, `documents`, `chunks`         | language per document/chunk, embedding, tsvector, trigram                                                            |
+| `source_files`                                     | an uploaded price list or brochure waiting to be read (private; removed once its text is on the source)             |
 | `qa_pairs`                                         | question variants, answer, **translations** (machine / owner-reviewed flag)                                          |
 | `catalog_items`                                    | kind, name, description, price text, category, photo, main button, order, shown (built); structured attributes (Phase 3 feeds) |
 | `conversations`, `messages`                        | channel, **language**, original + translated text, citations, scope flags, model/provider, tokens, cost              |
@@ -823,7 +824,8 @@ phase, when `conversations.channel` gains `sms` and `voice` (today: `hosted`, `i
   chart, by assistant/channel, estimated AI cost for owners/admins). Later: Cloudflare Turnstile on suspicious
   traffic, email alerts at 80 % / 100 %.
 - Prompt injection: retrieved content and visitor text are data; server-side tool validation; works in all languages
-- Uploads: type/size limits, malware scan, private storage
+- Uploads: type detected from the content, size limits, private storage; an uploaded price list or
+  brochure is deleted once its text is read (built). Malware scan: not built
 
 ## 13. Scalability path
 
@@ -863,7 +865,7 @@ pack phases in code (1–4) follow the industry phases above.
 | **1.1 Chat end-to-end** (done) | Knowledge tables + RLS; LLM gateway; background jobs; website crawl, text and Q&A sources; retrieval; streaming answers with sources; conversation logging + usage metering; hosted chat page, inline iframe and floating widget; admin: knowledge sources, playground, share link & embed codes |
 | **1.2 Business page** (done) | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
 | **1.3 Requests for trades and auto shops** (done) | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
-| **1.4 Setup without a website** | Interview mode in the setup assistant; price list and brochure upload (PDF, DOCX, photo with vision OCR); services proposed from the sources; Google listing details if the terms allow (§17) |
+| **1.4 Setup without a website** (done, except Google listing details) | Services and products, with prices, and the page description proposed from the sources and added to the page after the owner's review; price list and brochure upload (PDF with a text layer, DOCX, photo read by a vision model) as a knowledge source; interview mode (industry questions, EN/FR, answers saved as a knowledge source). **Waiting:** Google listing details, on open decision §17.4. Not covered yet: scanned PDFs (upload photos of the pages instead) and correcting the text read from a file |
 | **1.5 Pilot readiness** | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) |
 
 **MVP success criteria:** 10–20 trades and auto businesses with a live page in one or two cities, at least

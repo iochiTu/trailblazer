@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   availablePacks,
+  getInterview,
   getTemplate,
   hasTemplate,
   isSelectable,
@@ -158,5 +159,29 @@ describe("workflow library", () => {
     const generic = getTemplate("generic").library;
     expect(generic.filter((w) => w.id === "contact-request")).toHaveLength(1);
     expect(generic.find((w) => w.id === "contact-request")?.group).toBe("industry");
+  });
+});
+
+describe("setup interview", () => {
+  it("asks the common questions, then the industry's own, each once and in both languages", () => {
+    for (const pack of packs) {
+      const questions = getInterview(pack.slug);
+      const keys = questions.map((question) => question.key);
+      expect(new Set(keys).size).toBe(keys.length);
+      expect(keys.slice(0, 6)).toEqual(["about", "services", "where", "hours", "contact", "payment"]);
+      for (const question of questions) {
+        expect(question.key).toMatch(/^[a-z]{1,40}$/);
+        expect(
+          question.question.en && question.question.fr && question.hint.en && question.hint.fr,
+        ).toBeTruthy();
+      }
+    }
+    expect(getInterview("trades").map((question) => question.key)).toContain("emergency");
+    expect(getInterview("trades").map((question) => question.key)).not.toContain("visit");
+    expect(getInterview("auto-repair").map((question) => question.key)).toEqual(
+      expect.arrayContaining(["visit", "vehicles", "tires", "warranty"]),
+    );
+    // An industry without its own questions, or an unknown one, gets the common ones.
+    expect(getInterview("unknown-pack")).toHaveLength(6);
   });
 });

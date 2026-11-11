@@ -1,6 +1,6 @@
 /**
  * Background worker: polls the Postgres job queue and runs jobs (website crawls, text indexing,
- * add-on effects such as notification emails, urgent request alerts, the setup assistant).
+ * reading uploaded price lists and brochures, add-on effects such as notification emails, urgent request alerts, the setup assistant).
  * Several workers can run side by side; jobs are claimed with FOR UPDATE SKIP LOCKED.
  */
 import { hostname } from "node:os";
@@ -38,7 +38,7 @@ const adminUrl = process.env.ADMIN_ORIGIN ? new URL(process.env.ADMIN_ORIGIN).or
 async function run(job: JobRow): Promise<void> {
   switch (job.type) {
     case JOB_TYPES.sourceSync:
-      await syncSource({ db, embeddings }, job.tenantId, String(job.payload.sourceId));
+      await syncSource({ db, embeddings, gateway }, job.tenantId, String(job.payload.sourceId));
       return;
     case JOB_TYPES.addonEffect: {
       const payload = job.payload as unknown as AddonEffectPayload;

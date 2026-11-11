@@ -11,6 +11,7 @@ import {
   messageAttachments,
   messages,
   qaPairs,
+  sourceFiles,
   tenants,
   withTenant,
 } from "@traiblazer/db";
@@ -18,9 +19,12 @@ import {
   createKnowledgeImageSchema,
   createSourceSchema,
   MAX_KNOWLEDGE_IMAGE_BYTES,
+  MAX_SOURCE_FILE_BYTES,
   qaPairSchema,
+  SOURCE_FILE_LIMIT,
   updateKnowledgeImageSchema,
   updateTextSourceSchema,
+  uploadSourceFileSchema,
 } from "@traiblazer/shared";
 import { and, asc, count, desc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -28,7 +32,7 @@ import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
 import { badRequest, HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
-import { prepareChatImage } from "../lib/images.js";
+import { prepareChatImage, sniffSourceFileType, stripImageMetadata } from "../lib/images.js";
 import { requireTenantRole } from "../plugins/auth.js";
 import { publicAssetUrl } from "./assets.js";
 
@@ -79,12 +83,20 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
           documentCount: knowledgeSources.documentCount,
           lastSyncedAt: knowledgeSources.lastSyncedAt,
           createdAt: knowledgeSources.createdAt,
+          settings: knowledgeSources.settings,
         })
         .from(knowledgeSources)
         .where(eq(knowledgeSources.botId, botId))
         .orderBy(desc(knowledgeSources.createdAt)),
     );
-    return { sources };
+    return {
+      sources: sources.map(({ settings, ...source }) => ({
+        ...source,
+        fileName: settings.file?.name ?? null,
+        /** The setup interview's answers: edited through the interview. */
+        interview: Boolean(settings.interview),
+      })),
+    };
   });
 
   app.post<BotParams>(
@@ -126,7 +138,82 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
     },
   );
 
-  /** One source with its content: the pasted text, or the list of pages read from a website. */
+  /**
+   * Uploads a price list, menu or brochure (PDF, Word document or photo). The worker reads it into
+   * text, which becomes the source's content; the file itself is private and removed once read.
+   */
+  app.post<BotParams>(
+    `${base}/sources/file`,
+    {
+      preHandler: requireTenantRole(db, "editor"),
+      bodyLimit: Math.ceil((MAX_SOURCE_FILE_BYTES * 4) / 3) + 16 * 1024,
+    },
+    async (request, reply) => {
+      const { tenantId, botId } = request.params;
+      const input = uploadSourceFileSchema.parse(request.body);
+      const raw = Buffer.from(input.data, "base64");
+      if (!raw.length || raw.length > MAX_SOURCE_FILE_BYTES) {
+        throw badRequest("Files must be smaller than 5 MB");
+      }
+      const contentType = sniffSourceFileType(raw);
+      // Photos lose their metadata (where and when they were taken) before they are stored.
+      const bytes = contentType?.startsWith("image/")
+        ? stripImageMetadata(raw, contentType as "image/png" | "image/jpeg" | "image/webp")
+        : raw;
+      if (!contentType || !bytes) {
+        throw badRequest("Please upload a PDF, a Word document (.docx) or a photo (PNG, JPEG or WebP)");
+      }
+
+      const source = await forBot(tenantId, botId, async (tx) => {
+        const [used] = await tx
+          .select({ n: count() })
+          .from(knowledgeSources)
+          .where(and(eq(knowledgeSources.botId, botId), eq(knowledgeSources.type, "file")));
+        if ((used?.n ?? 0) >= SOURCE_FILE_LIMIT) {
+          throw new HttpError(
+            409,
+            "file_limit",
+            `An assistant can have up to ${SOURCE_FILE_LIMIT} uploaded files. Delete one to add another.`,
+          );
+        }
+        const [row] = await tx
+          .insert(knowledgeSources)
+          .values({
+            tenantId,
+            botId,
+            type: "file",
+            title: input.title ?? (input.name.replace(/\.[A-Za-z0-9]{1,5}$/, "").trim() || input.name),
+            settings: { file: { name: input.name, contentType, sizeBytes: bytes.length } },
+          })
+          .returning();
+        await tx.insert(sourceFiles).values({
+          sourceId: row!.id,
+          tenantId,
+          contentType,
+          bytes,
+          sizeBytes: bytes.length,
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+        });
+        await audit(tx, {
+          tenantId,
+          actorUserId: request.user!.id,
+          action: "source.created",
+          targetType: "knowledge_source",
+          targetId: row!.id,
+          metadata: { type: "file", contentType, sizeBytes: bytes.length },
+        });
+        return row!;
+      });
+      await enqueueJob(db, { tenantId, type: JOB_TYPES.sourceSync, payload: { sourceId: source.id } });
+      const { settings, ...created } = source;
+      return reply.code(201).send({ source: { ...created, fileName: settings.file?.name ?? null } });
+    },
+  );
+
+  /**
+   * One source with its content: the pasted text, the text read from an uploaded file, or the list
+   * of pages read from a website.
+   */
   app.get<ItemParams>(
     `${base}/sources/:itemId`,
     { preHandler: requireTenantRole(db, "viewer") },
@@ -155,6 +242,8 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
             title: source.title,
             url: source.url,
             content: source.content,
+            fileName: source.settings.file?.name ?? null,
+            fileType: source.settings.file?.contentType ?? null,
             status: source.status,
             error: source.error,
             documentCount: source.documentCount,
@@ -177,13 +266,16 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
       const input = updateTextSourceSchema.parse(request.body);
       const source = await forBot(tenantId, botId, async (tx) => {
         const [current] = await tx
-          .select({ type: knowledgeSources.type })
+          .select({ type: knowledgeSources.type, settings: knowledgeSources.settings })
           .from(knowledgeSources)
           .where(and(eq(knowledgeSources.id, itemId), eq(knowledgeSources.botId, botId)))
           .limit(1);
         if (!current) throw notFound("Source");
         if (current.type !== "text")
           throw badRequest("Only pasted text can be edited. Refresh websites instead.");
+        if (current.settings.interview) {
+          throw badRequest("These are your interview answers: change them in the interview.");
+        }
         const [row] = await tx
           .update(knowledgeSources)
           .set({ ...input, status: "pending", error: null })

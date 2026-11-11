@@ -1,6 +1,16 @@
 import { runSetup, syncSource } from "@traiblazer/core";
-import { createDb, type DbHandle, jobs, runMigrations, setupRuns, tenants, users } from "@traiblazer/db";
+import {
+  catalogItems,
+  createDb,
+  type DbHandle,
+  jobs,
+  runMigrations,
+  setupRuns,
+  tenants,
+  users,
+} from "@traiblazer/db";
 import { createGatewayFromEnv } from "@traiblazer/llm";
+import { CATALOG_LIMIT } from "@traiblazer/shared";
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -147,6 +157,29 @@ describe("setup assistant", () => {
         .statusCode,
     ).toBe(400);
 
+    // More services than the page can hold: refused, and nothing of the suggestion is saved.
+    expect(
+      (await call("POST", `${base()}/catalog`, { name: "Coffee beans", kind: "product" })).statusCode,
+    ).toBe(201);
+    await ownerDb.db.insert(catalogItems).values(
+      Array.from({ length: CATALOG_LIMIT - 2 }, (_, n) => ({
+        tenantId,
+        botId,
+        name: `Filler ${n}`,
+        position: 9,
+      })),
+    );
+    const full = await call("POST", `${base()}/setup/${runId}/apply`, {
+      greeting: { en: "Not saved" },
+      services: [{ name: "One" }, { name: "Two" }],
+    });
+    expect(full.statusCode).toBe(409);
+    expect(full.json().error).toBe("catalog_limit");
+    expect((await call("GET", base())).json().bot.settings.greeting?.en).toBeUndefined();
+    await ownerDb.db
+      .delete(catalogItems)
+      .where(and(eq(catalogItems.botId, botId), eq(catalogItems.position, 9)));
+
     const hours = { mon: [{ open: "07:00", close: "16:00" }], sun: [] };
     const applied = await call("POST", `${base()}/setup/${runId}/apply`, {
       profile: { phone: "807-555-0142", address: { full: "12 Water Street, Thunder Bay" }, hours },
@@ -154,6 +187,10 @@ describe("setup assistant", () => {
       greeting: { en: "Welcome to Maple Bakery!", de: "Willkommen!" },
       quickReplies: { fr: ["Quelles sont vos heures ?"] },
       answers: [{ question: "Do you have parking?", answer: "Yes, behind the building." }],
+      services: [
+        { name: "Sourdough loaf", kind: "product", priceText: "$8", description: null },
+        { name: "Catering", category: "For groups", description: "Trays for meetings." },
+      ],
     });
     expect(applied.statusCode).toBe(200);
     expect(applied.json().run).toMatchObject({ status: "applied", suggestion: null });
@@ -175,6 +212,22 @@ describe("setup assistant", () => {
     const { pairs } = (await call("GET", `${base()}/qa`)).json();
     expect(pairs).toMatchObject([
       { question: "Do you have parking?", answer: "Yes, behind the building.", language: "en" },
+    ]);
+
+    // The services the owner kept are on the business page, after the one that was there.
+    const { items } = (await call("GET", `${base()}/catalog`)).json();
+    expect(items).toMatchObject([
+      { name: "Coffee beans", position: 0 },
+      { name: "Sourdough loaf", kind: "product", priceText: "$8", description: null, position: 1 },
+      {
+        name: "Catering",
+        kind: "service",
+        priceText: null,
+        category: "For groups",
+        action: "ask",
+        enabled: true,
+        position: 2,
+      },
     ]);
 
     // A suggestion is applied once.

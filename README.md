@@ -5,8 +5,9 @@ for the product plan and roadmap.
 
 **Status:** Phase 1, milestones 1.1 (chat end-to-end), 1.2 (business page) and 1.3 (requests for
 trades and auto shops: urgent triage and alerts, request details and photos, service-area check, call
-and book buttons) — knowledge sources
-(website crawl, text, Q&A), retrieval, streaming answers with sources, multi-provider LLM gateway,
+and book buttons), and most of 1.4 (setup without a website: services and prices proposed from the
+sources, price-list and brochure upload, interview) — knowledge sources
+(website crawl, text, Q&A, uploaded price lists and brochures, interview answers), retrieval, streaming answers with sources, multi-provider LLM gateway,
 three ways to put the chat on a customer's site (business page, inline iframe, floating widget), and
 the business page itself: services and products, notices, gallery, hours, friendly link, search-engine
 basics. See PLAN.md §14 for what's next.
@@ -18,7 +19,7 @@ apps/
   api/              Fastify API: auth, tenants, bots, knowledge, public chat, chat page + widget.js
   admin/            Next.js admin portal (EN/FR): knowledge, test chat, share & install, requests, conversations
   chat/             Preact chat page (hosted link / iframe / widget panel) + widget.js loader
-  worker/           Background jobs: website crawling and indexing
+  worker/           Background jobs: website crawling, reading uploaded files, indexing
 packages/
   core/             Chat engine, tools, retrieval, prompt (locked platform rules), crawler, job queue
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
@@ -204,18 +205,60 @@ the marker from the stream (`packages/core/src/chat/markers.ts`, the same filter
 - Questions from the owner's test chat are flagged but not listed. A question that was also passed to
   staff as a request is listed, but only the request is emailed.
 
+## Price lists and brochures (uploaded files)
+
+A business without a website can upload what it has: on the **Knowledge** tab, **Upload a price list or
+brochure** takes a PDF, a Word document (.docx) or a photo (PNG, JPEG, WebP), up to 5 MB and 20 files
+per assistant (PLAN milestone 1.4).
+
+- The worker reads the file into text (`packages/core/src/knowledge/files.ts`): a PDF's text layer
+  (`unpdf`, first 50 pages), a Word document's headings, paragraphs, lists and tables with each table
+  row kept on one line (`mammoth`), or a photo written out by a model that can see images (the `agent`
+  routes; one call, recorded as `llm.agent` usage). The text is indexed like pasted text and is what
+  the setup assistant reads to propose services and prices.
+- Nothing is guessed. A scanned PDF with no text layer, a document that can't be opened, a photo with
+  no readable text, or a photo when no connected model reads images fails with the reason shown on
+  the source. The owner can open **View text** to check what was read.
+- The type is detected from the file's content, never its name. The file is stored privately
+  (`source_files`, RLS; there is no public route to it), photos lose their metadata first, and the file
+  is deleted once its text has been read. **Refresh** re-indexes the kept text, so a photo is sent to a
+  model once.
+- A Word document is a zip: one whose directory declares more than 40 MB unpacked is refused.
+
+## Interview (no website)
+
+A business with nothing written down can answer a few questions instead: **No website? Answer a few
+questions** on the **Knowledge** tab (PLAN milestone 1.4). Every question can be skipped.
+
+- The questions come from the industry (`packages/industry-packs/src/interview.ts`): six common ones
+  (what the business does, services and prices, where, hours, how to reach or book, payment), parking
+  and access for businesses customers visit, then the industry's own (trades: emergency calls, quotes,
+  licences and warranty; auto repair: vehicles, tires, waiting and loaners, warranty; restaurants and
+  cafés: dietary needs, ordering). English and French.
+- The answers are saved as one text source per assistant ("Interview answers"), each answer with its
+  question so it keeps its meaning, in the assistant's default language (English for other languages).
+  It is indexed like pasted text, and the setup assistant reads it like any other source. The answers
+  are edited in the interview, not as pasted text; clearing every answer removes the source.
+- `GET` / `PUT /v1/tenants/:t/bots/:b/interview`. No model is involved: the follow-up questions come
+  from the setup assistant's "Questions your information doesn't answer yet".
+
 ## Setup assistant (onboarding)
 
-Once a business has added its website or some text, the **Knowledge** tab offers **Suggest my setup**:
+Once a business has added its website, a price list or some text, the **Knowledge** tab offers **Suggest my setup**:
 the setup assistant reads those pages in the background and proposes how to set the assistant up. The
 owner edits the proposal and applies it; nothing is used before that.
 
 - It proposes the business details (name, phone, email, address, opening hours), a greeting and
   suggested questions per language, and the questions customers often ask that the information doesn't
   answer yet. An answer the owner writes to one of those is saved as a Q&A answer.
+- For the **business page** it proposes the short description and up to 20 **services and products**
+  (name, price text, description, category) that aren't on the page yet. The owner unticks or corrects
+  them in the review; the ones kept are added to the page's list (PLAN milestone 1.4).
 - Details are kept only when they are found in the pages the model read: a phone number or email must
   appear there, and the hours and the address must come with a quote that does. The review shows that
-  quote next to the suggestion. What can't be found is dropped, never guessed.
+  quote next to the suggestion. A service must be named in the pages; its price is kept only when the
+  pages write that exact price, and a description that brings words or numbers the pages don't have is
+  dropped. What can't be found is dropped, never guessed.
 - One model call that returns JSON (`packages/core/src/setup/setup.ts`), so it works on any provider; no
   tool calling is needed. It uses the `agent` routes (`LLM_AGENT_ROUTES`, default: the chat routes), so
   owner-side jobs can use a different model than live chat. With no model configured it only looks up
@@ -229,7 +272,7 @@ owner edits the proposal and applies it; nothing is used before that.
 
 ## Requirements
 
-- Node.js 22.12+ (26 LTS used locally) and pnpm 10 (`npm install -g pnpm@10`)
+- Node.js 24+ (26 LTS used locally; the PDF reader needs 24) and pnpm 10 (`npm install -g pnpm@10`)
 - Docker (Postgres 17 + pgvector, Redis)
 
 ## Getting started

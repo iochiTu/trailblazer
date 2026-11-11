@@ -433,14 +433,31 @@ export const auditLogs = pgTable(
 // Knowledge (RLS enforced)
 // ---------------------------------------------------------------------------------------------
 
-export const sourceTypes = ["website", "text", "qa"] as const;
+/** file: an uploaded price list or brochure (PDF, Word document or photo), read once into text. */
+export const sourceTypes = ["website", "text", "qa", "file"] as const;
 export type SourceType = (typeof sourceTypes)[number];
+/** Files a business can upload as a source; the type is detected from the content. */
+export const sourceFileTypes = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
+export type SourceFileType = (typeof sourceFileTypes)[number];
 export const sourceStatuses = ["pending", "processing", "ready", "failed"] as const;
 export type SourceStatus = (typeof sourceStatuses)[number];
 
 export interface SourceSettings {
   /** Website crawl: maximum pages to fetch. */
   maxPages?: number;
+  /** Uploaded file: its name as uploaded, its detected type and its size. */
+  file?: { name: string; contentType: SourceFileType; sizeBytes: number };
+  /**
+   * The setup interview (a text source): the owner's answers by question key. The source's text is
+   * written from them, so it is edited through the interview, not as pasted text.
+   */
+  interview?: { answers: Record<string, string> };
 }
 
 export const knowledgeSources = pgTable(
@@ -455,7 +472,7 @@ export const knowledgeSources = pgTable(
     title: text("title").notNull(),
     /** Website: start URL. */
     url: text("url"),
-    /** Text sources: the owner's text. */
+    /** Text sources: the owner's text. File sources: the text read from the file. */
     content: text("content"),
     status: text("status").$type<SourceStatus>().notNull().default("pending"),
     error: text("error"),
@@ -471,6 +488,32 @@ export const knowledgeSources = pgTable(
       name: "knowledge_sources_bot_tenant_fk",
       columns: [t.botId, t.tenantId],
       foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * An uploaded file waiting to be read by the worker. Private: never served to anyone. The row is
+ * removed once the text has been read into the source (and with the source, if that is deleted).
+ */
+export const sourceFiles = pgTable(
+  "source_files",
+  {
+    sourceId: uuid("source_id").primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    contentType: text("content_type").$type<SourceFileType>().notNull(),
+    bytes: bytea("bytes").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "source_files_source_tenant_fk",
+      columns: [t.sourceId, t.tenantId],
+      foreignColumns: [knowledgeSources.id, knowledgeSources.tenantId],
     }).onDelete("cascade"),
   ],
 );
@@ -957,6 +1000,17 @@ export type SetupStatus = (typeof setupStatuses)[number];
  * What the setup assistant proposes for a business after reading its information. Nothing here is
  * in use until the owner reviews it and applies it.
  */
+/** A service or product the setup assistant found in the business's information. */
+export interface SetupService {
+  kind: CatalogKind;
+  /** As the business writes it. */
+  name: string;
+  description?: string;
+  /** The price in the business's own words ("from $120"); left out when its information gives none. */
+  priceText?: string;
+  category?: string;
+}
+
 export interface SetupSuggestion {
   /** Business details found in the information. A detail that wasn't found is left out. */
   profile: {
@@ -966,7 +1020,14 @@ export interface SetupSuggestion {
     websiteUrl?: string;
     address?: string;
     hours?: WeeklyHours;
+    /** One or two sentences for the top of the business page. */
+    description?: string;
   };
+  /**
+   * Services and products for the business page that aren't on it yet. Absent on suggestions
+   * written before the setup assistant proposed them.
+   */
+  services?: SetupService[];
   /** The business's own words that the hours and the address were read from. */
   evidence: { hours?: string; address?: string };
   /** A welcome message per language code. */
@@ -1125,6 +1186,7 @@ export const rlsTables = [
   "bot_addons",
   "audit_logs",
   "knowledge_sources",
+  "source_files",
   "documents",
   "chunks",
   "qa_pairs",

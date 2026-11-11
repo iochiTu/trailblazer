@@ -22,6 +22,25 @@ export function sniffImageType(bytes: Buffer): "image/png" | "image/jpeg" | "ima
 
 export type RasterType = NonNullable<ReturnType<typeof sniffImageType>>;
 
+const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * Detects an uploaded source file's type from its content: a PDF, a Word document (a zip that
+ * holds `word/document.xml`) or a raster image. Anything else is refused (null).
+ */
+export function sniffSourceFileType(bytes: Buffer): "application/pdf" | typeof DOCX_TYPE | RasterType | null {
+  if (bytes.subarray(0, 1024).includes("%PDF-")) return "application/pdf";
+  if (
+    bytes.length >= 4 &&
+    bytes.readUInt32LE(0) === 0x04034b50 &&
+    bytes.includes("word/document.xml") &&
+    bytes.includes("[Content_Types].xml")
+  ) {
+    return DOCX_TYPE;
+  }
+  return sniffImageType(bytes);
+}
+
 /**
  * Removes metadata (EXIF with GPS position and camera details, XMP, IPTC, comments, text chunks)
  * without re-encoding the pixels. Returns null when the file's structure is malformed, so broken

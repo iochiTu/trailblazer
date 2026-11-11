@@ -1,7 +1,15 @@
 import { enqueueJob, JOB_TYPES, tsvectorSql } from "@traiblazer/core";
-import { bots, businessProfiles, documents, qaPairs, setupRuns, withTenant } from "@traiblazer/db";
-import { applySetupSchema } from "@traiblazer/shared";
-import { and, count, desc, eq, gt } from "drizzle-orm";
+import {
+  bots,
+  businessProfiles,
+  catalogItems,
+  documents,
+  qaPairs,
+  setupRuns,
+  withTenant,
+} from "@traiblazer/db";
+import { applySetupSchema, CATALOG_LIMIT } from "@traiblazer/shared";
+import { and, count, desc, eq, gt, max } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
@@ -158,6 +166,26 @@ export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
           );
         }
 
+        // Services and products go on the business page, after the ones already there.
+        const services = input.services ?? [];
+        if (services.length) {
+          const [listed] = await tx
+            .select({ n: count(), last: max(catalogItems.position) })
+            .from(catalogItems)
+            .where(eq(catalogItems.botId, botId));
+          if ((listed?.n ?? 0) + services.length > CATALOG_LIMIT) {
+            throw new HttpError(
+              409,
+              "catalog_limit",
+              `An assistant can list up to ${CATALOG_LIMIT} services and products`,
+            );
+          }
+          const first = (listed?.last ?? -1) + 1;
+          await tx
+            .insert(catalogItems)
+            .values(services.map((item, index) => ({ tenantId, botId, ...item, position: first + index })));
+        }
+
         const [applied] = await tx
           .update(setupRuns)
           .set({ status: "applied" })
@@ -174,6 +202,7 @@ export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
             greeting: Object.keys(greeting),
             quickReplies: Object.keys(quickReplies),
             answers: answers.length,
+            services: services.length,
           },
         });
         return { run: publicRun(applied!) };

@@ -8,16 +8,18 @@ const MAX_TEXT = 50_000;
 
 interface SourceWithContent {
   id: string;
-  type: "website" | "text";
+  type: "website" | "text" | "file";
   title: string;
   url: string | null;
   content: string | null;
+  fileName: string | null;
   updatedAt: string;
 }
 
 /**
  * Opened under a source in the Knowledge tab. Pasted text can be read and edited (saving
- * re-indexes it in the background); for websites it lists the pages that were read.
+ * re-indexes it in the background); for websites it lists the pages that were read; for an
+ * uploaded file it shows the text that was read from it.
  */
 export function SourceDetail({
   url,
@@ -66,6 +68,36 @@ export function SourceDetail({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (source.type === "file") {
+    return (
+      <div className="flex flex-col gap-2 panel p-4">
+        <span className="text-sm font-medium">
+          {t("knowledge.fileText", { name: source.fileName ?? source.title })}
+        </span>
+        {source.content ? (
+          <>
+            <pre
+              className="input max-h-80 overflow-y-auto whitespace-pre-wrap font-[inherit] text-sm"
+              dir="auto"
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must be reachable by keyboard
+              tabIndex={0}
+            >
+              {source.content}
+            </pre>
+            <span className="muted text-xs">{t("knowledge.fileTextHint")}</span>
+          </>
+        ) : (
+          <span className="muted text-sm">{t("knowledge.fileNoText")}</span>
+        )}
+        <div>
+          <button type="button" className="btn btn-ghost py-1" onClick={onClose}>
+            {t("common.close")}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (source.type === "website") {

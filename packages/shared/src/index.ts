@@ -1,6 +1,6 @@
 import { AVATAR_ICON_IDS, type AvatarIcon, THEMES } from "@traiblazer/appearance";
 import { isSupportedLanguage, normalizeLanguageTag } from "@traiblazer/i18n";
-import { WORKFLOW_LIMITS as L } from "@traiblazer/industry-packs";
+import { INTERVIEW_LIMITS, WORKFLOW_LIMITS as L } from "@traiblazer/industry-packs";
 import { z } from "zod";
 
 const avatarSchema = z.discriminatedUnion("kind", [
@@ -216,6 +216,31 @@ export const createSourceSchema = z.discriminatedUnion("type", [
 ]);
 export type CreateSourceInput = z.infer<typeof createSourceSchema>;
 
+/**
+ * A price list, menu or brochure uploaded as a source: a PDF, a Word document (.docx) or a photo
+ * (PNG, JPEG, WebP), at most 5 MB. The type is detected from the content, never from the name.
+ */
+export const MAX_SOURCE_FILE_BYTES = 5 * 1024 * 1024;
+/** Uploaded files one assistant can have as sources. */
+export const SOURCE_FILE_LIMIT = 20;
+export const uploadSourceFileSchema = z.object({
+  /** The file's name, for display. */
+  name: z.string().trim().min(1).max(200),
+  /** Shown in the list of sources; the file's name without its extension when left out. */
+  title: z.string().trim().min(1).max(200).optional(),
+  /** Base64 without a `data:` prefix. */
+  data: z.base64().max(Math.ceil((MAX_SOURCE_FILE_BYTES * 4) / 3) + 4),
+});
+
+/**
+ * The owner's answers to the setup interview, by question key (see `getInterview` in
+ * @traiblazer/industry-packs). An empty answer is a skipped question.
+ */
+export const interviewAnswersSchema = z.object({
+  answers: z.record(z.string().max(40), z.string().max(INTERVIEW_LIMITS.answerLength)),
+});
+export type InterviewAnswersInput = z.infer<typeof interviewAnswersSchema>;
+
 export const updateTextSourceSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -412,12 +437,16 @@ export type UpdateGapInput = z.infer<typeof updateGapSchema>;
  * What the owner keeps from the setup assistant's suggestion, after editing it. Each part is
  * optional: a part left out isn't changed.
  */
+/** Services and products the setup assistant proposes in one run, at most. */
+export const SETUP_SERVICES_LIMIT = 20;
 export const applySetupSchema = z.object({
   profile: businessProfileSchema.optional(),
   greeting: z.record(z.string(), z.string().trim().max(300)).optional(),
   quickReplies: z.record(z.string(), z.array(z.string().trim().min(1).max(120)).max(6)).optional(),
   /** Answers the owner wrote to questions their information didn't cover (saved as Q&A answers). */
   answers: z.array(qaPairSchema).max(10).optional(),
+  /** The proposed services and products the owner kept: added to the business page. */
+  services: z.array(createCatalogItemSchema).max(SETUP_SERVICES_LIMIT).optional(),
 });
 export type ApplySetupInput = z.infer<typeof applySetupSchema>;
 
