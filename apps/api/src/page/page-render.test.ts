@@ -130,7 +130,9 @@ describe("business page HTML", () => {
     expect(html).toContain('<h1 dir="auto">Smith &amp; Sons Plumbing</h1>');
     expect(html).toContain("Licensed plumbers serving Guelph since 1998.");
     expect(html).toContain('data-open="true">Open now · closes at 17:00');
-    expect(html).toContain('<a class="tbp-action tbp-action-primary" data-action="call" href="tel:5195550100">');
+    expect(html).toContain(
+      '<a class="tbp-action tbp-action-primary" data-action="call" href="tel:5195550100">',
+    );
     expect(html).toContain("Closed Monday for the holiday");
     expect(html).toContain('<h3 dir="auto">Drain cleaning</h3>');
     expect(html).toContain('<p class="tbp-price" dir="auto">from $120</p>');
@@ -148,7 +150,9 @@ describe("business page HTML", () => {
       'data-ask="I&#39;d like a quote for Drain cleaning." hidden>Request a quote</button>',
     );
     // "Book" links to the business's booking tool when it has one.
-    expect(html).toContain('<a class="tbp-btn tbp-btn-primary" data-action="book" href="https://book.example/smith"');
+    expect(html).toContain(
+      '<a class="tbp-btn tbp-btn-primary" data-action="book" href="https://book.example/smith"',
+    );
     expect(renderBusinessPage(TEMPLATE, data({ bookingUrl: null }))).toContain(
       'data-ask="I&#39;d like to book Water heater install." hidden>Book</button>',
     );
