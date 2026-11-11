@@ -10,6 +10,32 @@ export interface OperatorOverview {
   refused: number;
   costMicros: number;
   byPlan: Record<string, number>;
+  /** Prospect demos, counted apart from businesses, and what they cost this month. */
+  demos: number;
+  demoCostMicros: number;
+}
+
+/** A prospect demo page built by operators (see the Demos tab). */
+export interface OperatorDemo {
+  id: string;
+  tenantId: string;
+  botId: string;
+  name: string;
+  industry: string | null;
+  status: "building" | "ready" | "needs_information" | "failed" | "handed_over";
+  error: string | null;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  handedOverTo: string | null;
+  handedOverAt: string | null;
+  pageUrl: string | null;
+  sources: { type: string; status: string; url: string | null }[];
+  services: number;
+  /** Times the demo page was opened, chats on it and requests left (test chats not counted). */
+  views: number;
+  conversations: number;
+  requests: number;
 }
 
 export interface OperatorTenant {

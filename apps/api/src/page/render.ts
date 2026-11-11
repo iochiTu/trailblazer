@@ -38,6 +38,11 @@ export interface PageData {
   canonicalUrl: string;
   /** Let search engines list it. */
   listed: boolean;
+  /**
+   * A prospect demo built by operators (not the business's own page yet): shown with a notice at the
+   * top, and never listed whatever `listed` says.
+   */
+  demo?: boolean;
   preset: PagePreset;
   /** schema.org type, e.g. "Plumber" (see `schemaTypeFor`). */
   schemaType: string;
@@ -357,6 +362,9 @@ export function pageBody(data: PageData): string {
   const style = `--tb-brand:${data.palette.brand};--tb-on-brand:${data.palette.onBrand};--tb-accent:${data.palette.accent}`;
   return [
     `<div class="tbp" data-theme="${esc(data.theme)}" data-preset="${data.preset}" style="${esc(style)}">`,
+    data.demo
+      ? `<p class="tbp-demo" role="note">${esc(t("demoNotice", { business: data.businessName }))}</p>`
+      : "",
     `<header class="tbp-hero"><div class="tbp-hero-inner">`,
     avatarHtml(data.avatar),
     `<div class="tbp-heading"><h1 dir="auto">${esc(data.businessName)}</h1>`,
@@ -412,7 +420,7 @@ export const bootScript = (boot: { publicKey: string; page: boolean }) =>
  * back gracefully if the template changes shape.
  */
 export function renderBusinessPage(template: string, data: PageData): string {
-  const robots = `<meta name="robots" content="${data.listed ? "index, follow" : "noindex"}">`;
+  const robots = `<meta name="robots" content="${data.listed && !data.demo ? "index, follow" : "noindex"}">`;
   const head = `${pageHead(data)}\n    ${bootScript({ publicKey: data.publicKey, page: true })}`;
   let html = template.replace(/<html[^>]*>/i, () => `<html lang="${data.lang}" dir="ltr" class="tbp-root">`);
   html = /<meta name="robots"[^>]*>/i.test(html)

@@ -296,7 +296,7 @@ describe("row-level security", () => {
         and exists (select 1 from information_schema.columns col
                     where col.table_name = c.relname and col.column_name = 'tenant_id')
     `);
-    const platformTables = new Set(["memberships", "jobs"]);
+    const platformTables = new Set(["memberships", "jobs", "demos"]);
     for (const row of rows) {
       if (platformTables.has(row.relname)) continue;
       expect(row.rls, row.relname).toBe(true);

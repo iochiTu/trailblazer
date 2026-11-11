@@ -17,9 +17,10 @@ import {
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
+import { createAssistant } from "../lib/assistants.js";
 import { audit } from "../lib/audit.js";
 import { badRequest, HttpError, isUniqueViolation, notFound } from "../lib/errors.js";
-import { isUuid, newPublicKey, toOrigin } from "../lib/ids.js";
+import { isUuid, toOrigin } from "../lib/ids.js";
 import { requireTenantRole } from "../plugins/auth.js";
 
 type TenantParams = { Params: { tenantId: string } };
@@ -55,48 +56,30 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
     if (!languages.includes(defaultLanguage)) throw badRequest("defaultLanguage must be one of languages");
 
     const tenantId = request.tenant!.id;
-    // The template is a starting point: its guidelines and workflows are copied into the
-    // assistant, which the business then edits freely.
-    const template = getTemplate(input.pack, input.variant);
     const result = await withTenant(db, tenantId, async (tx) => {
-      const [bot] = await tx
-        .insert(bots)
-        .values({
-          tenantId,
-          name: input.name,
-          pack: input.pack,
-          variant: input.variant ?? null,
-          guidelines: template.guidelines,
-          workflows: template.workflows,
-          languages,
-          defaultLanguage,
-          hostedPageEnabled: input.hostedPageEnabled ?? false,
-        })
-        .returning();
       // Start the profile with the business's name, so greetings and the web version show it.
       const [tenant] = await tx.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId));
-      const [profile] = await tx
-        .insert(businessProfiles)
-        .values({ tenantId, botId: bot!.id, businessName: tenant?.name ?? null })
-        .returning();
-      const [key] = await tx
-        .insert(botKeys)
-        .values({
-          tenantId,
-          botId: bot!.id,
-          publicKey: newPublicKey(config.NODE_ENV === "production"),
-          allowedOrigins: [...new Set((input.allowedOrigins ?? []).map(toOrigin))],
-        })
-        .returning();
+      const { bot, profile, key } = await createAssistant(tx, {
+        tenantId,
+        name: input.name,
+        pack: input.pack,
+        variant: input.variant,
+        languages,
+        defaultLanguage,
+        hostedPageEnabled: input.hostedPageEnabled,
+        allowedOrigins: input.allowedOrigins,
+        businessName: tenant?.name ?? null,
+        live: config.NODE_ENV === "production",
+      });
       await audit(tx, {
         tenantId,
         actorUserId: request.user!.id,
         action: "bot.created",
         targetType: "bot",
-        targetId: bot!.id,
+        targetId: bot.id,
         metadata: { pack: input.pack, variant: input.variant ?? null },
       });
-      return { bot: bot!, profile: profile!, keys: [key!] };
+      return { bot, profile, keys: [key] };
     });
 
     return reply.code(201).send({ ...result, pack: getPack(input.pack) });
@@ -157,6 +140,16 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
       const defaultLanguage = input.defaultLanguage ?? current.defaultLanguage;
       if (!languages.includes(defaultLanguage)) throw badRequest("defaultLanguage must be one of languages");
 
+      // A prospect demo stays private: only its key link, which can't be guessed.
+      if (input.pageSlug) {
+        const [tenant] = await tx
+          .select({ kind: tenants.kind })
+          .from(tenants)
+          .where(eq(tenants.id, request.tenant!.id));
+        if (tenant?.kind === "demo") {
+          throw badRequest("A demo page can't have a friendly link. Hand it over to its owner first.");
+        }
+      }
       // Friendly links are unique across the platform: check first for a clear message (the
       // unique index below is the final word).
       if (

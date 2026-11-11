@@ -21,6 +21,7 @@
     "@traiblazer/i18n": "workspace:*",
     "@traiblazer/industry-packs": "workspace:*",
     "@traiblazer/llm": "workspace:*",
+    "@traiblazer/shared": "workspace:*",
     "cheerio": "1.2.0",
     "drizzle-orm": "0.45.4",
     "mammoth": "1.13.0",

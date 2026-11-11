@@ -1,15 +1,7 @@
-import { enqueueJob, JOB_TYPES, tsvectorSql } from "@traiblazer/core";
-import {
-  bots,
-  businessProfiles,
-  catalogItems,
-  documents,
-  qaPairs,
-  setupRuns,
-  withTenant,
-} from "@traiblazer/db";
-import { applySetupSchema, CATALOG_LIMIT } from "@traiblazer/shared";
-import { and, count, desc, eq, gt, max } from "drizzle-orm";
+import { applySetup, CatalogLimitError, enqueueJob, JOB_TYPES } from "@traiblazer/core";
+import { bots, documents, setupRuns, withTenant } from "@traiblazer/db";
+import { applySetupSchema } from "@traiblazer/shared";
+import { and, count, desc, eq, gt } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
@@ -127,64 +119,10 @@ export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
         const [bot] = await tx.select().from(bots).where(eq(bots.id, botId)).limit(1);
         if (!bot) throw notFound("Assistant");
 
-        if (input.profile && Object.keys(input.profile).length) {
-          await tx.update(businessProfiles).set(input.profile).where(eq(businessProfiles.botId, botId));
-        }
-
-        // Texts are kept per language, and only for languages the assistant offers.
-        const offered = <T>(texts: Record<string, T> | undefined) =>
-          Object.fromEntries(Object.entries(texts ?? {}).filter(([code]) => bot.languages.includes(code)));
-        const greeting = offered(input.greeting);
-        const quickReplies = offered(input.quickReplies);
-        if (Object.keys(greeting).length || Object.keys(quickReplies).length) {
-          await tx
-            .update(bots)
-            .set({
-              settings: {
-                ...bot.settings,
-                greeting: { ...bot.settings.greeting, ...greeting },
-                quickReplies: { ...bot.settings.quickReplies, ...quickReplies },
-              },
-            })
-            .where(eq(bots.id, botId));
-        }
-
-        const answers = input.answers ?? [];
-        if (answers.length) {
-          await tx.insert(qaPairs).values(
-            answers.map((pair) => {
-              const language = pair.language ?? bot.defaultLanguage;
-              return {
-                tenantId,
-                botId,
-                question: pair.question,
-                answer: pair.answer,
-                language,
-                tsv: tsvectorSql(`${pair.question}\n${pair.answer}`, language) as unknown as string,
-              };
-            }),
-          );
-        }
-
-        // Services and products go on the business page, after the ones already there.
-        const services = input.services ?? [];
-        if (services.length) {
-          const [listed] = await tx
-            .select({ n: count(), last: max(catalogItems.position) })
-            .from(catalogItems)
-            .where(eq(catalogItems.botId, botId));
-          if ((listed?.n ?? 0) + services.length > CATALOG_LIMIT) {
-            throw new HttpError(
-              409,
-              "catalog_limit",
-              `An assistant can list up to ${CATALOG_LIMIT} services and products`,
-            );
-          }
-          const first = (listed?.last ?? -1) + 1;
-          await tx
-            .insert(catalogItems)
-            .values(services.map((item, index) => ({ tenantId, botId, ...item, position: first + index })));
-        }
+        const saved = await applySetup(tx, { tenantId, bot, input }).catch((error: unknown) => {
+          if (error instanceof CatalogLimitError) throw new HttpError(409, "catalog_limit", error.message);
+          throw error;
+        });
 
         const [applied] = await tx
           .update(setupRuns)
@@ -197,13 +135,7 @@ export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
           action: "setup.applied",
           targetType: "bot",
           targetId: botId,
-          metadata: {
-            profile: Object.keys(input.profile ?? {}),
-            greeting: Object.keys(greeting),
-            quickReplies: Object.keys(quickReplies),
-            answers: answers.length,
-            services: services.length,
-          },
+          metadata: { ...saved },
         });
         return { run: publicRun(applied!) };
       });

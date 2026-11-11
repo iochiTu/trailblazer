@@ -67,10 +67,16 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
   // ---- Overview -----------------------------------------------------------------------------
 
   app.get("/v1/operator/overview", guard, async () => {
-    const [rows, tenantRows] = await Promise.all([
+    const [allRows, allTenants] = await Promise.all([
       stats(),
-      db.select({ plan: tenants.plan, status: tenants.status }).from(tenants),
+      db
+        .select({ id: tenants.id, plan: tenants.plan, status: tenants.status, kind: tenants.kind })
+        .from(tenants),
     ]);
+    // Prospect demos are counted apart: they aren't customers.
+    const demoIds = new Set(allTenants.filter((t) => t.kind === "demo").map((t) => t.id));
+    const tenantRows = allTenants.filter((t) => t.kind !== "demo");
+    const rows = allRows.filter((r) => !demoIds.has(r.tenant_id));
     const sum = (key: keyof TenantStatsRow) => rows.reduce((total, r) => total + Number(r[key]), 0);
     const byPlan: Record<string, number> = {};
     for (const t of tenantRows) byPlan[t.plan] = (byPlan[t.plan] ?? 0) + 1;
@@ -84,6 +90,10 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
       refused: sum("blocked"),
       costMicros: sum("cost_micros"),
       byPlan,
+      demos: demoIds.size,
+      demoCostMicros: allRows
+        .filter((r) => demoIds.has(r.tenant_id))
+        .reduce((total, r) => total + Number(r.cost_micros), 0),
     };
   });
 
@@ -92,7 +102,8 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
   app.get<{ Querystring: { q?: string } }>("/v1/operator/tenants", guard, async (request) => {
     const q = (request.query.q ?? "").trim().toLowerCase();
     const [tenantRows, owners, rows] = await Promise.all([
-      db.select().from(tenants).orderBy(desc(tenants.createdAt)),
+      // Prospect demos have their own tab.
+      db.select().from(tenants).where(eq(tenants.kind, "business")).orderBy(desc(tenants.createdAt)),
       db
         .select({ tenantId: memberships.tenantId, email: users.email })
         .from(memberships)
@@ -178,6 +189,7 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
       tenant: {
         id: tenant.id,
         name: tenant.name,
+        kind: tenant.kind,
         plan: tenant.plan,
         status: tenant.status,
         createdAt: tenant.createdAt,

@@ -47,7 +47,7 @@ function photoSearch(title: string, description: string) {
 }
 
 /** Quick, DNS-free rejection of obviously private targets; the worker re-checks every request. */
-function assertLooksPublic(url: string) {
+export function assertLooksPublic(url: string) {
   const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || isIP(host)) {
     throw badRequest("Please enter the public address of your website, e.g. https://www.example.com");

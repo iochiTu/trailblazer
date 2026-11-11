@@ -30,6 +30,8 @@ const en = {
   address: "Address",
   contact: "Contact",
   notice: "Notice",
+  demoNotice:
+    "Demo page prepared for {business} by Traiblazer. It isn't public: only people with this link can see it.",
   chatHeading: "Ask us anything",
   chatHeadingPersonal: "Ask me anything",
   noScript: "Turn on JavaScript to chat with the assistant, or contact us directly.",
@@ -75,6 +77,8 @@ const fr: PageStrings = {
   address: "Adresse",
   contact: "Coordonnées",
   notice: "Avis",
+  demoNotice:
+    "Page de démonstration préparée pour {business} par Traiblazer. Elle n'est pas publique : seules les personnes qui ont ce lien peuvent la voir.",
   chatHeading: "Posez-nous vos questions",
   chatHeadingPersonal: "Posez-moi vos questions",
   noScript: "Activez JavaScript pour discuter avec l'assistant, ou communiquez directement avec nous.",

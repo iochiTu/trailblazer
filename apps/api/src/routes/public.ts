@@ -133,7 +133,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!resolved) return null;
     // A business suspended by operators is invisible to visitors (page, widget and chat).
     const [tenant] = await db
-      .select({ status: tenants.status })
+      .select({ status: tenants.status, kind: tenants.kind })
       .from(tenants)
       .where(eq(tenants.id, resolved.tenantId))
       .limit(1);
@@ -157,7 +157,8 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           .from(botAddons)
           .where(eq(botAddons.botId, bot.id)),
       );
-      return { ...resolved, bot, profile: profile ?? null, addons };
+      // A prospect demo: its page says so and is never listed.
+      return { ...resolved, bot, profile: profile ?? null, addons, demo: tenant.kind === "demo" };
     });
   }
 
@@ -223,7 +224,9 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       : await businessPage(template, found, publicKey, preview, request);
 
     // Page statistics: a person opening the published page (not the owner's preview or a robot).
-    if (!request.query.embed && !preview && found.bot.status === "active" && isPersonVisit(request.headers)) {
+    // A prospect demo counts from the start: whether it was opened is what operators want to know.
+    const counted = found.bot.status === "active" || found.demo;
+    if (!request.query.embed && !preview && counted && isPersonVisit(request.headers)) {
       await countPageEvent(db, found.tenantId, found.botId, "views").catch((error) =>
         request.log.warn(error, "page view not counted"),
       );
@@ -272,7 +275,13 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         ? `${config.PUBLIC_URL}/${bot.pageSlug}`
         : `${config.PUBLIC_URL}/c/${publicKey}`,
       // Only a published page is listed: active, web version on, not kept unlisted by the owner.
-      listed: !preview && bot.status === "active" && bot.hostedPageEnabled && settings.page?.listed !== false,
+      listed:
+        !preview &&
+        !found.demo &&
+        bot.status === "active" &&
+        bot.hostedPageEnabled &&
+        settings.page?.listed !== false,
+      demo: found.demo,
       preset: settings.page?.preset === "personal" ? "personal" : "business",
       schemaType: schemaTypeFor(bot.pack, bot.variant),
       publicKey,
@@ -543,7 +552,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       // Nothing for the page to do with an answer: it only says whether the tap was counted.
       if (!parsed.success) return reply.code(400).send({ error: "invalid", message: "Unknown event" });
       const found = await loadBot(parsed.data.publicKey);
-      if (found?.bot.status === "active" && found.bot.hostedPageEnabled) {
+      if (found && (found.bot.status === "active" || found.demo) && found.bot.hostedPageEnabled) {
         await countPageEvent(db, found.tenantId, found.botId, parsed.data.action);
       }
       return reply.code(204).send();
