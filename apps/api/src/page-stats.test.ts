@@ -18,7 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { isPersonVisit } from "./lib/page-stats.js";
+import { fromPerson } from "./lib/page-stats.js";
 import { PlatformConfig } from "./lib/platform.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
@@ -84,11 +84,17 @@ const open = (url: string, headers: Record<string, string> = {}) =>
     headers: { "sec-fetch-dest": "document", "user-agent": BROWSER, ...headers },
   });
 
-const tap = (action: string, publicKey = owner.publicKey, origin = PUBLIC) =>
+/** What the page sends: "view" once per visit, or the contact button tapped. */
+const tap = (
+  action: string,
+  publicKey = owner.publicKey,
+  origin = PUBLIC,
+  headers: Record<string, string> = {},
+) =>
   app.inject({
     method: "POST",
     url: "/v1/public/page-events",
-    headers: { origin, "content-type": "application/json" },
+    headers: { origin, "content-type": "application/json", "user-agent": BROWSER, ...headers },
     payload: { publicKey, action },
   });
 
@@ -136,23 +142,16 @@ afterAll(async () => {
 });
 
 describe("who counts as a visitor", () => {
-  it("counts a browser opening the page, not robots, prefetches or frames", () => {
-    expect(isPersonVisit({ "sec-fetch-dest": "document", "user-agent": BROWSER })).toBe(true);
-    expect(isPersonVisit({ "user-agent": BROWSER })).toBe(false);
-    expect(isPersonVisit({ "sec-fetch-dest": "iframe", "user-agent": BROWSER })).toBe(false);
-    expect(isPersonVisit({ "sec-fetch-dest": "document" })).toBe(false);
+  it("counts a person's browser, not robots or pages loaded ahead of time", () => {
+    expect(fromPerson({ "user-agent": BROWSER })).toBe(true);
+    expect(fromPerson({})).toBe(false);
     expect(
-      isPersonVisit({
-        "sec-fetch-dest": "document",
+      fromPerson({
         "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
       }),
     ).toBe(false);
-    expect(isPersonVisit({ "sec-fetch-dest": "document", "user-agent": "facebookexternalhit/1.1" })).toBe(
-      false,
-    );
-    expect(
-      isPersonVisit({ "sec-fetch-dest": "document", "user-agent": BROWSER, "sec-purpose": "prefetch" }),
-    ).toBe(false);
+    expect(fromPerson({ "user-agent": "facebookexternalhit/1.1" })).toBe(false);
+    expect(fromPerson({ "user-agent": BROWSER, "sec-purpose": "prefetch" })).toBe(false);
   });
 });
 
@@ -180,16 +179,19 @@ describe("page statistics", () => {
     }
   });
 
-  it("counts views only once the assistant is live, and never previews, frames or robots", async () => {
-    // Draft: the page opens (the earlier test) but isn't counted yet.
+  it("counts views the page sends once the assistant is live, and never robots", async () => {
+    // Draft: the page opens and says so, but isn't counted yet.
+    await tap("view");
     expect((await stats()).totals.views).toBe(0);
     await call("PATCH", owner.base, { status: "active" });
+    // Loading the page counts nothing by itself: the page sends its view once per visit, so a
+    // refresh isn't counted again.
     await open(`/c/${owner.publicKey}`);
-    await open(`/c/${owner.publicKey}`);
-    await open(`/c/${owner.publicKey}?preview=1`);
-    await open(`/c/${owner.publicKey}?embed=inline`, { "sec-fetch-dest": "iframe" });
-    await open(`/c/${owner.publicKey}`, { "user-agent": "Mozilla/5.0 (compatible; bingbot/2.0)" });
-    await open(`/c/${owner.publicKey}`, { "sec-purpose": "prefetch;prerender" });
+    expect((await stats()).totals.views).toBe(0);
+    await tap("view");
+    await tap("view");
+    await tap("view", owner.publicKey, PUBLIC, { "user-agent": "Mozilla/5.0 (compatible; bingbot/2.0)" });
+    await tap("view", owner.publicKey, PUBLIC, { "sec-purpose": "prefetch;prerender" });
     const report = await stats();
     expect(report.totals.views).toBe(2);
     expect(report.daily.at(-1)).toMatchObject({ views: 2, taps: 0 });

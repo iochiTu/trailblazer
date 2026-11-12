@@ -282,8 +282,16 @@ describe("prospect demos: building", () => {
 
   it("shows the demo page with a notice, never listed, even when the assistant is active", async () => {
     // Opened while still a draft: counted, so operators see whether the prospect looked at it.
+    // The page sends its view itself, once per visit.
     const agent = { "sec-fetch-dest": "document", "user-agent": "Mozilla/5.0 (test browser)" };
     await app.inject({ method: "GET", url: pagePath(demo), headers: agent });
+    expect((await listed(demo.id))?.views).toBe(0);
+    await app.inject({
+      method: "POST",
+      url: "/v1/public/page-events",
+      headers: { origin: PUBLIC, "content-type": "application/json", "user-agent": agent["user-agent"] },
+      payload: { publicKey: pagePath(demo).split("/").pop(), action: "view" },
+    });
     expect((await listed(demo.id))?.views).toBe(1);
 
     await op("PATCH", `/v1/tenants/${demo.tenantId}/bots/${demo.botId}`, { status: "active" });

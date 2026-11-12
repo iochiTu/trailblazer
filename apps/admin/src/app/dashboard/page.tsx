@@ -266,8 +266,8 @@ function CreateBotForm({
         </label>
         {variants.length > 0 && (
           <label className="flex flex-col gap-1 text-sm">
-            &nbsp;
-            <select className="input" name="variant" defaultValue="">
+            <span aria-hidden="true">&nbsp;</span>
+            <select className="input" name="variant" defaultValue="" aria-label={t("bots.variant")}>
               <option value="">—</option>
               {variants.map((v) => (
                 <option key={v.slug} value={v.slug}>

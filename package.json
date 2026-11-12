@@ -12,12 +12,14 @@
     "test": "turbo run test --concurrency=1",
     "lint": "biome check .",
     "format": "biome check --write .",
+    "prepare": "git config core.hooksPath .githooks || true",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter @traiblazer/db generate",
     "db:migrate": "pnpm --filter @traiblazer/db migrate",
     "db:seed": "pnpm --filter @traiblazer/api seed",
-    "evals": "pnpm --filter @traiblazer/evals eval"
+    "evals": "pnpm --filter @traiblazer/evals eval",
+    "a11y": "pnpm --filter @traiblazer/e2e a11y"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",

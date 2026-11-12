@@ -21,6 +21,7 @@ apps/
   admin/            Next.js admin portal (EN/FR): knowledge, test chat, share & install, requests, conversations
   chat/             Preact chat page (hosted link / iframe / widget panel) + widget.js loader
   worker/           Background jobs: website crawling, reading uploaded files, indexing
+  e2e/              Accessibility checks in a real browser (Playwright + axe, `pnpm a11y`)
 packages/
   core/             Chat engine, tools, retrieval, prompt (locked platform rules), crawler, job queue
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
@@ -59,7 +60,10 @@ on phones. `?embed=…` (iframe, widget, test chat) still gets the plain chat.
   `Plumber`, `TireShop`, with hours and offers). The chat app (`apps/chat`) then mounts in `#app`;
   "Ask about this" / "Request a quote" / "Book" buttons on the cards send their text to the chat.
 - **Listed by search engines** only when the assistant is active, its web version is on and the owner
-  hasn't kept it unlisted; otherwise `noindex`.
+  hasn't kept it unlisted; otherwise `noindex`. `<chat-domain>/sitemap.xml` lists exactly those pages
+  (at their friendly link when they have one; `SECURITY DEFINER` function `app_listed_pages`, which
+  also leaves out suspended businesses and prospect demos), and `/robots.txt` points to it and keeps
+  robots out of `/v1/`.
 - **Friendly link** `<chat-domain>/<slug>` (`bots.page_slug`, unique across the platform, resolved by
   the `SECURITY DEFINER` function `app_resolve_page_slug`). Platform words are reserved
   (`RESERVED_PAGE_SLUGS` in `@traiblazer/shared`). The `/c/<key>` link keeps working and points
@@ -77,11 +81,13 @@ on phones. `?embed=…` (iframe, widget, test chat) still gets the plain chat.
 - **Page statistics** ("How your page is doing" on the Business page tab, 7/30/90 days): page views
   and taps on the contact buttons (`page_stats`, RLS: daily totals per assistant in the reporting time
   zone, nothing about the visitor), next to the questions visitors asked (page and website chat) and
-  the requests they left, both without the owner's tests. A view is a top-level browser load of the
-  published page (active assistant, web version on): not `?embed`, not `?preview=1`, not prefetches
-  or robots (`isPersonVisit` in `apps/api/src/lib/page-stats.ts`). The buttons carry `data-action`;
-  the chat app sends taps with `navigator.sendBeacon` to `POST /v1/public/page-events` (same origin,
-  30 per minute per address). API: `GET /v1/tenants/:t/bots/:b/page-stats?days=30`.
+  the requests they left, both without the owner's tests. A view is one visit to the published page
+  (active assistant, web version on): the page sends `view` once per browser tab, so a refresh or
+  coming back in the same tab isn't counted again (a flag in session storage, never sent anywhere).
+  Not counted: `?embed`, `?preview=1`, robots and prefetches (`fromPerson` in
+  `apps/api/src/lib/page-stats.ts`). The buttons carry `data-action`; the chat app sends views and
+  taps with `navigator.sendBeacon` to `POST /v1/public/page-events` (same origin, 30 per minute per
+  address). API: `GET /v1/tenants/:t/bots/:b/page-stats?days=30`.
 
 ## Add-ons
 
@@ -309,7 +315,20 @@ pnpm typecheck
 pnpm test           # needs `pnpm db:up`; uses the traiblazer_test database
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same steps against the docker-compose services.
+CI (`.github/workflows/ci.yml`) runs the same steps against the docker-compose services. A pre-commit
+hook (`.githooks/pre-commit`, turned on by `pnpm install`) runs the Biome check on the staged files.
+
+**Accessibility** (`apps/e2e`): every page visitors and owners use (business page, chat in an iframe,
+sign-in, dashboard, usage, every assistant tab, operator console) is checked with axe against WCAG 2.2
+AA on a desktop and a phone-sized screen, with reduced motion, plus keyboard focus on the chat and no
+sideways scrolling. It runs against the dev servers with the demo data:
+
+```bash
+pnpm dev && pnpm db:seed            # in another terminal
+pnpm a11y                           # Chromium from Playwright: `pnpm --filter @traiblazer/e2e exec playwright install chromium` once
+```
+
+Not in CI yet (it needs the servers and a browser).
 
 ## Evals (answer quality and safety)
 

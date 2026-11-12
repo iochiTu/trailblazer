@@ -23,8 +23,10 @@ const parseDay = (date: string) => new Date(`${date}T12:00:00`);
 
 /**
  * One count per day: one series, so no legend (the title names it). Thin bars (≤ 24px) grow from
- * one baseline with a rounded data end; hairline gridlines; each day is a focusable hit target
- * with a tooltip; a table view carries the same numbers for screen readers and exact reading.
+ * one baseline with a rounded data end; hairline gridlines; each day shows a tooltip on hover. The
+ * chart is one stop for the keyboard: the arrow keys move from day to day and each day is read out
+ * (a button per day would make 90 targets too small to tap). A table view carries the same numbers
+ * for screen readers and exact reading.
  */
 export function DailyBars<T extends { date: string }>({
   title,
@@ -92,34 +94,50 @@ export function DailyBars<T extends { date: string }>({
               ))}
             </div>
             <ul
-              className="relative m-0 flex h-40 list-none items-end p-0"
+              className="relative m-0 flex h-40 list-none items-end rounded-sm p-0 outline-offset-4 focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
               style={{ gap: 2 }}
-              aria-label={title}
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: one keyboard stop for the whole chart; the arrow keys move between days
+              tabIndex={0}
+              aria-label={`${title}. ${t("usage.chartKeys")}`}
               onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive((i) => i ?? data.length - 1)}
+              onBlur={() => setActive(null)}
+              onKeyDown={(event) => {
+                const last = data.length - 1;
+                const from = active ?? last;
+                const next =
+                  event.key === "ArrowLeft"
+                    ? Math.max(0, from - 1)
+                    : event.key === "ArrowRight"
+                      ? Math.min(last, from + 1)
+                      : event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? last
+                          : null;
+                if (next === null) return;
+                event.preventDefault();
+                setActive(next);
+              }}
             >
               {data.map((d, i) => {
                 const label = tooltip(d, parseDay(d.date));
                 return (
-                  <li key={d.date} className="relative flex h-full flex-1">
-                    {/* Hit target = the whole day column (bigger than the bar); focusable for keyboards. */}
-                    <button
-                      type="button"
-                      aria-label={label}
-                      className="flex h-full w-full cursor-default items-end justify-center rounded-sm outline-none focus-visible:bg-[var(--grid)]"
-                      onMouseEnter={() => setActive(i)}
-                      onFocus={() => setActive(i)}
-                      onBlur={() => setActive(null)}
-                    >
-                      {value(d) > 0 && (
-                        <span
-                          className="block w-full max-w-6 rounded-t bg-[var(--chart)]"
-                          style={{
-                            height: `${(value(d) / max) * 100}%`,
-                            opacity: active === null || active === i ? 1 : 0.55,
-                          }}
-                        />
-                      )}
-                    </button>
+                  // Hover target = the whole day column, bigger than the bar.
+                  <li
+                    key={d.date}
+                    className="relative flex h-full flex-1 items-end justify-center"
+                    onMouseEnter={() => setActive(i)}
+                  >
+                    {value(d) > 0 && (
+                      <span
+                        className="block w-full max-w-6 rounded-t bg-[var(--chart)]"
+                        style={{
+                          height: `${(value(d) / max) * 100}%`,
+                          opacity: active === null || active === i ? 1 : 0.55,
+                        }}
+                      />
+                    )}
                     {active === i && (
                       <div
                         role="tooltip"
@@ -133,6 +151,10 @@ export function DailyBars<T extends { date: string }>({
                 );
               })}
             </ul>
+            {/* The day the arrow keys are on, read out by screen readers. */}
+            <p className="sr-only" aria-live="polite">
+              {active !== null && data[active] ? tooltip(data[active]!, parseDay(data[active]!.date)) : ""}
+            </p>
             {/* X axis: a few dates, muted */}
             <div className="muted mt-1 flex justify-between text-xs" aria-hidden="true">
               {[0, Math.floor((data.length - 1) / 2), data.length - 1].map((i) => (

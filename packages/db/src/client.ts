@@ -58,6 +58,20 @@ export async function resolvePageSlug(db: Db, slug: string): Promise<string | nu
   return rows[0]?.public_key ?? null;
 }
 
+/**
+ * Business pages search engines may list (for the sitemap), most recently changed first, without
+ * tenant context: active businesses, live assistants with the web version on, not kept unlisted.
+ */
+export async function listListedPages(
+  db: Db,
+  limit = 50_000,
+): Promise<{ pageSlug: string | null; publicKey: string }[]> {
+  const rows = await db.execute<{ page_slug: string | null; public_key: string }>(
+    sql`select page_slug, public_key from app_listed_pages(${limit})`,
+  );
+  return rows.map((row) => ({ pageSlug: row.page_slug, publicKey: row.public_key }));
+}
+
 /** Reads a public image (e.g. an assistant avatar) by id, without tenant context. */
 export async function getPublicAsset(
   db: Db,

@@ -21,6 +21,7 @@ export const en = {
   "bots.title": "Assistants",
   "bots.create": "New assistant",
   "bots.name": "Assistant name",
+  "bots.variant": "Type of business",
   "bots.pack": "Industry template",
   "bots.packHint":
     "Gives your assistant ready-made response guidelines and workflows. You can change them anytime.",
@@ -366,6 +367,7 @@ export const en = {
   "usage.dayTooltip":
     "{date, date, medium}: {questions, plural, one {# question} other {# questions}}, {conversations, plural, one {# conversation} other {# conversations}}",
   "usage.showTable": "Show as table",
+  "usage.chartKeys": "Use the left and right arrow keys to read each day.",
   "usage.hideTable": "Hide table",
   "usage.date": "Date",
   "usage.questions": "Questions",
@@ -593,7 +595,7 @@ export const en = {
   "pageStats.action.website": "Website",
   "pageStats.action.link": "Shop and other links",
   "pageStats.privacy":
-    "Only totals are counted: nothing about who visited. Your own previews and tests aren't included.",
+    "Only totals are counted: nothing about who visited. A visit counts once, even if the visitor reloads the page. Your own previews and tests aren't included.",
   "page.preview.title": "Preview",
   "page.preview.hint": "Your page as visitors see it. Conversations you have here are saved as tests.",
   "requests.urgent": "Urgent",

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Lint and format check of the staged files, the same check CI runs (pnpm lint), so a formatting
+# slip fails here instead of on the pull request. Fix with: pnpm format
+# Skip once with: git commit --no-verify
+exec pnpm exec biome check --staged --no-errors-on-unmatched

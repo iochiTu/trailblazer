@@ -343,7 +343,7 @@ describe("friendly page links", () => {
     await call("PATCH", owner.base, { hostedPageEnabled: true });
     expect((await visit("/no-such-business-page")).statusCode).toBe(404);
     // Paths that can't be page links keep the API's plain 404.
-    const plain = await app.inject({ method: "GET", url: "/robots.txt" });
+    const plain = await app.inject({ method: "GET", url: "/favicon.ico" });
     expect(plain.statusCode).toBe(404);
     expect(plain.headers["content-type"]).toContain("application/json");
   });
@@ -351,5 +351,40 @@ describe("friendly page links", () => {
   it("can remove the link", async () => {
     expect((await call("PATCH", owner.base, { pageSlug: null })).json().bot.pageSlug).toBeNull();
     expect((await visit(`/${slug}`)).statusCode).toBe(404);
+  });
+});
+
+describe("search engines", () => {
+  const sitemap = async () => (await app.inject({ method: "GET", url: "/sitemap.xml" })).body;
+
+  it("points robots to the sitemap and keeps them out of the API", async () => {
+    const res = await app.inject({ method: "GET", url: "/robots.txt" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/plain");
+    expect(res.body).toContain("Disallow: /v1/");
+    expect(res.body).toContain(`Sitemap: ${PUBLIC}/sitemap.xml`);
+  });
+
+  it("lists published pages at their friendly link, or at the key without one", async () => {
+    const res = await app.inject({ method: "GET", url: "/sitemap.xml" });
+    expect(res.headers["content-type"]).toContain("application/xml");
+    expect(res.body).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>\n<urlset xmlns=/);
+    expect(res.body).toContain(`<loc>${PUBLIC}/c/${owner.publicKey}</loc>`);
+    await call("PATCH", owner.base, { pageSlug: slug });
+    expect(await sitemap()).toContain(`<loc>${PUBLIC}/${slug}</loc>`);
+    expect(await sitemap()).not.toContain(owner.publicKey);
+  });
+
+  it("leaves out pages that aren't listed: unlisted, web version off, or not live", async () => {
+    await call("PATCH", owner.base, { settings: { page: { listed: false } } });
+    expect(await sitemap()).not.toContain(slug);
+    await call("PATCH", owner.base, { settings: { page: { listed: true } } });
+    await call("PATCH", owner.base, { hostedPageEnabled: false });
+    expect(await sitemap()).not.toContain(slug);
+    await call("PATCH", owner.base, { hostedPageEnabled: true });
+    await call("PATCH", owner.base, { status: "paused" });
+    expect(await sitemap()).not.toContain(slug);
+    await call("PATCH", owner.base, { status: "active" });
+    expect(await sitemap()).toContain(slug);
   });
 });

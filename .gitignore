@@ -58,3 +58,7 @@ desktop.ini
 .vercel/
 tmp/
 *.tmp
+
+# Accessibility checks (Playwright)
+apps/e2e/test-results/
+apps/e2e/playwright-report/

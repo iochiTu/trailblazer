@@ -23,6 +23,7 @@ export const fr: Record<MessageKey, string> = {
   "bots.title": "Assistants",
   "bots.create": "Nouvel assistant",
   "bots.name": "Nom de l'assistant",
+  "bots.variant": "Type d'entreprise",
   "bots.pack": "Modèle de secteur",
   "bots.packHint":
     "Donne à votre assistant des consignes de réponse et des scénarios prêts à l'emploi. Vous pouvez les modifier en tout temps.",
@@ -388,6 +389,7 @@ export const fr: Record<MessageKey, string> = {
   "usage.dayTooltip":
     "{date, date, medium} : {questions, plural, one {# question} other {# questions}}, {conversations, plural, one {# conversation} other {# conversations}}",
   "usage.showTable": "Afficher en tableau",
+  "usage.chartKeys": "Utilisez les flèches gauche et droite pour lire chaque jour.",
   "usage.hideTable": "Masquer le tableau",
   "usage.date": "Date",
   "usage.questions": "Questions",
@@ -621,7 +623,7 @@ export const fr: Record<MessageKey, string> = {
   "pageStats.action.website": "Site Web",
   "pageStats.action.link": "Boutique et autres liens",
   "pageStats.privacy":
-    "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Vos propres aperçus et essais ne sont pas inclus.",
+    "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Une visite compte une fois, même si le visiteur recharge la page. Vos propres aperçus et essais ne sont pas inclus.",
   "page.preview.title": "Aperçu",
   "page.preview.hint":
     "Votre page telle que les visiteurs la voient. Les conversations ici sont enregistrées comme tests.",

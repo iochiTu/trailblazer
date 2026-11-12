@@ -290,10 +290,16 @@ export const chatImageSchema = z.object({
 export const PAGE_ACTIONS = ["call", "book", "email", "directions", "website", "link"] as const;
 export type PageAction = (typeof PAGE_ACTIONS)[number];
 
-/** A tap on a contact button of the business page, sent by the page itself (no visitor data). */
+/**
+ * What the business page reports about itself (no visitor data): "view" once per visit (a refresh
+ * in the same browser tab isn't sent again), or a tap on a contact button.
+ */
+export const PAGE_EVENTS = ["view", ...PAGE_ACTIONS] as const;
+export type PageEvent = (typeof PAGE_EVENTS)[number];
+
 export const pageEventSchema = z.object({
   publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
-  action: z.enum(PAGE_ACTIONS),
+  action: z.enum(PAGE_EVENTS),
 });
 
 export const publicChatSchema = z
