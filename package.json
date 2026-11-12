@@ -19,6 +19,8 @@
     "db:migrate": "pnpm --filter @traiblazer/db migrate",
     "db:seed": "pnpm --filter @traiblazer/api seed",
     "evals": "pnpm --filter @traiblazer/evals eval",
+    "evals:retrieval": "pnpm --filter @traiblazer/evals eval:retrieval",
+    "embeddings:backfill": "pnpm --filter @traiblazer/worker embeddings:backfill",
     "a11y": "pnpm --filter @traiblazer/e2e a11y"
   },
   "devDependencies": {

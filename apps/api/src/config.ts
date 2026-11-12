@@ -42,6 +42,8 @@ const envSchema = z.object({
   PLATFORM_CACHE_SECONDS: z.coerce.number().int().min(0).default(30),
   /** Shared rate limits and counters across API servers. Without it, limits are per server. */
   REDIS_URL: z.string().optional(),
+  /** How long an answer waits for the question's vector once the keyword search is ready (docs/EMBEDDINGS.md). */
+  EMBEDDINGS_QUERY_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(250),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

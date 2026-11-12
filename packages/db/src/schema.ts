@@ -23,11 +23,12 @@ const tsvector = customType<{ data: string }>({
 });
 
 /**
- * pgvector column without fixed dimensions, so different embedding models can coexist; rows record
- * `embedding_model` and searches only compare rows of the same model.
+ * pgvector half-precision column (2 bytes a number) without fixed dimensions, so different embedding
+ * models can coexist while moving from one to the next; rows record `embedding_model` and searches
+ * only compare rows of the same model (docs/EMBEDDINGS.md).
  */
-const vector = customType<{ data: number[]; driverData: string }>({
-  dataType: () => "vector",
+const halfvec = customType<{ data: number[]; driverData: string }>({
+  dataType: () => "halfvec",
   toDriver: (value) => `[${value.join(",")}]`,
   fromDriver: (value) => JSON.parse(value) as number[],
 });
@@ -654,7 +655,10 @@ export const chunks = pgTable(
     content: text("content").notNull(),
     language: text("language"),
     tsv: tsvector("tsv").notNull(),
-    embedding: vector("embedding"),
+    /** sha256 of the searchable text (heading + content): unchanged text keeps its vector. */
+    contentHash: text("content_hash"),
+    /** Filled in afterwards by the `embed.chunks` job; null until then (keyword search only). */
+    embedding: halfvec("embedding"),
     embeddingModel: text("embedding_model"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -684,6 +688,10 @@ export const qaPairs = pgTable(
     language: text("language").notNull().default("en"),
     enabled: boolean("enabled").notNull().default(true),
     tsv: tsvector("tsv").notNull(),
+    /** Search by meaning: the vector, its model, and a hash of the text it was made from. */
+    embedding: halfvec("embedding"),
+    embeddingModel: text("embedding_model"),
+    embeddingHash: text("embedding_hash"),
     ...timestamps,
   },
   (t) => [
@@ -726,6 +734,10 @@ export const knowledgeImages = pgTable(
     language: text("language"),
     enabled: boolean("enabled").notNull().default(true),
     tsv: tsvector("tsv").notNull(),
+    /** Search by meaning: the vector, its model, and a hash of the text it was made from. */
+    embedding: halfvec("embedding"),
+    embeddingModel: text("embedding_model"),
+    embeddingHash: text("embedding_hash"),
     ...timestamps,
   },
   (t) => [

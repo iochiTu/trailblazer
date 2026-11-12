@@ -596,7 +596,7 @@ later phases; the rest exists today.
 | Billing           | Stripe (CAD, Canadian sales tax)                                                                                                               |
 | LLM               | Own `LLMProvider` interface; Claude adapter (official Anthropic SDK) + OpenAI-compatible adapter (OpenRouter etc.) + offline test provider (§9) |
 | Translation       | The LLM via the gateway (cheap model); no separate service                                                                                     |
-| Embeddings        | `EmbeddingProvider` interface; strongly multilingual model (Voyage AI, Cohere, OpenAI, Bedrock, Azure, Gemini, local)                          |
+| Embeddings        | `EmbeddingProvider` interface; strongly multilingual model (Voyage AI, Cohere, OpenAI, Bedrock, Azure, Gemini, local); design in `docs/EMBEDDINGS.md` |
 | Parsing           | Readability/Cheerio, `unpdf`/`mammoth`, vision-model OCR for menus, Playwright for JS-heavy sites                                              |
 | Storage / hosting | S3 or R2; Vercel (admin) + Fly.io / Render / AWS ECS (API + workers) + Cloudflare CDN/WAF; Canadian region available for later residency needs |
 | Telephony (later) | Twilio or Telnyx behind a `TelephonyProvider` interface: local Canadian numbers, SMS/MMS, call events, signed webhooks |
@@ -894,7 +894,8 @@ emailed to the owner within one minute; 0 scope-policy failures on adversarial e
   requests, emergencies, invented prices/stock, allergens) in every Tier 1–2 language; run on every prompt,
   pack or model change. **Built for Trades and Auto repair in EN/FR** (`packages/evals`): deterministic
   checks through the real chat engine; bar = 80 % of quality runs and no safety failure. Search runs
-  on keywords alone unless embeddings are configured (`EMBEDDINGS_*`). Not yet: other
+  on keywords alone unless embeddings are configured (`EMBEDDINGS_*`); `pnpm evals:retrieval` measures
+  search by meaning (ranks with and without vectors, vector latency, distances). Not yet: other
   packs, Tier 2 languages, a model-graded check of free-form answers
 - Unit tests (chunking, ranking, prompt builder, pack inheritance, language detection, scope classifier),
   integration tests (ingestion, chat API), cross-tenant isolation tests

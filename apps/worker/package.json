@@ -7,7 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch --env-file-if-exists=../../.env src/worker.ts",
     "start": "node --env-file-if-exists=../../.env dist/worker.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "embeddings:backfill": "tsx --env-file-if-exists=../../.env src/backfill-embeddings.ts"
   },
   "dependencies": {
     "@traiblazer/core": "workspace:*",

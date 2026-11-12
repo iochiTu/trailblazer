@@ -2,11 +2,13 @@ import { type Db, knowledgeSources, sourceFiles, usageEvents, withTenant } from 
 import type { EmbeddingProvider, GatewayResultMeta, LLMGateway } from "@traiblazer/llm";
 import { eq } from "drizzle-orm";
 import { type CrawlOptions, crawlSite } from "./crawl.js";
+import { enqueueEmbedding } from "./embed.js";
 import { FileReadError, fileSections, readSourceFile } from "./files.js";
 import { type IncomingDocument, indexDocuments } from "./index-documents.js";
 
 export interface SyncDeps {
   db: Db;
+  /** When set, chunks that need vectors are queued for the `embed.chunks` job. */
   embeddings?: EmbeddingProvider | null;
   /** Reads uploaded photos (a model that can see images); without it photos can't be read. */
   gateway?: LLMGateway | null;
@@ -83,14 +85,13 @@ export async function syncSource(deps: SyncDeps, tenantId: string, sourceId: str
       throw new Error(`Source type "${source.type}" is not synced by the worker`);
     }
 
-    await withTenant(deps.db, tenantId, async (tx) => {
+    const unembedded = await withTenant(deps.db, tenantId, async (tx) => {
       const result = await indexDocuments(tx, {
         tenantId,
         botId: source.botId,
         sourceId,
         docs,
         removeMissing: true,
-        embeddings: deps.embeddings,
       });
       await tx
         .update(knowledgeSources)
@@ -113,7 +114,9 @@ export async function syncSource(deps: SyncDeps, tenantId: string, sourceId: str
           metadata: { sourceId, changed: result.changed },
         });
       }
+      return result.unembedded;
     });
+    if (unembedded && deps.embeddings) await enqueueEmbedding(deps.db, tenantId, source.botId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await withTenant(deps.db, tenantId, (tx) =>
