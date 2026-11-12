@@ -105,3 +105,38 @@ export const PACK_PHASES: Record<number, string> = {
   3: "Phase 3 — adds clinics, pharmacies, law, accounting, insurance, immigration, real estate, dealerships",
   4: "Phase 4 — adds mining, engineering, manufacturing, auto makers, logistics, utilities, colleges",
 };
+
+export type OnboardingStepId = "sources" | "page" | "services" | "photos" | "review" | "google" | "live";
+
+/** A done-for-you onboarding checklist (see the Onboarding tab). */
+export interface OperatorOnboarding {
+  id: string;
+  tenantId: string;
+  botId: string;
+  business: string;
+  businessStatus: "active" | "suspended";
+  assistant: string;
+  pageUrl: string | null;
+  receivedAt: string;
+  dueAt: string;
+  liveAt: string | null;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  facts: {
+    sources: { ready: number; failed: number; pending: number };
+    missing: ("description" | "contact" | "hours")[];
+    services: number;
+    photos: number;
+    live: boolean;
+  };
+  steps: {
+    id: OnboardingStepId;
+    /** Ticked by staff (true) or checked from the business's data (false). */
+    manual: boolean;
+    state: "done" | "skipped" | "open";
+    mark: { state: "done" | "skipped"; at: string; by: string | null } | null;
+  }[];
+  /** Every step done or not needed. */
+  finished: boolean;
+}

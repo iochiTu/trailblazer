@@ -379,6 +379,53 @@ export const botKeys = pgTable(
   ],
 );
 
+/** A checklist step staff marked: done by hand, or not needed for this business. */
+export interface OnboardingMark {
+  state: "done" | "skipped";
+  at: string;
+  /** Email of the staff member who marked it. */
+  by: string | null;
+}
+
+/**
+ * Done-for-you setup checklist for one business (operator console; PLAN §7): when its materials
+ * arrived, when the page is due (one working day later) and when it went live. Staff only, like
+ * `demos`: read and written by the operator API, never inside a business's own data.
+ */
+export const onboardings = pgTable(
+  "onboardings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .unique()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** The assistant whose page is being set up. */
+    botId: uuid("bot_id").notNull(),
+    /** When the business's materials arrived: the clock starts here. */
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    /** One working day after `receivedAt` (PLAN §14: a page live within one working day). */
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    /** When the page went live (published from the checklist, or first seen live). */
+    liveAt: timestamp("live_at", { withTimezone: true }),
+    /** Steps staff marked, by step id (see ONBOARDING_STEPS in @traiblazer/shared). */
+    marks: jsonb("marks").$type<Record<string, OnboardingMark>>().notNull().default({}),
+    /** Staff's own note (who is doing it, what is still awaited from the owner). */
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("onboardings_due_idx").on(t.dueAt),
+    // Removing the assistant removes its checklist.
+    foreignKey({
+      name: "onboardings_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 export type WeeklyHours = Partial<
   Record<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun", { open: string; close: string }[]>
 >;

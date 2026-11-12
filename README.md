@@ -432,6 +432,25 @@ within a minute or so.
 - **Delete** removes the demo business and everything in it. Statuses: building, ready, nothing to
   read (`needs_information`), couldn't fill the page in (`failed`), handed over.
 
+### Onboarding checklist
+
+The console's **Onboarding** tab tracks the done-for-you setup of a business we build the page for
+(PLAN §7.5): pick the business, say when its materials arrived, and the page is **due one working day
+later** (same time the next weekday in Toronto time; materials sent on a weekend count from Monday 9:00;
+statutory holidays aren't counted).
+
+- **Seven steps.** Five are checked from the business's own data every time the list is opened: materials
+  read (a source is ready), page content (description, phone or email, hours), services and prices,
+  photos, page published (assistant active and page on). Staff tick the other two: the owner reviewed
+  the page, and the page link is on the Google Business Profile. Any step but publishing can be marked
+  "not needed" (and undone); each mark records who and when.
+- **Publish page** turns the assistant on and the page on, with support access, once the owner's review is
+  ticked; it is written to the business's activity log and the operator audit log. If the owner publishes
+  it themselves, the checklist notices the next time it is opened. Each card shows "due in", "overdue by"
+  or whether it went live on time.
+- One checklist per business, in the platform table `onboardings` (no row-level security, staff only).
+  Prospect demos are handed over first. Removing a checklist leaves the business as it is.
+
 ## Multi-tenancy and security model
 
 - Every tenant-owned table has `tenant_id` and a Postgres **row-level security** policy

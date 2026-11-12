@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { ActivityTab } from "@/components/operator/ActivityTab";
 import { BusinessesTab } from "@/components/operator/BusinessesTab";
 import { DemosTab } from "@/components/operator/DemosTab";
+import { OnboardingTab } from "@/components/operator/OnboardingTab";
 import { OverviewTab } from "@/components/operator/OverviewTab";
 import { PlansTab } from "@/components/operator/PlansTab";
 import { PoliciesTab } from "@/components/operator/PoliciesTab";
@@ -18,6 +19,7 @@ const TABS = [
   { id: "overview", label: "Overview" },
   { id: "businesses", label: "Businesses" },
   { id: "demos", label: "Demos" },
+  { id: "onboarding", label: "Onboarding" },
   { id: "users", label: "Users" },
   { id: "plans", label: "Plans" },
   { id: "policies", label: "Policies" },
@@ -112,6 +114,7 @@ export default function OperatorPage() {
         {tab === "overview" && <OverviewTab />}
         {tab === "businesses" && <BusinessesTab selected={business} onSelect={setBusiness} />}
         {tab === "demos" && <DemosTab />}
+        {tab === "onboarding" && <OnboardingTab />}
         {tab === "users" && (
           <UsersTab
             onOpenBusiness={(id) => {

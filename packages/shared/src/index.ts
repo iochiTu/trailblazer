@@ -508,4 +508,48 @@ export const handOverDemoSchema = z.object({
     .transform((e) => e.toLowerCase()),
 });
 
+/**
+ * Steps of the done-for-you setup (PLAN §7: a page live within one working day of receiving the
+ * business's materials), in order.
+ */
+export const ONBOARDING_STEPS = [
+  "sources",
+  "page",
+  "services",
+  "photos",
+  "review",
+  "google",
+  "live",
+] as const;
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+/** Steps staff tick themselves. The others are checked from the business's own data. */
+export const MANUAL_ONBOARDING_STEPS: readonly OnboardingStep[] = ["review", "google"];
+
+/** Starts the checklist for a business (one per business). */
+export const createOnboardingSchema = z.object({
+  tenantId: z.uuid(),
+  /** The assistant whose page is being set up; the business's first one when left out. */
+  botId: z.uuid().nullish(),
+  /** When the business's materials arrived: the clock starts here. Now when left out. */
+  receivedAt: z.iso.datetime({ offset: true }).nullish(),
+  note: z.string().trim().max(500).nullish(),
+});
+
+export const updateOnboardingSchema = z
+  .object({
+    receivedAt: z.iso.datetime({ offset: true }).optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+    /**
+     * Marks one step: "done" (staff steps only), "skipped" (not needed for this business) or "open"
+     * again. Go-live is never marked: it is done when the page is published.
+     */
+    step: z
+      .object({
+        id: z.enum(["sources", "page", "services", "photos", "review", "google"]),
+        state: z.enum(["done", "skipped", "open"]),
+      })
+      .optional(),
+  })
+  .refine((input) => Object.values(input).some((value) => value !== undefined), "Nothing to change");
+
 export * from "./plans.js";
