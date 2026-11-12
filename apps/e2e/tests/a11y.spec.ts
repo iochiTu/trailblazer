@@ -166,5 +166,9 @@ test.describe("staff", () => {
     await page.goto(`${ADMIN}/operator`);
     await settle(page);
     await audit(page, "operator console");
+    await page.getByRole("tab", { name: "Onboarding" }).click();
+    await settle(page);
+    await audit(page, "operator console: onboarding");
+    await fitsScreen(page, "operator console: onboarding");
   });
 });

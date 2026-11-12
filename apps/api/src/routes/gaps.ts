@@ -1,4 +1,4 @@
-import { tsvectorSql } from "@traiblazer/core";
+import { enqueueEmbedding, tsvectorSql } from "@traiblazer/core";
 import { bots, gapStatuses, knowledgeGaps, qaPairs, withTenant } from "@traiblazer/db";
 import { qaPairSchema, updateGapSchema } from "@traiblazer/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -21,7 +21,7 @@ type Status = (typeof gapStatuses)[number];
  *
  * Reading needs the viewer role; answering and dismissing need editor, like the rest of the knowledge.
  */
-export async function gapRoutes(app: FastifyInstance, { db }: AppContext) {
+export async function gapRoutes(app: FastifyInstance, { db, embeddings }: AppContext) {
   const base = "/v1/tenants/:tenantId/bots/:botId/gaps";
 
   app.get<BotParams>(base, { preHandler: requireTenantRole(db, "viewer") }, async (request) => {
@@ -94,6 +94,8 @@ export async function gapRoutes(app: FastifyInstance, { db }: AppContext) {
         });
         return { gap: updated!, pair: pair! };
       });
+      // The new answer gets its vector from the worker (search by meaning).
+      if (embeddings) await enqueueEmbedding(db, request.tenant!.id, botId);
       return reply.code(201).send(result);
     },
   );

@@ -15,7 +15,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { createDb } from "@traiblazer/db";
-import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
+import { createEmbeddingsFromEnv, createGatewayFromEnv, QueryEmbedder } from "@traiblazer/llm";
 import { BUSINESSES } from "./businesses.js";
 import { ALL_CASES } from "./cases/index.js";
 import { DEFAULT_MIN_QUALITY, formatReport, summarize, toJson } from "./report.js";
@@ -73,7 +73,7 @@ const embeddings = createEmbeddingsFromEnv(process.env);
 const routes = {
   chat: process.env.LLM_CHAT_ROUTES ?? null,
   aux: process.env.LLM_AUX_ROUTES ?? null,
-  embeddings: process.env.EMBEDDINGS_MODEL ?? null,
+  embeddings: embeddings?.model ?? null,
 };
 
 if (offline) {
@@ -86,7 +86,8 @@ console.log(`Running ${cases.length} case(s) × ${repeat} with chat model ${rout
 const handle = createDb(url, { max: 4 });
 const startedAt = new Date();
 try {
-  const results = await runEvals({ db: handle.db, gateway, embeddings }, cases, BUSINESSES, {
+  const queryEmbeddings = embeddings ? new QueryEmbedder(embeddings) : null;
+  const results = await runEvals({ db: handle.db, gateway, embeddings, queryEmbeddings }, cases, BUSINESSES, {
     repeat,
     onResult: (r, done, total) => {
       const time = r.outcome.firstTextMs === null ? "" : ` ${r.outcome.firstTextMs} ms`;

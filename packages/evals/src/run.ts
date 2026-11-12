@@ -1,4 +1,4 @@
-import { type ChatStreamEvent, runChat, syncSource } from "@traiblazer/core";
+import { type ChatStreamEvent, embedChunks, runChat, syncSource } from "@traiblazer/core";
 import {
   bots,
   businessProfiles,
@@ -9,7 +9,7 @@ import {
   tenants,
   withTenant,
 } from "@traiblazer/db";
-import type { EmbeddingProvider, LLMGateway } from "@traiblazer/llm";
+import type { EmbeddingProvider, LLMGateway, QueryEmbedder } from "@traiblazer/llm";
 import { eq, inArray } from "drizzle-orm";
 import { score } from "./score.js";
 import type { CaseResult, EvalBusiness, EvalCase, Outcome } from "./types.js";
@@ -17,7 +17,10 @@ import type { CaseResult, EvalBusiness, EvalCase, Outcome } from "./types.js";
 export interface EvalDeps {
   db: Db;
   gateway: LLMGateway;
+  /** Embeds the businesses' text when set (search by meaning). */
   embeddings?: EmbeddingProvider | null;
+  /** Embeds the visitors' questions, like the API does. */
+  queryEmbeddings?: QueryEmbedder | null;
 }
 
 interface SetUp {
@@ -29,7 +32,10 @@ interface SetUp {
  * Creates a business of its own for the run (a tenant with one assistant, its profile, services and
  * pasted text, indexed like any knowledge source). Removed again by `removeBusinesses`.
  */
-export async function setUpBusiness(deps: EvalDeps, business: EvalBusiness): Promise<SetUp> {
+export async function setUpBusiness(
+  deps: Pick<EvalDeps, "db" | "embeddings">,
+  business: EvalBusiness,
+): Promise<SetUp> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const [tenant] = await deps.db
     .insert(tenants)
@@ -71,8 +77,16 @@ export async function setUpBusiness(deps: EvalDeps, business: EvalBusiness): Pro
       .returning({ id: knowledgeSources.id });
     return { botId, ids: sources.map((s) => s.id) };
   });
-  for (const id of sourceIds.ids) {
-    await syncSource({ db: deps.db, embeddings: deps.embeddings ?? null }, tenantId, id);
+  try {
+    for (const id of sourceIds.ids) await syncSource({ db: deps.db }, tenantId, id);
+    // What the worker's embed.chunks job does, right away.
+    if (deps.embeddings) {
+      await embedChunks({ db: deps.db, embeddings: deps.embeddings }, tenantId, sourceIds.botId);
+    }
+  } catch (error) {
+    // Not handed back to the caller yet, so nobody else would remove it.
+    await removeBusinesses(deps.db, [tenantId]);
+    throw error;
   }
   return { tenantId, botId: sourceIds.botId };
 }
@@ -120,7 +134,7 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
     let done: Extract<ChatStreamEvent, { type: "done" }> | null = null;
     try {
       for await (const event of runChat(
-        { db: deps.db, gateway: deps.gateway, embeddings: deps.embeddings ?? null },
+        { db: deps.db, gateway: deps.gateway, embeddings: deps.queryEmbeddings ?? null },
         {
           tenantId: business.tenantId,
           botId: business.botId,

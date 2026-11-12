@@ -1,4 +1,11 @@
-import { applySetup, CatalogLimitError, enqueueJob, JOB_TYPES } from "@traiblazer/core";
+import {
+  applySetup,
+  CatalogLimitError,
+  enqueueEmbedding,
+  enqueueJob,
+  JOB_TYPES,
+  warmQuestions,
+} from "@traiblazer/core";
 import { bots, documents, setupRuns, withTenant } from "@traiblazer/db";
 import { applySetupSchema } from "@traiblazer/shared";
 import { and, count, desc, eq, gt } from "drizzle-orm";
@@ -40,7 +47,7 @@ const publicRun = (run: Run) => ({
  *
  * Reading needs the viewer role; the rest need editor, like the settings they change.
  */
-export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
+export async function setupRoutes(app: FastifyInstance, { db, embeddings }: AppContext) {
   const base = "/v1/tenants/:tenantId/bots/:botId/setup";
 
   app.get<BotParams>(base, { preHandler: requireTenantRole(db, "viewer") }, async (request) => {
@@ -109,7 +116,7 @@ export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
       const input = applySetupSchema.parse(request.body);
       const tenantId = request.tenant!.id;
 
-      return withTenant(db, tenantId, async (tx) => {
+      const result = await withTenant(db, tenantId, async (tx) => {
         const [run] = await tx
           .select()
           .from(setupRuns)
@@ -139,6 +146,18 @@ export async function setupRoutes(app: FastifyInstance, { db }: AppContext) {
         });
         return { run: publicRun(applied!) };
       });
+      // Search by meaning: the answers get vectors from the worker; the suggested questions are
+      // embedded now, in the background, so a visitor's first tap doesn't wait.
+      if (embeddings) {
+        if (input.answers?.length) await enqueueEmbedding(db, tenantId, botId);
+        void warmQuestions(
+          { db, embeddings },
+          tenantId,
+          botId,
+          Object.values(input.quickReplies ?? {}).flat(),
+        );
+      }
+      return result;
     },
   );
 

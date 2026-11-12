@@ -260,6 +260,27 @@
       "when": 1794449998248,
       "tag": "0036_listed_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794451272510,
+      "tag": "0037_onboardings",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794452538420,
+      "tag": "0038_embeddings_halfvec",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794485039111,
+      "tag": "0039_embed_answers_photos",
+      "breakpoints": true
     }
   ]
 }

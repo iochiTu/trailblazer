@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import { enqueueJob, guessLanguage, JOB_TYPES, tsvectorSql } from "@traiblazer/core";
+import { enqueueEmbedding, enqueueJob, guessLanguage, JOB_TYPES, tsvectorSql } from "@traiblazer/core";
 import {
   assets,
   bots,
@@ -54,7 +54,15 @@ export function assertLooksPublic(url: string) {
   }
 }
 
-export async function knowledgeRoutes(app: FastifyInstance, { db, config, platform }: AppContext) {
+export async function knowledgeRoutes(
+  app: FastifyInstance,
+  { db, config, platform, embeddings }: AppContext,
+) {
+  /** New or changed text gets its vector from the worker (search by meaning), when that is on. */
+  const embedLater = async (tenantId: string, botId: string) => {
+    if (embeddings) await enqueueEmbedding(db, tenantId, botId);
+  };
+
   const base = "/v1/tenants/:tenantId/bots/:botId";
 
   /** Runs fn in the tenant's scope after checking the bot exists there. */
@@ -392,6 +400,7 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
           });
         return row!;
       });
+      await embedLater(tenantId, botId);
       return reply.code(201).send({ pair });
     },
   );
@@ -506,6 +515,7 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
         });
         return row!;
       });
+      await embedLater(tenantId, botId);
       return reply.code(201).send({ image: withUrl(image) });
     },
   );
@@ -539,6 +549,7 @@ export async function knowledgeRoutes(app: FastifyInstance, { db, config, platfo
           .returning(photoColumns);
         return row!;
       });
+      if (input.title !== undefined || input.description !== undefined) await embedLater(tenantId, botId);
       return { image: withUrl(image) };
     },
   );

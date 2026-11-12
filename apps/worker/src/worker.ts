@@ -11,6 +11,8 @@ import {
   completeJob,
   DEMO_RETRY_MS,
   type DemoBuildPayload,
+  embedChunks,
+  enqueueEmbedding,
   enqueueJob,
   failJob,
   JOB_TYPES,
@@ -46,6 +48,15 @@ async function run(job: JobRow): Promise<void> {
     case JOB_TYPES.sourceSync:
       await syncSource({ db, embeddings, gateway }, job.tenantId, String(job.payload.sourceId));
       return;
+    case JOB_TYPES.embedChunks: {
+      // Queued only when embeddings are configured; a worker without them leaves keyword search alone.
+      if (!embeddings) return;
+      const botId = String(job.payload.botId);
+      const { embedded, more } = await embedChunks({ db, embeddings }, job.tenantId, botId);
+      if (more) await enqueueEmbedding(db, job.tenantId, botId);
+      log("embedded", { id: job.id, botId, embedded, more, model: embeddings.model });
+      return;
+    }
     case JOB_TYPES.addonEffect: {
       const payload = job.payload as unknown as AddonEffectPayload;
       const outcome = await runAddonEffect({ db, mailer }, job.tenantId, payload);
@@ -61,7 +72,7 @@ async function run(job: JobRow): Promise<void> {
     case JOB_TYPES.demoBuild: {
       const payload = job.payload as unknown as DemoBuildPayload;
       const outcome = await buildDemo(
-        { db, gateway, log, inputChars: setupInputChars },
+        { db, gateway, log, inputChars: setupInputChars, embed: Boolean(embeddings) },
         job.tenantId,
         payload,
       );

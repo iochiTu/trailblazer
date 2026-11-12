@@ -1,5 +1,6 @@
 import { bots, demos, documents, knowledgeSources, setupRuns, tenants, withTenant } from "@traiblazer/db";
 import { count, eq } from "drizzle-orm";
+import { enqueueEmbedding } from "../knowledge/embed.js";
 import { applySetup, suggestionToInput } from "../setup/apply.js";
 import { runSetup, type SetupDeps } from "../setup/setup.js";
 
@@ -23,7 +24,10 @@ export const DEMO_SOURCE_WAIT_MS = 10 * 60 * 1000;
 export type DemoBuildOutcome = "waiting" | "ready" | "needs_information" | "failed" | "skipped";
 
 export async function buildDemo(
-  deps: SetupDeps & { now?: () => Date },
+  deps: SetupDeps & {
+    now?: () => Date /** Search by meaning is on: the answers get vectors. */;
+    embed?: boolean;
+  },
   tenantId: string,
   payload: DemoBuildPayload,
 ): Promise<DemoBuildOutcome> {
@@ -75,6 +79,7 @@ export async function buildDemo(
     return { error: null };
   });
   if (!applied) return "skipped";
+  if (deps.embed && !applied.error) await enqueueEmbedding(db, tenantId, demo.botId);
   return applied.error ? finish("failed", applied.error) : finish("ready", null);
 }
 

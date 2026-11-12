@@ -1,3 +1,4 @@
+import { warmQuestions } from "@traiblazer/core";
 import {
   assets,
   botKeys,
@@ -33,7 +34,7 @@ const pageSlugTaken = () =>
     { path: "pageSlug", message: "This page link is already used by another business" },
   ]);
 
-export async function botRoutes(app: FastifyInstance, { db, config, platform }: AppContext) {
+export async function botRoutes(app: FastifyInstance, { db, config, platform, embeddings }: AppContext) {
   const base = "/v1/tenants/:tenantId/bots";
 
   app.get<TenantParams>(base, { preHandler: requireTenantRole(db, "viewer") }, async (request) => {
@@ -120,7 +121,7 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
     if (!isUuid(botId)) throw notFound("Assistant");
     const input = updateBotSchema.parse(request.body);
 
-    return withTenant(db, request.tenant!.id, async (tx) => {
+    const saved = await withTenant(db, request.tenant!.id, async (tx) => {
       const [current] = await tx.select().from(bots).where(eq(bots.id, botId)).limit(1);
       if (!current) throw notFound("Assistant");
       if (input.variant !== undefined && !isSelectable(current.pack, input.variant, 4)) {
@@ -195,6 +196,12 @@ export async function botRoutes(app: FastifyInstance, { db, config, platform }: 
       });
       return { bot };
     });
+    // Suggested questions are embedded when saved, so a visitor's first tap doesn't wait for it.
+    const questions = Object.values(input.settings?.quickReplies ?? {}).flat();
+    if (embeddings && questions.length) {
+      void warmQuestions({ db, embeddings }, request.tenant!.id, botId, questions);
+    }
+    return saved;
   });
 
   app.delete<BotParams>(

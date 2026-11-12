@@ -31,12 +31,14 @@ import { getTemplate } from "@traiblazer/industry-packs";
 import {
   type ChatMessage,
   type ContentBlock,
-  type EmbeddingProvider,
   emptyUsage,
   type GatewayResultMeta,
   type ImageMediaType,
   type LLMGateway,
+  type QueryEmbedder,
+  type QueryVector,
   toolCallsOf,
+  withDeadline,
 } from "@traiblazer/llm";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
@@ -49,10 +51,16 @@ import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } fro
 import { chatTools, MAX_TOOL_ROUNDS, runToolCalls, toToolDefinition } from "./tools/index.js";
 import { higherUrgency, keywordTriage, parseTriage, type Urgency } from "./triage.js";
 
+/** Default wait for the question's vector: catches ~95 % of first-time questions (docs/EMBEDDINGS.md §7). */
+const EMBEDDING_WAIT_MS = 250;
+
 export interface ChatDeps {
   db: Db;
   gateway: LLMGateway;
-  embeddings?: EmbeddingProvider | null;
+  /** Search by meaning (docs/EMBEDDINGS.md); keyword search alone without it. */
+  embeddings?: QueryEmbedder | null;
+  /** How long retrieval waits for the question's vector once the keyword search is ready (default 250 ms). */
+  embeddingWaitMs?: number;
   now?: () => Date;
   log?: (msg: string, data?: Record<string, unknown>) => void;
   /** Admin portal origin, for links in add-on notifications. */
@@ -430,6 +438,24 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     return;
   }
   const { bot, profile, catalog, conversationId, isNew, history, historyImages, addons, addonCtx } = setup;
+
+  // Search by meaning: the question's vector is asked for now, alongside everything else, and waited
+  // for only briefly when the keyword search is ready (docs/EMBEDDINGS.md). A follow-up is embedded
+  // with the visitor's question before it, which gives "how much is it?" its subject.
+  const previousQuestion = history.findLast((m) => m.role === "user")?.content.trim() ?? "";
+  const vectorRequest =
+    deps.embeddings && message
+      ? deps.embeddings.embed(previousQuestion ? `${previousQuestion}\n${message}` : message)
+      : null;
+  /** Question vectors computed for this answer (not from a cache), recorded as usage. */
+  const embeddingUsage = { tokens: 0, costMicros: 0 };
+  const countEmbedding = (vector: QueryVector | null) => {
+    if (!vector) return;
+    embeddingUsage.tokens += vector.tokens;
+    embeddingUsage.costMicros += vector.costMicros;
+  };
+  // Counted whenever it arrives: a vector that came too late for the search was still paid for.
+  void vectorRequest?.then(countEmbedding);
   const runningNotices = setup.notices;
   const addonLog = (msg: string, data?: Record<string, unknown>) =>
     deps.log?.(msg, { ...data, botId: bot.id });
@@ -571,16 +597,18 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
 
       // 3. Retrieve business information.
       const embedding =
-        deps.embeddings && queries.length
-          ? {
-              vector: (await deps.embeddings.embed([queries.join("\n")], "query"))[0]!,
-              model: deps.embeddings.model,
-            }
+        vectorRequest && queries.length
+          ? await withDeadline(vectorRequest, deps.embeddingWaitMs ?? EMBEDDING_WAIT_MS, () =>
+              deps.log?.("embedding late", {
+                botId: bot.id,
+                waitedMs: deps.embeddingWaitMs ?? EMBEDDING_WAIT_MS,
+              }),
+            )
           : null;
       const [passages, photos] = queries.length
         ? await withTenant(deps.db, input.tenantId, async (tx) => [
             await retrievePassages(tx, { botId: bot.id, queries, embedding }),
-            await retrievePhotos(tx, { botId: bot.id, queries }),
+            await retrievePhotos(tx, { botId: bot.id, queries, embedding }),
           ])
         : [[], []];
       offeredPhotos = photos as PhotoPassage[];
@@ -710,6 +738,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             language,
             urgent: Boolean(urgency),
             embeddings: deps.embeddings,
+            onEmbedding: countEmbedding,
             signal: input.signal,
           },
           { lastRound: round === MAX_TOOL_ROUNDS - 1, log: deps.log },
@@ -813,6 +842,16 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       chatMeta && { kind: "llm.chat", meta: chatMeta },
       auxMeta && { kind: "llm.aux", meta: auxMeta },
     ].filter(Boolean) as { kind: string; meta: GatewayResultMeta }[];
+    if (embeddingUsage.tokens && deps.embeddings) {
+      await tx.insert(usageEvents).values({
+        tenantId: input.tenantId,
+        botId: bot.id,
+        kind: "embedding",
+        quantity: embeddingUsage.tokens,
+        costMicros: embeddingUsage.costMicros,
+        metadata: { model: deps.embeddings.model, task: "questions" },
+      });
+    }
     if (usage.length) {
       await tx.insert(usageEvents).values(
         usage.map(({ kind, meta }) => ({

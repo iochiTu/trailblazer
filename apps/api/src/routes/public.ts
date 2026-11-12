@@ -527,6 +527,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             db,
             gateway: ctx.gateway,
             embeddings: ctx.embeddings,
+            embeddingWaitMs: ctx.config.EMBEDDINGS_QUERY_WAIT_MS,
             log: (msg, data) => request.log.error(data, msg),
             adminUrl: adminOrigin,
           },

@@ -20,6 +20,7 @@ import { gapRoutes } from "./routes/gaps.js";
 import { interviewRoutes } from "./routes/interview.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
 import { leadRoutes } from "./routes/leads.js";
+import { onboardingRoutes } from "./routes/onboarding.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { pageRoutes } from "./routes/page.js";
 import { publicRoutes } from "./routes/public.js";
@@ -123,6 +124,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => usageRoutes(scope, ctx));
   await app.register(async (scope) => operatorRoutes(scope, ctx));
   await app.register(async (scope) => demoRoutes(scope, ctx));
+  await app.register(async (scope) => onboardingRoutes(scope, ctx));
   await app.register(async (scope) => publicRoutes(scope, ctx));
 
   return app;
