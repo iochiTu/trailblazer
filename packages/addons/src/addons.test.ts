@@ -157,6 +157,13 @@ describe("email notifications", () => {
     expect(fr?.effect.subject).toMatch(/Jane Doe demande une soumission$/);
     expect(fr?.effect.text).toContain("Invités: 80");
 
+    // The service the request started from, when there is one.
+    expect(mail?.effect.text).not.toContain("About:");
+    const [named] = addonEffects(on, { ...request, item: "Wedding cake" }, ctx);
+    expect(named?.effect.text).toContain("Best time: after 5 pm\nAbout: Wedding cake\nGuests: 80");
+    const [nommee] = addonEffects(on, { ...request, item: "Wedding cake" }, { ...ctx, ownerLanguage: "fr" });
+    expect(nommee?.effect.text).toContain("Au sujet de: Wedding cake");
+
     const off = activeAddons([install("email-notifications", { email: "o@e.co", newRequest: false })]);
     expect(addonEffects(off, request, ctx)).toEqual([]);
     // Urgent requests are emailed by the platform's urgent alert instead (never twice).
