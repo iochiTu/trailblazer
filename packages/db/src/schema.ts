@@ -905,10 +905,15 @@ export interface ReplyImage {
   title: string;
 }
 
-/** A button under an assistant reply; the link always comes from the business profile, never the model. */
+/**
+ * A button under an assistant reply. "call" and "book" open a link from the business profile (never
+ * from the model). With `item`, the button is about one service or product from the business page
+ * (docs/SELL_AND_PROMOTE.md): "quote" and a "book" without a link start that request in the chat.
+ */
 export interface ReplyAction {
-  kind: "call" | "book";
-  href: string;
+  kind: "call" | "book" | "quote";
+  href?: string;
+  item?: { id: string; name: string };
 }
 
 export interface MessageFlags {
@@ -937,7 +942,7 @@ export interface MessageFlags {
   urgency?: "urgent" | "danger";
   /** The visitor asked for professional advice or a diagnosis; the assistant was told to decline. */
   advice?: boolean;
-  /** Buttons shown under the reply ("call", "book"). */
+  /** Buttons shown under the reply ("call", "book", or "quote"/"book" for a service). */
   actions?: ReplyAction[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
@@ -991,6 +996,12 @@ export const leads = pgTable(
      * tireSize: "215/55R16" }); keys come from the industry template's `leadFields`.
      */
     details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+    /**
+     * The service or product the request is about, when it started from one (docs/SELL_AND_PROMOTE.md).
+     * The name is kept as it was then, so the request still reads right after the item is renamed or removed.
+     */
+    catalogItemId: uuid("catalog_item_id").references(() => catalogItems.id, { onDelete: "set null" }),
+    itemName: text("item_name"),
     /** Photos the visitor sent in the conversation (message_attachments ids), shown with the request. */
     attachmentIds: uuid("attachment_ids").array().notNull().default(sql`ARRAY[]::uuid[]`),
     ...timestamps,

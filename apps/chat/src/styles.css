@@ -580,6 +580,17 @@ body {
   transition: background-color 0.15s;
 }
 
+button.tb-action {
+  font-family: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+button.tb-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .tb-action:hover {
   background: color-mix(in srgb, var(--tb-accent) 10%, var(--tb-surface));
 }

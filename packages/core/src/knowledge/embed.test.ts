@@ -435,3 +435,51 @@ describe("the owner's answers and photos", () => {
     expect(provider.calls).toBe(2);
   });
 });
+
+/** A query writer that takes its time, like a real auxiliary model (2–3 s). */
+class SlowWriter implements LLMProvider {
+  readonly id = "slow-writer";
+  supportsImages() {
+    return false;
+  }
+  async *stream(model: string, request: ChatRequest): AsyncIterable<ChatEvent> {
+    await new Promise((r) => setTimeout(r, 1200));
+    yield* new OfflineProvider().stream(model, request);
+  }
+}
+
+describe("a question in the business's other language", () => {
+  const recorder = new Recorder();
+  const gateway = new LLMGateway({
+    providers: [new SlowWriter(), recorder],
+    routes: {
+      chat: [{ provider: "recorder", model: "r1" }],
+      aux: [{ provider: "slow-writer", model: "echo" }],
+    },
+  });
+  const QUESTION = "Bonjour, est-ce qu'il y a un rabais pour les aînés chez vous ?";
+  /** Milliseconds until the first words of the answer. */
+  const firstText = async (embedder: QueryEmbedder | null) => {
+    const started = Date.now();
+    let first: number | null = null;
+    for await (const event of runChat(
+      { db: app.db, gateway, embeddings: embedder, embeddingWaitMs: 300 },
+      { tenantId, botId, visitorId: `v-${crypto.randomUUID()}`, channel: "hosted", message: QUESTION },
+    )) {
+      if (event.type === "text") first ??= Date.now() - started;
+    }
+    return first!;
+  };
+  const knowledge = () => recorder.last!.system.map((b) => b.text).join("\n");
+
+  it("doesn't wait for the translated queries when the question's vector is there", async () => {
+    expect(await firstText(new QueryEmbedder(new ConceptEmbeddings()))).toBeLessThan(900);
+    expect(knowledge()).toContain("Seniors get 10% off");
+  });
+
+  it("waits for them without a vector: keyword search can't cross languages", async () => {
+    const down = Object.assign(new ConceptEmbeddings(), { fail: true });
+    expect(await firstText(new QueryEmbedder(down))).toBeGreaterThanOrEqual(1200);
+    expect(await firstText(null)).toBeGreaterThanOrEqual(1200);
+  });
+});

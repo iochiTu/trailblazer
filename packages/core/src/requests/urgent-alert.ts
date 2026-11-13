@@ -36,6 +36,7 @@ const TEXT = {
     email: "Email",
     bestTime: "Best time",
     request: "Request",
+    item: "About",
     photos: (n: number) => `${n} photo${n === 1 ? "" : "s"} attached to the request.`,
     open: "Open the request",
     footer:
@@ -50,6 +51,7 @@ const TEXT = {
     email: "Courriel",
     bestTime: "Meilleur moment",
     request: "Demande",
+    item: "Au sujet de",
     photos: (n: number) => `${n} photo${n === 1 ? "" : "s"} jointe${n === 1 ? "" : "s"} à la demande.`,
     open: "Ouvrir la demande",
     footer:
@@ -123,6 +125,7 @@ export async function runUrgentAlert(
     line(t.phone, lead.phone),
     line(t.email, lead.email),
     line(t.bestTime, lead.bestTime),
+    line(t.item, lead.itemName),
     ...fields.map((f) => line(f.label[lang], lead.details[f.key])),
     line(t.request, lead.message),
     lead.attachmentIds.length ? t.photos(lead.attachmentIds.length) : null,

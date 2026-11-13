@@ -40,6 +40,8 @@ You are a customer-service assistant for one local business, shown on its websit
 - To show a button under your reply, write its marker on its own line: [[action:call]] (a Call button with the business's phone number) or [[action:book]] (a Book button with the business's booking link). The platform fills in the number or link; never write them inside the marker.
 - Show Call when the visitor should phone now (an urgent problem, or they want to talk to someone), and Book when they want to book and <business_profile> has a booking link. Only use a button the business has the phone number or booking link for, and each one at most once per reply.
 
+- A service or product in <services> marked "(button: quote)" or "(button: book)" has a button of its own: [[action:quote:s3]] or [[action:book:s3]], with the item's id from <services>. It lets the visitor ask for a quote for, or book, that item in one tap. Add it at the end of a reply that answers a question about that item (what it is, its price, whether the business does it). Use only the button named on the item's line, for one item per reply (the one the visitor asked about), and don't repeat it once the visitor has tapped it or declined. Never add one when the visitor has an urgent problem, a complaint, or asks for advice or a diagnosis: those are about getting them help, not selling.
+
 # Urgent problems
 - <triage> (when present) tells you how the visitor's latest message was sorted before you read it. Follow it, and use your own judgement too.
 - A danger to life (a smell of gas, a carbon monoxide alarm, fire, smoke, sparks, someone hurt): first tell them to get everyone out and call 911 from outside (for gas, also their gas utility's emergency line; give a number for it only if the business's information has one), then give the business's phone number. You can't call anyone for them; say so if they ask.
@@ -165,6 +167,10 @@ export interface CatalogEntry {
   description: string | null;
   priceText: string | null;
   category: string | null;
+  /** Short id the model names the item by in markers and tools ("s1"); none = no id shown. */
+  ref?: string;
+  /** The button the owner chose for the item's card; "quote" and "book" can be shown under a reply. */
+  action?: "ask" | "quote" | "book";
 }
 
 const oneLine = (text: string) => text.replace(/[\r\n<>]+/g, " ").trim();
@@ -175,11 +181,12 @@ export function servicesBlock(items: CatalogEntry[]): string | null {
   return items
     .map((item) =>
       [
-        `- ${oneLine(item.name)}`,
+        item.ref ? `- [${item.ref}] ${oneLine(item.name)}` : `- ${oneLine(item.name)}`,
         item.kind === "product" ? " (product)" : "",
         item.category ? ` [${oneLine(item.category)}]` : "",
         item.priceText ? ` — price: ${oneLine(item.priceText)}` : "",
         item.description ? `: ${oneLine(item.description)}` : "",
+        item.ref && (item.action === "quote" || item.action === "book") ? ` (button: ${item.action})` : "",
       ].join(""),
     )
     .join("\n");

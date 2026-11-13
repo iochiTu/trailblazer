@@ -605,7 +605,9 @@ describe("chat engine", () => {
         ),
       );
       const system = vision.last!.system.map((b) => b.text).join("\n");
-      expect(system).toContain("<services>\n- Custom birthday cake [Cakes] — price: from $45\n</services>");
+      expect(system).toContain(
+        "<services>\n- [s1] Custom birthday cake [Cakes] — price: from $45\n</services>",
+      );
       expect(system).not.toContain("Wedding cake");
       expect(system).toContain("<notices>\n- Closed Monday for Thanksgiving\n</notices>");
       expect(system).not.toContain("Summer patio");

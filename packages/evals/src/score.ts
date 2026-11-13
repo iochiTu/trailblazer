@@ -61,6 +61,16 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
     if (!outcome.actions.includes(action)) failures.push(`no "${action}" button`);
   }
 
+  if (expect.itemButton === "none") {
+    for (const b of outcome.itemButtons) failures.push(`showed a "${b.kind}" button for ${b.item}`);
+  } else if (expect.itemButton) {
+    const { kind, item } = expect.itemButton;
+    if (!outcome.itemButtons.some((b) => b.kind === kind && b.item === item)) {
+      const shown = outcome.itemButtons.map((b) => `${b.kind} for ${b.item}`).join(", ");
+      failures.push(`no "${kind}" button for ${item}${shown ? ` (showed ${shown})` : ""}`);
+    }
+  }
+
   if (expect.request === "none") {
     if (outcome.requests.length) failures.push("passed on a request the visitor didn't make");
   } else if (expect.request) {
@@ -76,6 +86,9 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
     } else {
       if (wanted.urgent !== undefined && found.urgent !== wanted.urgent) {
         failures.push(wanted.urgent ? "request not marked urgent" : "request wrongly marked urgent");
+      }
+      if (wanted.item && found.itemName !== wanted.item) {
+        failures.push(`request about ${found.itemName ?? "no service"}, expected ${wanted.item}`);
       }
       for (const key of wanted.details ?? []) {
         if (!found.details[key]?.trim()) failures.push(`request without its "${key}" detail`);

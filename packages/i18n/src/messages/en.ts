@@ -339,6 +339,7 @@ export const en = {
   "requests.status.done": "Done",
   "requests.test": "Test",
   "requests.bestTime": "Best time: {time}",
+  "requests.item": "About: {item}",
   "requests.start": "Mark in progress",
   "requests.finish": "Mark done",
   "requests.reopen": "Reopen",

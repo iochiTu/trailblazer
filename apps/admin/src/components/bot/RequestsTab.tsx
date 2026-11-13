@@ -141,6 +141,11 @@ export function RequestsTab({
                   <span className={lead.status === "new" ? "badge badge-accent" : "badge"}>
                     {t(`requests.status.${lead.status}`)}
                   </span>
+                  {lead.itemName && (
+                    <span className="badge" dir="auto">
+                      {t("requests.item", { item: lead.itemName })}
+                    </span>
+                  )}
                   {lead.channel === "playground" && <span className="badge">{t("requests.test")}</span>}
                   <span className="muted ms-auto text-xs">{fmt.format(new Date(lead.createdAt))}</span>
                 </div>

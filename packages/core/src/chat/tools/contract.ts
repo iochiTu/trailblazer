@@ -30,6 +30,8 @@ export interface ToolContext {
   language: string | null;
   /** The visitor's latest message was triaged as urgent or a danger (see triage.ts). */
   urgent?: boolean;
+  /** The business's services and products, with the short ids the model was shown ("s1"). */
+  catalog?: { ref: string; id: string; name: string; action: string }[];
   embeddings?: QueryEmbedder | null;
   /** Told about each question vector a tool used (for usage records). */
   onEmbedding?: (vector: QueryVector | null) => void;
