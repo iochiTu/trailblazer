@@ -129,6 +129,11 @@ effort there.
   **250 ms** more (`EMBEDDINGS_QUERY_WAIT_MS`), then goes ahead without it and logs `embedding late`.
   On the fast path (no rewrite needed), retrieval never waits more than that; 150 ms dropped a third of
   first-time vectors (§7).
+- **No wait for the translation.** A first question in the business's other language (French to an
+  English business) used to wait 2–3 s for the query writer, as keyword search can't cross languages.
+  When the question's vector arrives within the deadline, the answer goes ahead and the query writer
+  runs alongside, as for the main language; without a vector it waits as before. Median time to first
+  text for French questions in the chat evals: 6.7 s before, 1.3 s after, 59 of 59 still passing (§7).
 - **Cache:** an in-process LRU (5,000 vectors) in front of Redis (30 days), keyed by
   `model + sha256(normalized text)`. Suggested questions (quick replies) are embedded when the owner
   saves them, so a tap on one never waits. The `search_knowledge` tool uses the same cache,

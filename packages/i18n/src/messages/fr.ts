@@ -359,6 +359,7 @@ export const fr: Record<MessageKey, string> = {
   "requests.status.done": "Terminée",
   "requests.test": "Test",
   "requests.bestTime": "Meilleur moment : {time}",
+  "requests.item": "Au sujet de : {item}",
   "requests.start": "Marquer en cours",
   "requests.finish": "Marquer terminée",
   "requests.reopen": "Rouvrir",

@@ -133,6 +133,9 @@ reciprocal-rank fusion. Design and reasoning: [docs/EMBEDDINGS.md](docs/EMBEDDIN
   (`embedding late` in the log). A failing provider never turns an answer into an error; after 5
   failures in a row it isn't asked for 30 s. Question vectors are kept in memory and in Redis
   (30 days, keyed by a hash of the question).
+- **Other-language questions don't wait for a translation.** A French question to an English business
+  finds the text through its vector, so the answer no longer waits 2–3 s for the query writer (it
+  still does when no vector arrives in time).
 - **Indexing makes no network calls.** A source sync writes chunks without vectors (searchable by
   keyword at once) and queues the worker job `embed.chunks`, which embeds them in batches of 128 with
   retries and records the tokens as usage (kind `embedding`). A chunk whose text is already embedded
@@ -246,6 +249,14 @@ assistant declines kindly). When a message is urgent or a danger:
 marker and sends a button whose link comes from the business profile (phone number, booking link),
 never from the model. Buttons are kept on the message (`flags.actions`) and come back with the
 conversation history.
+
+**A button for the service the visitor asked about** (docs/SELL_AND_PROMOTE.md, phase 1): a service
+or product whose card on the business page has "Request a quote" or "Book" gets the same button under
+an answer about it (`[[action:quote:s3]]`, with the item's id from `<services>`). A tap asks for that
+quote or booking in the chat (Book opens the booking link when the business has one), and the request
+that follows records the service (`leads.catalog_item_id`, `item_name`), shown on the Requests tab and
+in the notification emails. One item per reply, once per conversation, and never on an urgent problem
+or a request for advice.
 
 ## Questions the assistant couldn't answer (knowledge gaps)
 

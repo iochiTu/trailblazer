@@ -107,6 +107,7 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
     advice: false,
     unanswered: false,
     actions: [],
+    itemButtons: [],
     tools: [],
     requests: [],
     error: null,
@@ -119,7 +120,7 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
     const id = conversationId;
     return withTenant(deps.db, business.tenantId, (tx) =>
       tx
-        .select({ kind: leads.kind, urgent: leads.urgent, details: leads.details })
+        .select({ kind: leads.kind, urgent: leads.urgent, details: leads.details, itemName: leads.itemName })
         .from(leads)
         .where(eq(leads.conversationId, id)),
     );
@@ -171,6 +172,9 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
       outcome.advice = Boolean(done?.flags.advice);
       outcome.unanswered = Boolean(done?.flags.unanswered);
       outcome.actions = (done?.flags.actions ?? []).map((a) => a.kind);
+      outcome.itemButtons = (done?.flags.actions ?? []).flatMap((a) =>
+        a.item ? [{ kind: a.kind, item: a.item.name }] : [],
+      );
       outcome.tools = done?.flags.tools ?? [];
     }
   }

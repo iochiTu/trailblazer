@@ -46,10 +46,14 @@ export interface ReplyPhoto {
   alt: string;
 }
 
-/** A button under an assistant reply. */
+/**
+ * A button under an assistant reply. With `item` it is about one service or product: it opens `href`
+ * when there is one (the booking link), otherwise it asks for that quote or booking in the chat.
+ */
 export interface ReplyAction {
-  kind: "call" | "book";
-  href: string;
+  kind: "call" | "book" | "quote";
+  href?: string;
+  item?: { id: string; name: string };
 }
 
 export interface StoredMessage {

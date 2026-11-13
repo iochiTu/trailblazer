@@ -332,6 +332,8 @@ export interface Lead {
   urgent: boolean;
   /** Industry details (e.g. vehicle, tire size), keyed by the template's lead fields. */
   details: Record<string, string>;
+  /** The service or product the request is about, when it started from one. */
+  itemName: string | null;
   /** Photos the visitor sent in the conversation. */
   attachmentIds: string[];
   createdAt: string;
