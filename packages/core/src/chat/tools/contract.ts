@@ -1,6 +1,12 @@
 import type { AddonEvent } from "@traiblazer/addons";
 import type { Channel, Db } from "@traiblazer/db";
-import type { EmbeddingProvider, ToolCallBlock, ToolDefinition, ToolResultBlock } from "@traiblazer/llm";
+import type {
+  QueryEmbedder,
+  QueryVector,
+  ToolCallBlock,
+  ToolDefinition,
+  ToolResultBlock,
+} from "@traiblazer/llm";
 import { z } from "zod";
 import type { Passage } from "../retrieval.js";
 
@@ -24,7 +30,13 @@ export interface ToolContext {
   language: string | null;
   /** The visitor's latest message was triaged as urgent or a danger (see triage.ts). */
   urgent?: boolean;
-  embeddings?: EmbeddingProvider | null;
+  /** The number the customer is texting from (SMS): a way to reach them without asking. */
+  visitorPhone?: string;
+  /** The business's services and products, with the short ids the model was shown ("s1"). */
+  catalog?: { ref: string; id: string; name: string; action: string }[];
+  embeddings?: QueryEmbedder | null;
+  /** Told about each question vector a tool used (for usage records). */
+  onEmbedding?: (vector: QueryVector | null) => void;
   signal?: AbortSignal;
 }
 

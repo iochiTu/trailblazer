@@ -21,6 +21,7 @@ apps/
   admin/            Next.js admin portal (EN/FR): knowledge, test chat, share & install, requests, conversations
   chat/             Preact chat page (hosted link / iframe / widget panel) + widget.js loader
   worker/           Background jobs: website crawling, reading uploaded files, indexing
+  e2e/              Accessibility checks in a real browser (Playwright + axe, `pnpm a11y`)
 packages/
   core/             Chat engine, tools, retrieval, prompt (locked platform rules), crawler, job queue
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
@@ -60,7 +61,10 @@ on phones. `?embed=…` (iframe, widget, test chat) still gets the plain chat.
   `Plumber`, `TireShop`, with hours and offers). The chat app (`apps/chat`) then mounts in `#app`;
   "Ask about this" / "Request a quote" / "Book" buttons on the cards send their text to the chat.
 - **Listed by search engines** only when the assistant is active, its web version is on and the owner
-  hasn't kept it unlisted; otherwise `noindex`.
+  hasn't kept it unlisted; otherwise `noindex`. `<chat-domain>/sitemap.xml` lists exactly those pages
+  (at their friendly link when they have one; `SECURITY DEFINER` function `app_listed_pages`, which
+  also leaves out suspended businesses and prospect demos), and `/robots.txt` points to it and keeps
+  robots out of `/v1/`.
 - **Friendly link** `<chat-domain>/<slug>` (`bots.page_slug`, unique across the platform, resolved by
   the `SECURITY DEFINER` function `app_resolve_page_slug`). Platform words are reserved
   (`RESERVED_PAGE_SLUGS` in `@traiblazer/shared`). The `/c/<key>` link keeps working and points
@@ -78,11 +82,13 @@ on phones. `?embed=…` (iframe, widget, test chat) still gets the plain chat.
 - **Page statistics** ("How your page is doing" on the Business page tab, 7/30/90 days): page views
   and taps on the contact buttons (`page_stats`, RLS: daily totals per assistant in the reporting time
   zone, nothing about the visitor), next to the questions visitors asked (page and website chat) and
-  the requests they left, both without the owner's tests. A view is a top-level browser load of the
-  published page (active assistant, web version on): not `?embed`, not `?preview=1`, not prefetches
-  or robots (`isPersonVisit` in `apps/api/src/lib/page-stats.ts`). The buttons carry `data-action`;
-  the chat app sends taps with `navigator.sendBeacon` to `POST /v1/public/page-events` (same origin,
-  30 per minute per address). API: `GET /v1/tenants/:t/bots/:b/page-stats?days=30`.
+  the requests they left, both without the owner's tests. A view is one visit to the published page
+  (active assistant, web version on): the page sends `view` once per browser tab, so a refresh or
+  coming back in the same tab isn't counted again (a flag in session storage, never sent anywhere).
+  Not counted: `?embed`, `?preview=1`, robots and prefetches (`fromPerson` in
+  `apps/api/src/lib/page-stats.ts`). The buttons carry `data-action`; the chat app sends views and
+  taps with `navigator.sendBeacon` to `POST /v1/public/page-events` (same origin, 30 per minute per
+  address). API: `GET /v1/tenants/:t/bots/:b/page-stats?days=30`.
 
 ## Add-ons
 
@@ -160,6 +166,52 @@ before every reply, which can take most of the time. `OPENAI_COMPATIBLE_REASONIN
 `reasoning.effort`) and nothing is sent when it is unset, because endpoints reject the field for models
 that don't reason. Which values a model honours is up to the endpoint: Ollama applies the ones the
 model supports and falls back to the model's default otherwise.
+
+## Search by meaning (embeddings)
+
+Answers are grounded in a hybrid search: full text (English and French stemming), fuzzy matching, and,
+when an embedding provider is configured (`EMBEDDINGS_*` in `.env`), search by meaning, all merged by
+reciprocal-rank fusion. Design and reasoning: [docs/EMBEDDINGS.md](docs/EMBEDDINGS.md).
+
+- **Off the answer's path.** The visitor's question is sent for embedding as soon as it arrives (with
+  the previous question, for a follow-up), alongside the query writer. Retrieval waits for it at most
+  `EMBEDDINGS_QUERY_WAIT_MS` (250 ms) once the keyword search is ready, then goes ahead without it
+  (`embedding late` in the log). A failing provider never turns an answer into an error; after 5
+  failures in a row it isn't asked for 30 s. Question vectors are kept in memory and in Redis
+  (30 days, keyed by a hash of the question).
+- **Other-language questions don't wait for a translation.** A French question to an English business
+  finds the text through its vector, so the answer no longer waits 2–3 s for the query writer (it
+  still does when no vector arrives in time).
+- **Indexing makes no network calls.** A source sync writes chunks without vectors (searchable by
+  keyword at once) and queues the worker job `embed.chunks`, which embeds them in batches of 128 with
+  retries and records the tokens as usage (kind `embedding`). A chunk whose text is already embedded
+  in the same assistant (an unchanged paragraph, a footer on every page) keeps that vector
+  (`chunks.content_hash`).
+- **Q&A pairs and photos** are embedded by the same job (question + answer; title + description), and
+  again when their text is edited. They match by meaning only when clearly close (0.75 × the cutoff),
+  so "Puis-je venir avec mon chien ?" finds the owner's "Can I bring my dog?". Suggested questions are
+  embedded when saved, so the first tap on one doesn't wait. Services aren't embedded: the whole list
+  is in every prompt.
+- **Storage:** half-precision vectors (`halfvec`), 512 numbers by default (`EMBEDDINGS_DIMENSIONS`):
+  1 KB per chunk. The stored model name includes the size (`voyage-4-lite@512`); only vectors of the
+  current model are compared. No approximate index: each search compares the assistant's own chunks
+  exactly. Results farther than `EMBEDDINGS_MAX_DISTANCE` (cosine; 0.85 by default, 0.75 for
+  voyage-4-lite) don't count.
+- **A model run locally** (`EMBEDDINGS_PROVIDER=local`, `EMBEDDINGS_MODEL=Xenova/multilingual-e5-small`):
+  nothing leaves the server and nothing is billed. About 3 ms per question and close to the hosted
+  model in the retrieval evals, for 0.6–1 GB of memory in the API and in the worker. The model is
+  downloaded on first use (`EMBEDDINGS_CACHE_DIR` says where it is kept) and loaded when the API starts.
+- **Changing the model or size:** set the new values, restart the API and worker, then
+  `pnpm embeddings:backfill` queues every assistant whose chunks, Q&A pairs or photos need new vectors. Until the worker
+  reaches one, it is searched by keyword.
+- **Measuring:** `pnpm evals:retrieval` ranks 27 EN/FR questions worded differently from the text with
+  keyword search alone and with vectors, times the question vectors and prints the distances that set
+  `EMBEDDINGS_MAX_DISTANCE`. With the question as typed, the right text comes first for 33 % of
+  questions with keyword search alone (French questions on English text: 8 %) and 81 % with
+  voyage-4-lite (French: 75 %). Five models compared in docs/EMBEDDINGS.md §7.
+- **Choice:** `mongodb/voyage-4-lite` through OpenRouter (`EMBEDDINGS_BASE_URL=https://openrouter.ai/api/v1`;
+  `OPENROUTER_API_KEY` is used when `EMBEDDINGS_API_KEY` is empty), or `voyage-4-lite` direct from
+  Voyage. See `.env.example`.
 
 ## Tools
 
@@ -243,6 +295,35 @@ assistant declines kindly). When a message is urgent or a danger:
 marker and sends a button whose link comes from the business profile (phone number, booking link),
 never from the model. Buttons are kept on the message (`flags.actions`) and come back with the
 conversation history.
+
+**A button for the service the visitor asked about** (docs/SELL_AND_PROMOTE.md, phase 1): a service
+or product whose card on the business page has "Request a quote" or "Book" gets the same button under
+an answer about it (`[[action:quote:s3]]`, with the item's id from `<services>`). A tap asks for that
+quote or booking in the chat (Book opens the booking link when the business has one), and the request
+that follows records the service (`leads.catalog_item_id`, `item_name`), shown on the Requests tab and
+in the notification emails. One item per reply, once per conversation, and never on an urgent problem
+or a request for advice.
+
+## Text messages (SMS) and missed calls
+
+Design and status: [docs/PHONE_AND_SMS.md](docs/PHONE_AND_SMS.md). With `TWILIO_ACCOUNT_SID` and
+`TWILIO_AUTH_TOKEN` set, an assistant that has a phone number answers texts and follows up missed calls:
+
+- **A text** to the number is answered by the same assistant as the chat (channel `sms`): plain,
+  short replies; the phone number or link written out instead of a button; a request carries the
+  number the customer writes from. One thread per customer number, a new one after 24 hours.
+- **STOP, START and HELP** (and ARRET, AIDE) are handled before the assistant; opt-outs are kept per
+  assistant (`sms_opt_outs`) and nothing more is sent to that number.
+- **A call** in "text back" mode hears one sentence, then gets one text a day that opens the
+  conversation. Answering calls by voice is the next phase.
+- **Sending** is a worker job (`message.send`) with retries; every text is kept in `outbound_messages`
+  with its delivery status, and its parts are recorded as usage (kind `sms`).
+- **Webhooks** (`/v1/telephony/twilio/sms`, `/voice`, `/status`) accept only requests signed by the
+  provider. The provider sits behind `packages/telephony`, so it can be changed.
+- **The number** is assigned by Traiblazer staff in support mode (`PUT /v1/tenants/:t/bots/:b/phone`);
+  the business turns texting on or off and chooses what a call does (`PATCH`). Both are on the
+  assistant's **Phone & texts** tab, which also explains how to forward missed calls to the number.
+- **Trying it locally** without a Twilio account: `TELEPHONY_PROVIDER=fake` (see `.env.example`).
 
 ## Questions the assistant couldn't answer (knowledge gaps)
 
@@ -355,7 +436,20 @@ pnpm typecheck
 pnpm test           # needs `pnpm db:up`; uses the traiblazer_test database
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same steps against the docker-compose services.
+CI (`.github/workflows/ci.yml`) runs the same steps against the docker-compose services. A pre-commit
+hook (`.githooks/pre-commit`, turned on by `pnpm install`) runs the Biome check on the staged files.
+
+**Accessibility** (`apps/e2e`): every page visitors and owners use (business page, chat in an iframe,
+sign-in, dashboard, usage, every assistant tab, operator console) is checked with axe against WCAG 2.2
+AA on a desktop and a phone-sized screen, with reduced motion, plus keyboard focus on the chat and no
+sideways scrolling. It runs against the dev servers with the demo data:
+
+```bash
+pnpm dev && pnpm db:seed            # in another terminal
+pnpm a11y                           # Chromium from Playwright: `pnpm --filter @traiblazer/e2e exec playwright install chromium` once
+```
+
+Not in CI yet (it needs the servers and a browser).
 
 ## Evals (answer quality and safety)
 
@@ -400,6 +494,8 @@ pnpm evals --list                       # show the cases
     now waits for the English and French queries, and the query writer adds the words a business
     would use ("flat tire" → towing, roadside);
   - the tire shop's guideline held back listed service prices until the tire size was given.
+- **Retrieval** (`pnpm evals:retrieval`, `src/retrieval.ts`): see Search by meaning; needs no chat
+  model, only the embedding provider.
 - `pnpm test` only checks the scorer and the case list; evals need a model, so CI doesn't run them.
   Run them after changing prompts, packs, tools or the model, and with `--repeat` before comparing
   models (open decision §17.10).
@@ -458,6 +554,25 @@ within a minute or so.
   comes off. The assistant stays a draft, so the page is listed only once the owner activates it.
 - **Delete** removes the demo business and everything in it. Statuses: building, ready, nothing to
   read (`needs_information`), couldn't fill the page in (`failed`), handed over.
+
+### Onboarding checklist
+
+The console's **Onboarding** tab tracks the done-for-you setup of a business we build the page for
+(PLAN §7.5): pick the business, say when its materials arrived, and the page is **due one working day
+later** (same time the next weekday in Toronto time; materials sent on a weekend count from Monday 9:00;
+statutory holidays aren't counted).
+
+- **Seven steps.** Five are checked from the business's own data every time the list is opened: materials
+  read (a source is ready), page content (description, phone or email, hours), services and prices,
+  photos, page published (assistant active and page on). Staff tick the other two: the owner reviewed
+  the page, and the page link is on the Google Business Profile. Any step but publishing can be marked
+  "not needed" (and undone); each mark records who and when.
+- **Publish page** turns the assistant on and the page on, with support access, once the owner's review is
+  ticked; it is written to the business's activity log and the operator audit log. If the owner publishes
+  it themselves, the checklist notices the next time it is opened. Each card shows "due in", "overdue by"
+  or whether it went live on time.
+- One checklist per business, in the platform table `onboardings` (no row-level security, staff only).
+  Prospect demos are handed over first. Removing a checklist leaves the business as it is.
 
 ## Multi-tenancy and security model
 

@@ -290,7 +290,11 @@ describe("urgent requests", () => {
   });
 
   it("emails the owners, or the notification address when that add-on is on", async () => {
-    const [lead] = await owner.db.select().from(leads).where(eq(leads.botId, botId));
+    const [lead] = await owner.db
+      .update(leads)
+      .set({ itemName: "Water heater installation" })
+      .where(eq(leads.botId, botId))
+      .returning();
     const sent: { to: string[]; subject: string; text: string }[] = [];
     const mailer = { send: async (m: (typeof sent)[number]) => void sent.push(m) };
     const deps = { db: app.db, mailer, adminUrl: "https://admin.example" };
@@ -299,6 +303,7 @@ describe("urgent requests", () => {
     expect(sent[0]!.to).toEqual([ownerEmail]);
     expect(sent[0]!.subject).toBe("URGENT: Alex Doe needs help now (Smith & Sons Plumbing)");
     expect(sent[0]!.text).toContain("Phone: 519-555-0142");
+    expect(sent[0]!.text).toContain("About: Water heater installation");
     expect(sent[0]!.text).toContain("Address or town: Guelph N1H 2B3");
     expect(sent[0]!.text).toContain("Equipment: Gas water heater, 12 years");
     expect(sent[0]!.text).toContain("1 photo attached");

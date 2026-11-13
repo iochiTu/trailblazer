@@ -1,0 +1,17 @@
+{
+  "name": "@traiblazer/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Accessibility checks (axe, WCAG 2.2 AA) of the business page, the chat and the admin portal, in a real browser.",
+  "scripts": {
+    "a11y": "playwright test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^26.6.6",
+    "typescript": "~6.0.3"
+  }
+}

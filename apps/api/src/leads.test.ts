@@ -189,4 +189,13 @@ describe("visitor requests", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().bot.settings.followUps).toBe(false);
   });
+
+  it("returns the service a request is about", async () => {
+    await addLead("Dana Quote", { kind: "quote", itemName: "Wedding cake" });
+    const res = await call("GET", leadsUrl());
+    const lead = (res.json().leads as { name: string; itemName: string | null }[]).find(
+      (l) => l.name === "Dana Quote",
+    );
+    expect(lead?.itemName).toBe("Wedding cake");
+  });
 });

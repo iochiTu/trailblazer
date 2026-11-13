@@ -114,6 +114,8 @@ export type AddonEvent =
        * right away (see the urgent alert in @traiblazer/core).
        */
       urgent: boolean;
+      /** The service or product the request is about, when it started from one. */
+      item?: string | null;
       /** Industry details the visitor gave (vehicle, tire size, address…), labelled for the owner. */
       details: { key: string; label: Localized; value: string }[];
       /** Photos the visitor sent in the conversation, attached to the request. */

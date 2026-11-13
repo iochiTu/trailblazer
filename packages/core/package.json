@@ -23,6 +23,7 @@
     "@traiblazer/integrations": "workspace:*",
     "@traiblazer/llm": "workspace:*",
     "@traiblazer/shared": "workspace:*",
+    "@traiblazer/telephony": "workspace:*",
     "cheerio": "1.2.0",
     "drizzle-orm": "0.45.4",
     "mammoth": "1.13.0",

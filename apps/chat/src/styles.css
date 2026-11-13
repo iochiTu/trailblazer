@@ -184,9 +184,12 @@ body {
   color: var(--tb-on-brand);
 }
 
+/* On the brand-coloured header: an outline instead of a lighter fill, so the initials keep the
+   brand / on-brand contrast (a tinted fill dropped it below 4.5:1). */
 .tb-header .tb-avatar-icon,
 .tb-header .tb-avatar-initials {
-  background: color-mix(in srgb, var(--tb-on-brand) 20%, transparent);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tb-on-brand) 55%, transparent);
   color: var(--tb-on-brand);
 }
 
@@ -502,20 +505,6 @@ body {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tb-typing i,
-  .tb-row,
-  .tb-user,
-  .tb-welcome {
-    animation: none;
-  }
-
-  .tb-chip,
-  .tb-send {
-    transition: none;
-  }
-}
-
 /* Business photos in assistant replies. */
 .tb-photos {
   display: flex;
@@ -591,6 +580,17 @@ body {
   transition: background-color 0.15s;
 }
 
+button.tb-action {
+  font-family: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+button.tb-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .tb-action:hover {
   background: color-mix(in srgb, var(--tb-accent) 10%, var(--tb-surface));
 }
@@ -648,9 +648,10 @@ body {
     box-shadow 0.15s;
 }
 
+/* The message box has no outline of its own: the whole composer shows where the keyboard is. */
 .tb-composer:focus-within {
   background: var(--tb-surface);
-  border-color: color-mix(in srgb, var(--tb-accent) 60%, transparent);
+  border-color: var(--tb-accent);
   box-shadow: 0 2px 12px color-mix(in srgb, var(--tb-brand) 14%, transparent);
 }
 
@@ -828,6 +829,7 @@ body {
 .tb-shell[data-theme="midnight"] .tb-header .tb-avatar,
 .tb-shell[data-page] .tb-header .tb-avatar {
   background: var(--tb-brand);
+  box-shadow: none;
   color: var(--tb-on-brand);
 }
 
@@ -937,4 +939,20 @@ body {
 
 body:has(.tb-shell[data-theme="midnight"]) {
   background: #17171a;
+}
+
+/* Last in the file, so it wins over the rules above for visitors who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .tb-typing i,
+  .tb-row,
+  .tb-user,
+  .tb-welcome {
+    animation: none;
+  }
+
+  .tb-chip,
+  .tb-composer,
+  .tb-send {
+    transition: none;
+  }
 }

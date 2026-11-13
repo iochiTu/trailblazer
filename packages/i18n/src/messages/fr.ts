@@ -23,6 +23,7 @@ export const fr: Record<MessageKey, string> = {
   "bots.title": "Assistants",
   "bots.create": "Nouvel assistant",
   "bots.name": "Nom de l'assistant",
+  "bots.variant": "Type d'entreprise",
   "bots.pack": "Modèle de secteur",
   "bots.packHint":
     "Donne à votre assistant des consignes de réponse et des scénarios prêts à l'emploi. Vous pouvez les modifier en tout temps.",
@@ -364,6 +365,47 @@ export const fr: Record<MessageKey, string> = {
   "share.sitesHint": "Le widget et l'iframe fonctionnent seulement sur ces sites Web.",
   "share.addSite": "Ajouter un site Web",
   "bots.tab.requests": "Demandes",
+  "bots.tab.phone": "Téléphone et textos",
+  "phone.title": "Numéro de téléphone",
+  "phone.intro":
+    "Votre assistant peut répondre aux messages texte et faire le suivi des appels manqués, avec les mêmes renseignements que le clavardage de votre page.",
+  "phone.unavailable": "Le téléphone et les messages texte ne sont pas encore offerts sur cette plateforme.",
+  "phone.none":
+    "Cet assistant n'a pas encore de numéro de téléphone. Traiblazer le configure pour vous : communiquez avec nous pour en obtenir un dans votre indicatif régional.",
+  "phone.number": "Numéro",
+  "phone.texts.title": "Messages texte",
+  "phone.texts.enable": "Répondre aux messages texte envoyés à ce numéro",
+  "phone.texts.hint":
+    "Les clients peuvent texter ARRET en tout temps pour ne plus recevoir de messages, et AIDE pour obtenir votre numéro de téléphone.",
+  "phone.calls.title": "Appels",
+  "phone.calls.label": "Quand quelqu'un appelle ce numéro",
+  "phone.calls.textBack": "Dire que nous ne pouvons pas répondre, puis texter l'appelant",
+  "phone.calls.off": "Ne pas répondre",
+  "phone.calls.hint":
+    "L'appelant entend une phrase et reçoit un message texte par jour, pour écrire ce dont il a besoin. La réponse vocale aux appels n'est pas encore offerte.",
+  "phone.forward.title": "Envoyez vos appels manqués ici",
+  "phone.forward.intro":
+    "Gardez votre propre numéro. Demandez à votre fournisseur de téléphonie de renvoyer les appels auxquels vous ne répondez pas (sans réponse, occupé, hors des heures d'ouverture) vers le numéro ci-dessus. Chaque fournisseur procède différemment :",
+  "phone.forward.mobile":
+    "Cellulaire : cherchez « renvoi d'appel conditionnel » dans l'application ou l'aide de votre fournisseur.",
+  "phone.forward.landline":
+    "Ligne fixe ou système téléphonique de bureau : demandez le « renvoi sur non-réponse » et le « renvoi sur occupation ».",
+  "phone.forward.test":
+    "Appelez ensuite votre propre numéro d'un autre téléphone, ne répondez pas, et vérifiez que le message texte arrive.",
+  "phone.stats":
+    "{texts, plural, one {# message texte envoyé} other {# messages texte envoyés}} dans les 30 derniers jours · {stopped, plural, one {# numéro désabonné} other {# numéros désabonnés}}",
+  "phone.saved": "Enregistré",
+  "phone.staff.title": "Configuration par l'équipe Traiblazer",
+  "phone.staff.hint":
+    "Achetez le numéro chez le fournisseur, pointez ses webhooks de messages et d'appels vers les adresses ci-dessous, puis entrez-le ici.",
+  "phone.staff.number": "Numéro de téléphone",
+  "phone.staff.assign": "Attribuer le numéro",
+  "phone.staff.replace": "Remplacer le numéro",
+  "phone.staff.remove": "Retirer le numéro",
+  "phone.staff.removeConfirm":
+    "Retirer ce numéro de l'assistant ? Les textos et les appels vers ce numéro ne recevront plus de réponse.",
+  "phone.staff.webhookSms": "À la réception d'un message",
+  "phone.staff.webhookVoice": "À la réception d'un appel",
   "requests.intro":
     "Quand un visiteur veut être rappelé, demande une soumission ou a besoin de quelque chose que vous seul pouvez faire, votre assistant prend son nom et ses coordonnées, puis enregistre la demande ici.",
   "requests.enable": "Permettre à l'assistant de prendre des demandes",
@@ -383,6 +425,7 @@ export const fr: Record<MessageKey, string> = {
   "requests.status.done": "Terminée",
   "requests.test": "Test",
   "requests.bestTime": "Meilleur moment : {time}",
+  "requests.item": "Au sujet de : {item}",
   "requests.start": "Marquer en cours",
   "requests.finish": "Marquer terminée",
   "requests.reopen": "Rouvrir",
@@ -413,6 +456,7 @@ export const fr: Record<MessageKey, string> = {
   "usage.dayTooltip":
     "{date, date, medium} : {questions, plural, one {# question} other {# questions}}, {conversations, plural, one {# conversation} other {# conversations}}",
   "usage.showTable": "Afficher en tableau",
+  "usage.chartKeys": "Utilisez les flèches gauche et droite pour lire chaque jour.",
   "usage.hideTable": "Masquer le tableau",
   "usage.date": "Date",
   "usage.questions": "Questions",
@@ -424,6 +468,7 @@ export const fr: Record<MessageKey, string> = {
   "usage.channel.inline": "Page intégrée",
   "usage.channel.widget": "Widget du site Web",
   "usage.channel.playground": "Tests dans l'administration",
+  "usage.channel.sms": "Messages texte",
   "usage.limits": "Limites",
   "usage.monthlyLimit": "Limite mensuelle de questions",
   "usage.monthlyLimitHint":
@@ -646,7 +691,7 @@ export const fr: Record<MessageKey, string> = {
   "pageStats.action.website": "Site Web",
   "pageStats.action.link": "Boutique et autres liens",
   "pageStats.privacy":
-    "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Vos propres aperçus et essais ne sont pas inclus.",
+    "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Une visite compte une fois, même si le visiteur recharge la page. Vos propres aperçus et essais ne sont pas inclus.",
   "page.preview.title": "Aperçu",
   "page.preview.hint":
     "Votre page telle que les visiteurs la voient. Les conversations ici sont enregistrées comme tests.",

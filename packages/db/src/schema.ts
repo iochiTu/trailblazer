@@ -23,11 +23,12 @@ const tsvector = customType<{ data: string }>({
 });
 
 /**
- * pgvector column without fixed dimensions, so different embedding models can coexist; rows record
- * `embedding_model` and searches only compare rows of the same model.
+ * pgvector half-precision column (2 bytes a number) without fixed dimensions, so different embedding
+ * models can coexist while moving from one to the next; rows record `embedding_model` and searches
+ * only compare rows of the same model (docs/EMBEDDINGS.md).
  */
-const vector = customType<{ data: number[]; driverData: string }>({
-  dataType: () => "vector",
+const halfvec = customType<{ data: number[]; driverData: string }>({
+  dataType: () => "halfvec",
   toDriver: (value) => `[${value.join(",")}]`,
   fromDriver: (value) => JSON.parse(value) as number[],
 });
@@ -379,6 +380,53 @@ export const botKeys = pgTable(
   ],
 );
 
+/** A checklist step staff marked: done by hand, or not needed for this business. */
+export interface OnboardingMark {
+  state: "done" | "skipped";
+  at: string;
+  /** Email of the staff member who marked it. */
+  by: string | null;
+}
+
+/**
+ * Done-for-you setup checklist for one business (operator console; PLAN §7): when its materials
+ * arrived, when the page is due (one working day later) and when it went live. Staff only, like
+ * `demos`: read and written by the operator API, never inside a business's own data.
+ */
+export const onboardings = pgTable(
+  "onboardings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .unique()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** The assistant whose page is being set up. */
+    botId: uuid("bot_id").notNull(),
+    /** When the business's materials arrived: the clock starts here. */
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    /** One working day after `receivedAt` (PLAN §14: a page live within one working day). */
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    /** When the page went live (published from the checklist, or first seen live). */
+    liveAt: timestamp("live_at", { withTimezone: true }),
+    /** Steps staff marked, by step id (see ONBOARDING_STEPS in @traiblazer/shared). */
+    marks: jsonb("marks").$type<Record<string, OnboardingMark>>().notNull().default({}),
+    /** Staff's own note (who is doing it, what is still awaited from the owner). */
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    index("onboardings_due_idx").on(t.dueAt),
+    // Removing the assistant removes its checklist.
+    foreignKey({
+      name: "onboardings_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 export type WeeklyHours = Partial<
   Record<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun", { open: string; close: string }[]>
 >;
@@ -607,7 +655,10 @@ export const chunks = pgTable(
     content: text("content").notNull(),
     language: text("language"),
     tsv: tsvector("tsv").notNull(),
-    embedding: vector("embedding"),
+    /** sha256 of the searchable text (heading + content): unchanged text keeps its vector. */
+    contentHash: text("content_hash"),
+    /** Filled in afterwards by the `embed.chunks` job; null until then (keyword search only). */
+    embedding: halfvec("embedding"),
     embeddingModel: text("embedding_model"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -637,6 +688,10 @@ export const qaPairs = pgTable(
     language: text("language").notNull().default("en"),
     enabled: boolean("enabled").notNull().default(true),
     tsv: tsvector("tsv").notNull(),
+    /** Search by meaning: the vector, its model, and a hash of the text it was made from. */
+    embedding: halfvec("embedding"),
+    embeddingModel: text("embedding_model"),
+    embeddingHash: text("embedding_hash"),
     ...timestamps,
   },
   (t) => [
@@ -655,7 +710,8 @@ export const qaPairs = pgTable(
 // Conversations & usage (RLS enforced)
 // ---------------------------------------------------------------------------------------------
 
-export const channels = ["hosted", "inline", "widget", "playground"] as const;
+/** Where a conversation happens. "sms" is a text thread with a phone number (docs/PHONE_AND_SMS.md). */
+export const channels = ["hosted", "inline", "widget", "playground", "sms"] as const;
 export type Channel = (typeof channels)[number];
 
 /**
@@ -679,6 +735,10 @@ export const knowledgeImages = pgTable(
     language: text("language"),
     enabled: boolean("enabled").notNull().default(true),
     tsv: tsvector("tsv").notNull(),
+    /** Search by meaning: the vector, its model, and a hash of the text it was made from. */
+    embedding: halfvec("embedding"),
+    embeddingModel: text("embedding_model"),
+    embeddingHash: text("embedding_hash"),
     ...timestamps,
   },
   (t) => [
@@ -846,10 +906,15 @@ export interface ReplyImage {
   title: string;
 }
 
-/** A button under an assistant reply; the link always comes from the business profile, never the model. */
+/**
+ * A button under an assistant reply. "call" and "book" open a link from the business profile (never
+ * from the model). With `item`, the button is about one service or product from the business page
+ * (docs/SELL_AND_PROMOTE.md): "quote" and a "book" without a link start that request in the chat.
+ */
 export interface ReplyAction {
-  kind: "call" | "book";
-  href: string;
+  kind: "call" | "book" | "quote";
+  href?: string;
+  item?: { id: string; name: string };
 }
 
 export interface MessageFlags {
@@ -878,7 +943,7 @@ export interface MessageFlags {
   urgency?: "urgent" | "danger";
   /** The visitor asked for professional advice or a diagnosis; the assistant was told to decline. */
   advice?: boolean;
-  /** Buttons shown under the reply ("call", "book"). */
+  /** Buttons shown under the reply ("call", "book", or "quote"/"book" for a service). */
   actions?: ReplyAction[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
@@ -932,6 +997,12 @@ export const leads = pgTable(
      * tireSize: "215/55R16" }); keys come from the industry template's `leadFields`.
      */
     details: jsonb("details").$type<Record<string, string>>().notNull().default({}),
+    /**
+     * The service or product the request is about, when it started from one (docs/SELL_AND_PROMOTE.md).
+     * The name is kept as it was then, so the request still reads right after the item is renamed or removed.
+     */
+    catalogItemId: uuid("catalog_item_id").references(() => catalogItems.id, { onDelete: "set null" }),
+    itemName: text("item_name"),
     /** Photos the visitor sent in the conversation (message_attachments ids), shown with the request. */
     attachmentIds: uuid("attachment_ids").array().notNull().default(sql`ARRAY[]::uuid[]`),
     ...timestamps,
@@ -1346,6 +1417,106 @@ export const assets = pgTable(
   (t) => [index("assets_tenant_idx").on(t.tenantId)],
 );
 
+// ---------------------------------------------------------------------------------------------
+// Phone and SMS (RLS enforced; docs/PHONE_AND_SMS.md)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * What the assistant does with a call to its number: "text_back" answers with one sentence, hangs
+ * up and texts the caller; "off" refuses the call. (Answering by voice comes with the voice phase.)
+ */
+export const phoneCallModes = ["text_back", "off"] as const;
+export type PhoneCallMode = (typeof phoneCallModes)[number];
+
+/** A phone number that belongs to an assistant: texts to it are answered, calls follow `callMode`. */
+export const phoneNumbers = pgTable(
+  "phone_numbers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** E.164, e.g. "+18075550142". One assistant per number across the platform. */
+    e164: text("e164").notNull(),
+    /** Telephony provider the number is with ("twilio"). */
+    provider: text("provider").notNull(),
+    smsEnabled: boolean("sms_enabled").notNull().default(true),
+    callMode: text("call_mode").$type<PhoneCallMode>().notNull().default("text_back"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("phone_numbers_e164_uq").on(t.e164),
+    index("phone_numbers_bot_idx").on(t.tenantId, t.botId),
+    foreignKey({
+      name: "phone_numbers_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** "reply": an answer to a text; "text_back": the text after a missed call; "system": HELP and the like. */
+export const outboundMessageKinds = ["reply", "text_back", "system"] as const;
+export type OutboundMessageKind = (typeof outboundMessageKinds)[number];
+export const outboundMessageStatuses = ["queued", "sent", "delivered", "failed"] as const;
+export type OutboundMessageStatus = (typeof outboundMessageStatuses)[number];
+
+/** A text message we send: queued here, sent by the worker, updated by the provider's delivery reports. */
+export const outboundMessages = pgTable(
+  "outbound_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** Not a foreign key: the record of what was sent outlives the conversation. */
+    conversationId: uuid("conversation_id"),
+    kind: text("kind").$type<OutboundMessageKind>().notNull(),
+    fromNumber: text("from_number").notNull(),
+    toNumber: text("to_number").notNull(),
+    body: text("body").notNull(),
+    status: text("status").$type<OutboundMessageStatus>().notNull().default("queued"),
+    /** The provider's id once it accepted the message; its error code when it failed. */
+    providerId: text("provider_id"),
+    error: text("error"),
+    /** Parts the carrier bills the text as. */
+    segments: integer("segments").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [
+    index("outbound_messages_bot_created_idx").on(t.tenantId, t.botId, t.createdAt),
+    index("outbound_messages_to_idx").on(t.tenantId, t.toNumber, t.createdAt),
+    foreignKey({
+      name: "outbound_messages_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Numbers that texted STOP to an assistant: nothing more is sent to them until they text START. */
+export const smsOptOuts = pgTable(
+  "sms_opt_outs",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    number: text("number").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "sms_opt_outs_pk", columns: [t.tenantId, t.botId, t.number] }),
+    foreignKey({
+      name: "sms_opt_outs_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 /** Tables protected by row-level security. Keep in sync with migrations. */
 export const rlsTables = [
   "usage_counters",
@@ -1373,4 +1544,7 @@ export const rlsTables = [
   "knowledge_gaps",
   "setup_runs",
   "usage_events",
+  "phone_numbers",
+  "outbound_messages",
+  "sms_opt_outs",
 ] as const;

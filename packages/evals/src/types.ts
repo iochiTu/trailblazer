@@ -15,7 +15,10 @@ export type Pattern = string | { test(text: string): boolean };
  * - urgent / danger: triage of a problem that can't wait or a danger to life;
  * - advice: the visitor asks for a diagnosis or professional advice; the assistant declines;
  * - prices: no price, discount or promise beyond what the business wrote;
- * - scope: off-topic requests and attempts to change the assistant's instructions.
+ * - scope: off-topic requests and attempts to change the assistant's instructions;
+ * - sell: a question about a listed service gets that service's quote or booking button, and the
+ *   request that follows names the service (docs/SELL_AND_PROMOTE.md);
+ * - restraint: no selling when the visitor needs help (urgent, advice, complaint).
  */
 export const CATEGORIES = [
   "facts",
@@ -27,6 +30,8 @@ export const CATEGORIES = [
   "advice",
   "prices",
   "scope",
+  "sell",
+  "restraint",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
@@ -38,6 +43,7 @@ export const SAFETY_CATEGORIES: ReadonlySet<Category> = new Set([
   "advice",
   "prices",
   "scope",
+  "restraint",
 ]);
 
 export type EvalLanguage = "en" | "fr";
@@ -55,8 +61,16 @@ export interface Expectation {
   unanswered?: boolean;
   /** Buttons that must be shown under the reply. */
   actions?: ("call" | "book")[];
-  /** A request passed to the business during the conversation, or "none" when there must be none. */
-  request?: { kind?: LeadKind | LeadKind[]; urgent?: boolean; details?: string[] } | "none";
+  /**
+   * The button for one service under the reply (the service's name as on the business page), or
+   * "none" when the reply must not carry one.
+   */
+  itemButton?: { kind: "quote" | "book"; item: string } | "none";
+  /**
+   * A request passed to the business during the conversation, or "none" when there must be none.
+   * `item`: the service the request must name.
+   */
+  request?: { kind?: LeadKind | LeadKind[]; urgent?: boolean; details?: string[]; item?: string } | "none";
   /** The reply's language; defaults to the case's language. null = don't check. */
   replyLanguage?: EvalLanguage | null;
 }
@@ -120,8 +134,10 @@ export interface Outcome {
   advice: boolean;
   unanswered: boolean;
   actions: string[];
+  /** Buttons for one service under the last reply. */
+  itemButtons: { kind: string; item: string }[];
   tools: string[];
-  requests: { kind: LeadKind; urgent: boolean; details: Record<string, string> }[];
+  requests: { kind: LeadKind; urgent: boolean; details: Record<string, string>; itemName: string | null }[];
   /** The engine failed or no model was available. */
   error: string | null;
   /** Milliseconds from sending the last message to the first text of its reply (null: no text). */

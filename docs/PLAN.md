@@ -85,7 +85,7 @@ only (no health or case details), to learn their workflow before the full packs 
 |---|---|
 | **Local businesses** — restaurants, cafés, retail, salons, lodging, attractions | Self-serve: sign up, add the website or build the page, paste the widget. The same product at a low price; a good offer for agency partners |
 | **Car dealerships** | Phase 3 — inventory feeds, CRM and lead-response tooling |
-| **Industrial & institutions** | Phase 4 — long enterprise sales, procurement, security reviews |
+| **Industrial & institutions** | Phase 4 — long enterprise sales, procurement, security reviews. Universities, colleges and municipalities: what they need and what to respect while building now is in §18 |
 
 **Needs that come up in every early-stage industry:**
 
@@ -382,8 +382,8 @@ maintain. It is **one designed page, not a website builder**: the layout is fixe
 
 Built as: the API renders the page into the chat app's HTML (`apps/api/src/page/`), the chat app mounts
 in it; friendly link `<chat-domain>/<slug>` (path form chosen for now, open decision §17.3 can still
-move it to a subdomain); `catalog_items` and `notices` tables (RLS). Not yet: `robots.txt` / sitemap,
-page text in Tier 2 languages (page is EN or FR by the default language). Page statistics (1.5): daily
+move it to a subdomain); `catalog_items` and `notices` tables (RLS). `robots.txt` and a sitemap of the listed
+pages. Not yet: page text in Tier 2 languages (page is EN or FR by the default language). Page statistics (1.5): daily
 views and contact-button taps in `page_stats` (RLS, totals only), shown with questions and requests on
 the admin's Business page tab.
 
@@ -465,6 +465,9 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 
 ### 7.3 Phone and SMS — later phase
 
+How it will be built (provider, voice pipeline, phases, the test that decides the voice backend):
+[PHONE_AND_SMS.md](PHONE_AND_SMS.md).
+
 Starts after the paid launch, when pilots ask for it (§14). SMS comes first and sends customers to the
 business page; voice follows. The same assistant, knowledge and services list answer on every channel.
 
@@ -539,8 +542,11 @@ landline, mobile or VoIP line, so setup uses a per-carrier sheet and ends with a
   first contact (§2.2). The console's Demos tab fills the page in with the setup assistant, shows a
   demo notice on it, keeps it out of search engines, counts views, chats and requests, and hands the
   business over to the owner's account when they sign up. Google listing import still waits on §17.4
-- **Done-for-you onboarding checklist** per business: sources collected, page content, services list,
-  photos, owner review, link on the Google listing, go-live
+- **Done-for-you onboarding checklist (built):** the Onboarding tab, one checklist per business: sources
+  read, page content, services list, photos, owner review, link on the Google listing, go-live. The first
+  five and go-live are checked from the business's data; staff tick the owner's review and the Google
+  link, and publish the page from the checklist once the owner approved it. Due one working day after the
+  materials arrived (§14), with "due in / overdue / live on time" on each card
 - System health: ingestion queue, errors, latency, provider fallbacks, scope-classifier triggers
 
 ## 8. Architecture
@@ -593,7 +599,7 @@ later phases; the rest exists today.
 | Billing           | Stripe (CAD, Canadian sales tax)                                                                                                               |
 | LLM               | Own `LLMProvider` interface; Claude adapter (official Anthropic SDK) + OpenAI-compatible adapter (OpenRouter etc.) + offline test provider (§9) |
 | Translation       | The LLM via the gateway (cheap model); no separate service                                                                                     |
-| Embeddings        | `EmbeddingProvider` interface; strongly multilingual model (Voyage AI, Cohere, OpenAI, Bedrock, Azure, Gemini, local)                          |
+| Embeddings        | `EmbeddingProvider` interface; strongly multilingual model (Voyage AI, Cohere, OpenAI, Bedrock, Azure, Gemini, local); design in `docs/EMBEDDINGS.md` |
 | Parsing           | Readability/Cheerio, `unpdf`/`mammoth`, vision-model OCR for menus, Playwright for JS-heavy sites                                              |
 | Storage / hosting | S3 or R2; Vercel (admin) + Fly.io / Render / AWS ECS (API + workers) + Cloudflare CDN/WAF; Canadian region available for later residency needs |
 | Telephony (later) | Twilio or Telnyx behind a `TelephonyProvider` interface: local Canadian numbers, SMS/MMS, call events, signed webhooks |
@@ -645,7 +651,8 @@ the metering and the admin portal; a second repository would duplicate all of th
 1. **SMS first.** Missed-call text-back needs no voice AI: the forwarded call hits the provider number, the
    call-status webhook queues a text, and the SMS conversation runs on the existing engine. It can be sold
    on its own.
-2. **Voice on a managed orchestrator** (Vapi or Retell). The orchestrator handles audio, speech-to-text,
+2. **Voice on a managed speech layer** (Twilio ConversationRelay; Vapi or Retell were the earlier
+   candidates; a speech-to-speech model is the alternative, chosen by the test in PHONE_AND_SMS §6). The orchestrator handles audio, speech-to-text,
    text-to-speech and interruptions; `apps/voice` exposes the engine to it as the "brain" and serves its
    tool calls. Our knowledge, scope rules, tools and metering stay ours.
 3. **Own audio pipeline only if cost or control require it** (provider media streams + streaming
@@ -860,7 +867,7 @@ Durations are estimates for 1–2 developers.
 | Phase | Duration | Deliverables |
 |---|---|---|
 | **0. Foundations** | done | Monorepo, CI, docker-compose, schema + RLS, auth with orgs, tenant/bot CRUD, i18n framework (ICU, RTL-ready) |
-| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.3 done; the rest ~2–4 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag with immediate email, quote requests with photos and industry fields, service-area check, call and book buttons, scope guard (keyword rules + auxiliary model). Setup without a website (interview, price list and brochure upload, services proposed from the sources); page statistics; evals EN/FR; prospect demo page generator. **To build:** done-for-you onboarding checklist; accessibility pass; Google listing details (§17.4) |
+| **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.3 done; the rest ~2–4 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag with immediate email, quote requests with photos and industry fields, service-area check, call and book buttons, scope guard (keyword rules + auxiliary model). Setup without a website (interview, price list and brochure upload, services proposed from the sources); page statistics; evals EN/FR; prospect demo page generator. Accessibility pass (axe, WCAG 2.2 AA, `pnpm a11y`); done-for-you onboarding checklist (operator console). **To build:** Google listing details (§17.4) |
 | **2. Paid launch + property management** | ~5–6 weeks | Stripe (CAD; setup fee + monthly plan); own domain for the page; page analytics (visits, questions, requests); booking through **Google Calendar and Jobber**; payment and deposit links; seasonal scripts; pack: **Property management & rentals** (maintenance requests, rental inquiry pre-screening after a privacy check); design-partner clinics and firms; agency white-label and referral tracking; Tier 2 reviewed UI strings |
 | **Later phase — Phone and SMS** | ~6–8 weeks; starts after the paid launch, when pilots ask for it | **SMS first:** telephony (numbers, signed webhooks), missed-call text-back with a link to the business page, two-way SMS/MMS, owner alerts by text, reminders. **Then voice:** voice agent on a managed orchestrator with a fast model profile, emergency transfer, call log (recording, transcript, summary), EN then FR. Housecall Pro; status & pickup alerts from shop software; minutes and SMS metering |
 | **3. Clinics and professional services (customer service only)** | ~6–8 weeks | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; clinic booking integrations (as API access allows); **document chaser** with secure upload and vision check; minimal intake; catalog feeds; packs: Clinic (vet first), Pharmacy, Accounting & tax, Law firm, Immigration consultant, Insurance & financial, Real estate, **Car dealership**; with phone and SMS in place: waitlist backfill & recall |
@@ -877,7 +884,7 @@ pack phases in code (1–4) follow the industry phases above.
 | **1.2 Business page** (done) | Page layout (header, contact buttons, hours and "open now", service area, footer); **services & products** (table, admin editor, cards on the page and in answers); photo gallery; business and personal presets; friendly link; content in the page's HTML with structured data; notices |
 | **1.3 Requests for trades and auto shops** (done) | Urgent request flag with immediate email; quote request with photos; service-area check; vehicle and tire fields; booking and call buttons in answers; scope guard classifier |
 | **1.4 Setup without a website** (done, except Google listing details) | Services and products, with prices, and the page description proposed from the sources and added to the page after the owner's review; price list and brochure upload (PDF with a text layer, DOCX, photo read by a vision model) as a knowledge source; interview mode (industry questions, EN/FR, answers saved as a knowledge source). **Waiting:** Google listing details, on open decision §17.4. Not covered yet: scanned PDFs (upload photos of the pages instead) and correcting the text read from a file |
-| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** page views, contact-button taps, questions and requests per day on the Business page tab; prospect demo page generator (operator console, Demos tab); evals (`packages/evals`, `pnpm evals`): 59 EN/FR cases for a plumbing company and a tire shop, scored on facts, triage, advice, invented prices, unanswered questions, requests and scope; DeepSeek V4.1 Flash (the planned production model, via OpenRouter) passes all of them, median first text 2.7 s (target 1.5 s) |
+| **1.5 Pilot readiness** (in progress) | Evals EN/FR for the Trades and Auto repair packs; prospect demo page generator; done-for-you onboarding checklist in the operator console; accessibility pass; basic page statistics (visits, questions, requests) — **built:** done-for-you onboarding checklist (operator console, Onboarding tab: seven steps, due one working day after the materials arrived, publish once the owner reviewed the page); page views, contact-button taps, questions and requests per day on the Business page tab; prospect demo page generator (operator console, Demos tab); accessibility checks (`apps/e2e`, `pnpm a11y`: axe against WCAG 2.2 AA on desktop and phone for the business page, chat, admin and operator console, all passing); evals (`packages/evals`, `pnpm evals`): 59 EN/FR cases for a plumbing company and a tire shop, scored on facts, triage, advice, invented prices, unanswered questions, requests and scope; DeepSeek V4.1 Flash (the planned production model, via OpenRouter) passes all of them, median first text 2.7 s (target 1.5 s) |
 
 **MVP success criteria:** 10–20 trades and auto businesses with a live page in one or two cities, at least
 half of them with no website or an outdated one before; a page live within one working day of receiving
@@ -891,11 +898,14 @@ emailed to the owner within one minute; 0 scope-policy failures on adversarial e
   requests, emergencies, invented prices/stock, allergens) in every Tier 1–2 language; run on every prompt,
   pack or model change. **Built for Trades and Auto repair in EN/FR** (`packages/evals`): deterministic
   checks through the real chat engine; bar = 80 % of quality runs and no safety failure. Search runs
-  on keywords alone unless embeddings are configured (`EMBEDDINGS_*`). Not yet: other
+  on keywords alone unless embeddings are configured (`EMBEDDINGS_*`); `pnpm evals:retrieval` measures
+  search by meaning (ranks with and without vectors, vector latency, distances). Not yet: other
   packs, Tier 2 languages, a model-graded check of free-form answers
 - Unit tests (chunking, ranking, prompt builder, pack inheritance, language detection, scope classifier),
   integration tests (ingestion, chat API), cross-tenant isolation tests
-- Widget E2E (Playwright): RTL layout, CJK/Indic rendering, IME input, accessibility checks
+- Widget E2E (Playwright): RTL layout, CJK/Indic rendering, IME input, accessibility checks. **Built:**
+  axe checks (WCAG 2.2 AA) of the business page, chat, admin and operator console on desktop and phone
+  (`apps/e2e`); not yet in CI, RTL or CJK/Indic
 - Business page: content present in the HTML without scripts, valid structured data, unpublished pages not
   listed, service cards and "open now" correct across time zones, mobile layout, WCAG checks
 - **Voice and SMS evals per pack (later phase):** scripted scenarios (burst pipe, no heat, gas smell, quote request,
@@ -969,3 +979,95 @@ Plan allowances stay editable in the operator console.
     Persian, Ukrainian, Tagalog, Spanish) and budget for native-speaker review.
 12. Indigenous languages: owner-provided phrases + human routing vs. deeper support with community partners.
 13. Product name, team size and target launch date.
+14. **Institutions (§18):** which comes first (a college or a mid-size municipality), whether the first
+    deal is a pilot under the open-competition threshold, and when to start SOC 2.
+
+## 18. Institutions: universities, colleges and municipalities
+
+A later market (Phase 4), written down now so that what we build for small businesses doesn't have to
+be rebuilt for it. These buyers don't choose the best chat; they choose a vendor that **passes their
+reviews** (security, privacy, accessibility, procurement) and then solves a real service problem.
+Legal and procurement points below were checked in November 2026 and must be confirmed with a lawyer
+and with each institution's procurement office before a bid.
+
+### 18.1 Why they would buy
+
+| Buyer | The problem | What the assistant does |
+|---|---|---|
+| **University, college** | The same questions by the thousand at peak times (admissions, registration, fees and aid, residence, IT help desk); international students in other time zones and languages | Answers from the institution's own pages and documents, with the source linked; hands off to the right office; works at 2 am and in the student's language |
+| **Municipality** | 311-style questions (waste collection, by-laws, permits, property tax, recreation programs, road and snow notices); small staff; after-hours calls | Answers from by-laws and service pages with the source linked; takes a service request and routes it to the department; notices for closures and emergencies |
+
+Our existing strengths apply directly: grounded answers with sources, "I don't know" plus a knowledge
+gap for staff, EN/FR and newcomer languages, requests routed to people, notices, urgent triage.
+
+### 18.2 What they require (the gates)
+
+| Area | What they ask for | Where we are | Gap |
+|---|---|---|---|
+| **Accessibility** | AODA: WCAG 2.x AA for the public widget and page, in practice 2.1/2.2 AA; a completed VPAT/ACR; keyboard, screen reader and zoom use; accessible support channels | WCAG 2.2 AA axe checks pass on desktop and phone (`pnpm a11y`) | A written ACR (VPAT), a manual screen-reader test, an accessibility statement |
+| **Privacy** | FIPPA (universities, colleges) and MFIPPA (municipalities), not PIPEDA: the institution stays accountable for records we hold. A privacy impact assessment (PIA) with our help; data kept in Canada; retention periods they set; export and deletion for access requests; breach notice terms; no training of models on their data | RLS per tenant; audit log; hashed question cache (no question text); usage records without content | Canadian hosting and Canadian or self-hosted model routes; per-tenant retention settings and purge job; conversation export; a subprocessor list; a data processing agreement |
+| **Security** | Single sign-on (SAML or OIDC with Entra ID, Google), enforced MFA, roles; audit logs they can export; encryption in transit and at rest; penetration test report; incident response plan; backups with stated recovery times; SOC 2 Type II or ISO 27001; in higher education the **HECVAT** questionnaire (version 4 includes AI, privacy and accessibility sections) | Tenant roles, audit logs, session cookies, rate limits | SSO and SCIM; exportable audit log; pen test; SOC 2; a filled-in HECVAT |
+| **AI governance** | Say clearly it is an AI; cite sources; a person can be reached; a record of what was answered; evaluation results; which models and providers process data; controls on what it may talk about. Ontario's Enhancing Digital Security and Trust Act, 2024 (Bill 194) puts AI and cyber security duties on public sector entities, with the detail left to regulations | Disclosure line, sources, requests to staff, scope policy and classifier, evals with a safety bar, knowledge gaps | Per-answer review and correction by staff; published eval results per deployment; an "AI use" page the institution can link to |
+| **Language** | English and French service where required (French Language Services Act areas, bilingual institutions); plain language | EN/FR throughout; Tier 2 languages for answers | French review of all public strings by a native speaker |
+| **Procurement** | Broader Public Sector Procurement Directive: open competition from about $139,000, quotes below that (April 2026 version); the Buy Ontario directive favours Ontario and Canadian suppliers; RFP responses; insurance (cyber, errors and omissions, general liability); references; annual invoicing against a purchase order; multi-year terms; group buying through OECM (education) and similar bodies | An Ontario company | A pilot offer priced under the quote threshold; insurance; two or three reference customers; standard contract terms and an SLA |
+| **Reliability** | Uptime commitment (99.9 %), status page, support hours, peak load (registration week, a storm) | Stateless services, limits per business, job queue | SLA, status page, load tests, on-call |
+
+### 18.3 What the product needs
+
+1. **Organization → departments.** One institution, many units (Registrar, Financial Aid, IT; Public
+   Works, Clerk, Recreation), each with its own knowledge, staff and inbox, under shared rules and
+   branding. Today: one tenant, several assistants. Needed: department-level roles, routing a request
+   to a department, and one front assistant that searches across them.
+2. **Large, changing knowledge.** Thousands of pages and PDFs (calendars, by-laws, council minutes,
+   policies). Needs: scheduled re-crawls with change detection (the chunk hash reuse already avoids
+   re-embedding), an approximate vector index past ~20,000 chunks (EMBEDDINGS §4.4), document dates and
+   "last updated" on sources, and an expiry date on time-limited content.
+3. **Sign-in and administration.** SSO, SCIM, enforced MFA, department admins, an exportable audit log.
+4. **Records.** Retention period per organization, purge job, export of conversations and requests,
+   legal hold.
+5. **Hand-off into their systems.** Email first; then ticketing and 311 (ServiceNow, Jira Service
+   Management, Salesforce, a municipal CRM), SharePoint and Google Drive as sources, and for campuses
+   an authenticated mode later (answers about *my* file need the student system: out of scope at first).
+6. **Reporting.** Questions by topic and department, answered and unanswered rates, languages, peak
+   hours, exportable; the knowledge-gap list is already the core of this.
+7. **Deployment choices.** Canada-only region; a model route that keeps data in Canada or on our own
+   servers (the local embedding backend exists; chat needs a Canadian-hosted or self-hosted model).
+8. **Embedding in their site.** The widget on their own pages with their branding and their
+   accessibility standard; the hosted business page matters less here.
+
+### 18.4 Rules to respect while building now
+
+These cost little today and are expensive to retrofit. Every new feature is checked against them.
+
+- **Every table that holds customer data has `tenant_id` and RLS**, and its rows can be exported and
+  deleted per tenant. No shared caches that contain customer text (the question cache keeps a hash).
+- **Nothing depends on one model provider or on a US-only service.** Each provider sits behind our
+  interface, with a route that can stay in Canada. New third parties go on a subprocessor list.
+- **Every staff action that changes data writes to the audit log**, with who and when.
+- **Every public surface meets WCAG 2.2 AA** and is added to the `pnpm a11y` checks: new buttons,
+  cards and banners need names, focus order, contrast and keyboard use.
+- **Every visitor-facing string exists in English and French.**
+- **Answers stay grounded and traceable:** sources shown, the stored message records what was shown
+  (buttons, photos, tools), and a new behaviour gets eval cases, with safety cases where it could harm.
+- **Selling features are optional per organization.** Offers and service buttons (SELL_AND_PROMOTE)
+  make no sense for a registrar: they stay off unless the organization uses them.
+- **No visitor identity in statistics.** Daily totals, as page statistics do today.
+- **Retention in mind:** new stores of conversation content get a created-at index and a tenant
+  filter, so a purge job can cover them.
+- **Sign-in is replaceable:** no feature assumes email and password; roles are checked through one
+  function, so SSO and department roles can be added behind it.
+
+### 18.5 Order of work (when Phase 4 starts)
+
+| Step | Work | Why first |
+|---|---|---|
+| 1 | Paperwork that needs no code: ACR (VPAT), security overview, subprocessor list, data processing agreement, filled-in HECVAT, insurance | Most reviews stop here; cheap to prepare |
+| 2 | Canada-only deployment and model route; retention settings, purge and export | The privacy gate |
+| 3 | SSO, department roles, exportable audit log | The security gate |
+| 4 | Departments, cross-department search, scheduled re-crawl, vector index | The product fit |
+| 5 | Reporting, ticketing hand-off, SLA and status page | What a renewal depends on |
+| 6 | SOC 2 Type II (start the observation period early: it takes 6–12 months) | Asked for by larger institutions |
+
+A realistic first deal: a college department or a mid-size municipality's service desk, as a paid
+pilot below the open-competition threshold, public information only, widget on their site, EN/FR.
+

@@ -257,15 +257,57 @@
     {
       "idx": 36,
       "version": "7",
-      "when": 1794601771601,
-      "tag": "0036_integrations",
+      "when": 1794449998248,
+      "tag": "0036_listed_pages",
       "breakpoints": true
     },
     {
       "idx": 37,
       "version": "7",
-      "when": 1794601772601,
-      "tag": "0037_integrations_rls",
+      "when": 1794451272510,
+      "tag": "0037_onboardings",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794452538420,
+      "tag": "0038_embeddings_halfvec",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794485039111,
+      "tag": "0039_embed_answers_photos",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794537371494,
+      "tag": "0040_request_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794573154450,
+      "tag": "0041_phone_sms",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794603085302,
+      "tag": "0042_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794603086402,
+      "tag": "0043_integrations_rls",
       "breakpoints": true
     }
   ]

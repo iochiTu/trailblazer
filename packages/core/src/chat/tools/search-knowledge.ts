@@ -1,8 +1,12 @@
 import { withTenant } from "@traiblazer/db";
+import { withDeadline } from "@traiblazer/llm";
 import { z } from "zod";
 import { formatSources } from "../prompt.js";
 import { retrievePassages } from "../retrieval.js";
 import { defineTool } from "./contract.js";
+
+/** Longest the search waits for the query's vector before searching by keyword alone. */
+const TOOL_EMBEDDING_WAIT_MS = 800;
 
 /**
  * Looks the business's information up again. The engine already searches with the visitor's
@@ -26,9 +30,11 @@ If a search finds nothing useful, tell the visitor you don't have that informati
       ),
   }),
   async run({ query }, ctx) {
+    // The model is waiting anyway; a slow or failing vector still doesn't hold it up for long.
     const embedding = ctx.embeddings
-      ? { vector: (await ctx.embeddings.embed([query], "query"))[0]!, model: ctx.embeddings.model }
+      ? await withDeadline(ctx.embeddings.embed(query), TOOL_EMBEDDING_WAIT_MS)
       : null;
+    ctx.onEmbedding?.(embedding);
     const passages = await withTenant(ctx.db, ctx.tenantId, (tx) =>
       retrievePassages(tx, { botId: ctx.botId, queries: [query], embedding, limit: 5 }),
     );

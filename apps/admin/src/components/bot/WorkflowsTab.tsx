@@ -139,6 +139,7 @@ export function WorkflowsTab({
       >
         <textarea
           className="input"
+          aria-label={t("workflows.guidelines")}
           rows={6}
           maxLength={LIMITS.guidelinesLength}
           value={guidelines}

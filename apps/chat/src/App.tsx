@@ -27,7 +27,7 @@ interface Message {
   attachments?: AttachmentName[];
   /** Business photos the assistant showed. */
   images?: ReplyPhoto[];
-  /** Buttons under the reply (call, book). */
+  /** Buttons under the reply (call, book, or a quote or booking for one service). */
   actions?: ReplyAction[];
   pending?: boolean;
   error?: boolean;
@@ -511,10 +511,34 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                   <div class="tb-actions">
                     {m.actions
                       .filter((a) =>
-                        a.kind === "call" ? /^tel:/.test(a.href) : /^https?:\/\//i.test(a.href),
+                        a.kind === "call"
+                          ? /^tel:/.test(a.href ?? "")
+                          : a.href
+                            ? /^https?:\/\//i.test(a.href)
+                            : Boolean(a.item),
                       )
                       .map((a) =>
-                        a.kind === "call" ? (
+                        a.item && !a.href ? (
+                          // A quote or booking for one service: asked for here, in the chat.
+                          <button
+                            key={`${a.kind}:${a.item.id}`}
+                            type="button"
+                            class="tb-action"
+                            disabled={busy}
+                            onClick={() =>
+                              void send(
+                                ui(lang, a.kind === "quote" ? "quoteMessage" : "bookMessage", {
+                                  item: a.item!.name,
+                                }),
+                              )
+                            }
+                          >
+                            <Icon name="book" size={16} />
+                            {ui(lang, a.kind === "quote" ? "actionQuoteItem" : "actionBookItem", {
+                              item: a.item.name,
+                            })}
+                          </button>
+                        ) : a.kind === "call" ? (
                           <a key={a.kind} class="tb-action tb-action-call" href={a.href}>
                             <Icon name="call" size={16} />
                             {config.contact.phone
@@ -523,14 +547,16 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                           </a>
                         ) : (
                           <a
-                            key={a.kind}
+                            key={a.item ? `${a.kind}:${a.item.id}` : a.kind}
                             class="tb-action"
                             href={a.href}
                             target="_blank"
                             rel="noopener noreferrer"
                           >
                             <Icon name="book" size={16} />
-                            {ui(lang, "actionBook")}
+                            {a.item
+                              ? ui(lang, "actionBookItem", { item: a.item.name })
+                              : ui(lang, "actionBook")}
                           </a>
                         ),
                       )}

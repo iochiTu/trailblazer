@@ -31,12 +31,14 @@ import { getTemplate } from "@traiblazer/industry-packs";
 import {
   type ChatMessage,
   type ContentBlock,
-  type EmbeddingProvider,
   emptyUsage,
   type GatewayResultMeta,
   type ImageMediaType,
   type LLMGateway,
+  type QueryEmbedder,
+  type QueryVector,
   toolCallsOf,
+  withDeadline,
 } from "@traiblazer/llm";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
@@ -49,10 +51,16 @@ import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } fro
 import { chatTools, MAX_TOOL_ROUNDS, runToolCalls, toToolDefinition } from "./tools/index.js";
 import { higherUrgency, keywordTriage, parseTriage, type Urgency } from "./triage.js";
 
+/** Default wait for the question's vector: catches ~95 % of first-time questions (docs/EMBEDDINGS.md §7). */
+const EMBEDDING_WAIT_MS = 250;
+
 export interface ChatDeps {
   db: Db;
   gateway: LLMGateway;
-  embeddings?: EmbeddingProvider | null;
+  /** Search by meaning (docs/EMBEDDINGS.md); keyword search alone without it. */
+  embeddings?: QueryEmbedder | null;
+  /** How long retrieval waits for the question's vector once the keyword search is ready (default 250 ms). */
+  embeddingWaitMs?: number;
   now?: () => Date;
   log?: (msg: string, data?: Record<string, unknown>) => void;
   /** Admin portal origin, for links in add-on notifications. */
@@ -253,6 +261,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     // The business page: services and products the owner lists, and notices running now.
     const catalog = await tx
       .select({
+        id: catalogItems.id,
+        action: catalogItems.action,
         kind: catalogItems.kind,
         name: catalogItems.name,
         description: catalogItems.description,
@@ -307,7 +317,12 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
 
     const history = (
       await tx
-        .select({ role: messages.role, content: messages.content, attachments: messages.attachments })
+        .select({
+          role: messages.role,
+          content: messages.content,
+          attachments: messages.attachments,
+          flags: messages.flags,
+        })
         .from(messages)
         .where(eq(messages.conversationId, conversation!.id))
         .orderBy(desc(messages.createdAt))
@@ -429,7 +444,27 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     yield { type: "error", code: "unavailable", message: "This assistant is not available right now." };
     return;
   }
-  const { bot, profile, catalog, conversationId, isNew, history, historyImages, addons, addonCtx } = setup;
+  const { bot, profile, conversationId, isNew, history, historyImages, addons, addonCtx } = setup;
+  /** The services and products, each with the short id the model names it by. */
+  const catalog = setup.catalog.map((item, index) => ({ ...item, ref: `s${index + 1}` }));
+
+  // Search by meaning: the question's vector is asked for now, alongside everything else, and waited
+  // for only briefly when the keyword search is ready (docs/EMBEDDINGS.md). A follow-up is embedded
+  // with the visitor's question before it, which gives "how much is it?" its subject.
+  const previousQuestion = history.findLast((m) => m.role === "user")?.content.trim() ?? "";
+  const vectorRequest =
+    deps.embeddings && message
+      ? deps.embeddings.embed(previousQuestion ? `${previousQuestion}\n${message}` : message)
+      : null;
+  /** Question vectors computed for this answer (not from a cache), recorded as usage. */
+  const embeddingUsage = { tokens: 0, costMicros: 0 };
+  const countEmbedding = (vector: QueryVector | null) => {
+    if (!vector) return;
+    embeddingUsage.tokens += vector.tokens;
+    embeddingUsage.costMicros += vector.costMicros;
+  };
+  // Counted whenever it arrives: a vector that came too late for the search was still paid for.
+  void vectorRequest?.then(countEmbedding);
   const runningNotices = setup.notices;
   const addonLog = (msg: string, data?: Record<string, unknown>) =>
     deps.log?.(msg, { ...data, botId: bot.id });
@@ -453,14 +488,46 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     return raised;
   };
 
-  /** Buttons the reply asked for, resolved from the business profile (never from the model). */
+  /**
+   * Buttons the reply asked for, resolved from the business profile and its services (never from the
+   * model). "quote:s3" is a button for one service: only the button the owner chose for that item,
+   * and one such button per reply.
+   */
   const shownActions: ReplyAction[] = [];
-  const addAction = (kind: string) => {
-    if (shownActions.some((a) => a.kind === kind)) return;
+  const offeredBefore = new Set(
+    history.flatMap((m) =>
+      ((m.flags as MessageFlags | null)?.actions ?? []).flatMap((a) =>
+        a.item ? [`${a.kind}:${a.item.id}`] : [],
+      ),
+    ),
+  );
+  const bookingUrl =
+    profile?.bookingUrl && /^https?:\/\//i.test(profile.bookingUrl) ? profile.bookingUrl : null;
+  const addAction = (marker: string) => {
+    const [kind, ref] = marker.split(":");
+    if (ref) {
+      const item = catalog.find((c) => c.ref === ref);
+      if (!item || item.action !== kind || (kind !== "quote" && kind !== "book")) {
+        deps.log?.("button dropped", { botId: bot.id, marker });
+        return;
+      }
+      if (shownActions.some((a) => a.item)) return;
+      // Once per conversation: the first one stays on screen, and repeating it under every reply
+      // (also after the request was passed on) reads as pushing.
+      if (offeredBefore.has(`${kind}:${item.id}`)) return;
+      shownActions.push({
+        kind,
+        // Booking opens the business's booking link when it has one; otherwise it starts a request.
+        ...(kind === "book" && bookingUrl ? { href: bookingUrl } : {}),
+        item: { id: item.id, name: item.name },
+      });
+      return;
+    }
+    if (shownActions.some((a) => a.kind === kind && !a.item)) return;
     if (kind === "call" && phone && /\d/.test(phone)) {
       shownActions.push({ kind: "call", href: `tel:${phone.replace(/[^\d+]/g, "")}` });
-    } else if (kind === "book" && profile?.bookingUrl && /^https?:\/\//i.test(profile.bookingUrl)) {
-      shownActions.push({ kind: "book", href: profile.bookingUrl });
+    } else if (kind === "book" && bookingUrl) {
+      shownActions.push({ kind: "book", href: bookingUrl });
     }
   };
 
@@ -555,7 +622,19 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       // keyword search can't match across languages.
       const mainLanguage = bot.defaultLanguage.toLowerCase().split("-")[0];
       const otherLanguage = Boolean(message) && isEnOrFr(language) && language !== mainLanguage;
-      if (history.length || (message && !isEnOrFr(language)) || otherLanguage) {
+      // With search by meaning, that question finds the text through its vector (the model is
+      // multilingual), so the answer doesn't wait 2–3 s for the translation: the auxiliary call
+      // runs alongside, as for a question in the main language. Without a vector in time, it waits.
+      const waitForVector = () =>
+        withDeadline(vectorRequest!, deps.embeddingWaitMs ?? EMBEDDING_WAIT_MS, () =>
+          deps.log?.("embedding late", {
+            botId: bot.id,
+            waitedMs: deps.embeddingWaitMs ?? EMBEDDING_WAIT_MS,
+          }),
+        );
+      let vector: QueryVector | null | undefined;
+      if (otherLanguage && !history.length && vectorRequest) vector = await waitForVector();
+      if (history.length || (message && !isEnOrFr(language)) || (otherLanguage && !vector)) {
         const aux = await analyze();
         auxMeta = aux;
         queries = parseSearchQueries(aux.text, message || IMAGE_ONLY_TEXT).filter(
@@ -571,16 +650,12 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
 
       // 3. Retrieve business information.
       const embedding =
-        deps.embeddings && queries.length
-          ? {
-              vector: (await deps.embeddings.embed([queries.join("\n")], "query"))[0]!,
-              model: deps.embeddings.model,
-            }
-          : null;
+        vector !== undefined ? vector : vectorRequest && queries.length ? await waitForVector() : null;
       const [passages, photos] = queries.length
         ? await withTenant(deps.db, input.tenantId, async (tx) => [
             await retrievePassages(tx, { botId: bot.id, queries, embedding }),
-            await retrievePhotos(tx, { botId: bot.id, queries }),
+            // A text message can't show a photo.
+            input.channel === "sms" ? [] : await retrievePhotos(tx, { botId: bot.id, queries, embedding }),
           ])
         : [[], []];
       offeredPhotos = photos as PhotoPassage[];
@@ -603,6 +678,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       const tools = chatTools(bot, {
         leadFields: template.leadFields,
         serviceArea: Boolean(profile?.serviceTowns.length || profile?.servicePostalPrefixes.length),
+        catalog: catalog.length > 0,
       });
       const request = {
         system: buildSystemBlocks({
@@ -613,6 +689,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           catalog,
           notices: runningNotices,
           triage: { urgency, advice },
+          channel: input.channel,
           addons: addonPrompt(addons, addonCtx, addonLog),
           now: deps.now?.() ?? new Date(),
         }),
@@ -709,7 +786,11 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             channel: input.channel,
             language,
             urgent: Boolean(urgency),
+            catalog,
+            // By text, the customer's own number is how the business reaches them.
+            visitorPhone: input.channel === "sms" ? input.visitorId : undefined,
             embeddings: deps.embeddings,
+            onEmbedding: countEmbedding,
             signal: input.signal,
           },
           { lastRound: round === MAX_TOOL_ROUNDS - 1, log: deps.log },
@@ -773,6 +854,10 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     addAction("call");
     shownActions.sort((a, b) => (a.kind === "call" ? -1 : b.kind === "call" ? 1 : 0));
   }
+  // Getting help comes before selling: no service button on an urgent problem or an advice request.
+  if (urgency || advice) {
+    for (let i = shownActions.length - 1; i >= 0; i--) if (shownActions[i]!.item) shownActions.splice(i, 1);
+  }
   if (flags.error || flags.busy) shownActions.length = 0;
   if (shownActions.length) flags.actions = [...shownActions];
 
@@ -813,6 +898,16 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       chatMeta && { kind: "llm.chat", meta: chatMeta },
       auxMeta && { kind: "llm.aux", meta: auxMeta },
     ].filter(Boolean) as { kind: string; meta: GatewayResultMeta }[];
+    if (embeddingUsage.tokens && deps.embeddings) {
+      await tx.insert(usageEvents).values({
+        tenantId: input.tenantId,
+        botId: bot.id,
+        kind: "embedding",
+        quantity: embeddingUsage.tokens,
+        costMicros: embeddingUsage.costMicros,
+        metadata: { model: deps.embeddings.model, task: "questions" },
+      });
+    }
     if (usage.length) {
       await tx.insert(usageEvents).values(
         usage.map(({ kind, meta }) => ({

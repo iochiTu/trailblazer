@@ -11,6 +11,8 @@ import {
   completeJob,
   DEMO_RETRY_MS,
   type DemoBuildPayload,
+  embedChunks,
+  enqueueEmbedding,
   enqueueJob,
   failJob,
   JOB_TYPES,
@@ -18,18 +20,29 @@ import {
   runAddonEffect,
   runSetup,
   runUrgentAlert,
+  sendQueuedText,
   syncSource,
   type UrgentAlertPayload,
 } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
 import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
+import { createTelephonyFromEnv } from "@traiblazer/telephony";
 import { createMailerFromEnv } from "./mailer.js";
 
 const url =
   process.env.DATABASE_APP_URL ?? "postgres://traiblazer_app:traiblazer_app@localhost:5433/traiblazer";
 const { db, close } = createDb(url, { max: 4 });
 const embeddings = createEmbeddingsFromEnv();
+// Phone and SMS (docs/PHONE_AND_SMS.md): texts are sent from here, with retries.
+const telephony = createTelephonyFromEnv();
+const webhookBase = (process.env.TELEPHONY_WEBHOOK_URL ?? process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
+const statusCallbackUrl = webhookBase.startsWith("https://")
+  ? (tenantId: string, messageId: string) =>
+      `${webhookBase}/v1/telephony/${telephony?.id}/status?t=${tenantId}&m=${messageId}`
+  : undefined;
+/** What one message part costs us, in millionths of a dollar (default 0.83 cents). */
+const segmentCostMicros = Number(process.env.SMS_SEGMENT_COST_MICROS) || 8300;
 const { gateway } = createGatewayFromEnv();
 const workerId = `${hostname()}:${process.pid}`;
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
@@ -49,6 +62,26 @@ async function run(job: JobRow): Promise<void> {
     case JOB_TYPES.sourceSync:
       await syncSource({ db, embeddings, gateway }, job.tenantId, String(job.payload.sourceId));
       return;
+    case JOB_TYPES.messageSend: {
+      if (!telephony) throw new Error("A text is queued but no telephony provider is configured");
+      const messageId = String(job.payload.messageId);
+      const outcome = await sendQueuedText(
+        { db, telephony, statusCallbackUrl, segmentCostMicros },
+        job.tenantId,
+        messageId,
+      );
+      log("text", { id: job.id, messageId, outcome });
+      return;
+    }
+    case JOB_TYPES.embedChunks: {
+      // Queued only when embeddings are configured; a worker without them leaves keyword search alone.
+      if (!embeddings) return;
+      const botId = String(job.payload.botId);
+      const { embedded, more } = await embedChunks({ db, embeddings }, job.tenantId, botId);
+      if (more) await enqueueEmbedding(db, job.tenantId, botId);
+      log("embedded", { id: job.id, botId, embedded, more, model: embeddings.model });
+      return;
+    }
     case JOB_TYPES.addonEffect: {
       const payload = job.payload as unknown as AddonEffectPayload;
       const outcome = await runAddonEffect({ db, mailer, integrations, adminUrl }, job.tenantId, payload);
@@ -64,7 +97,7 @@ async function run(job: JobRow): Promise<void> {
     case JOB_TYPES.demoBuild: {
       const payload = job.payload as unknown as DemoBuildPayload;
       const outcome = await buildDemo(
-        { db, gateway, log, inputChars: setupInputChars },
+        { db, gateway, log, inputChars: setupInputChars, embed: Boolean(embeddings) },
         job.tenantId,
         payload,
       );

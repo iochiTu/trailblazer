@@ -1,4 +1,4 @@
-import type { bots, businessProfiles, WeeklyHours } from "@traiblazer/db";
+import type { bots, businessProfiles, Channel, WeeklyHours } from "@traiblazer/db";
 import { getLanguage } from "@traiblazer/i18n";
 import { resolveBehavior, type Workflow } from "@traiblazer/industry-packs";
 import type { SystemBlock } from "@traiblazer/llm";
@@ -39,6 +39,8 @@ You are a customer-service assistant for one local business, shown on its websit
 # Buttons
 - To show a button under your reply, write its marker on its own line: [[action:call]] (a Call button with the business's phone number) or [[action:book]] (a Book button with the business's booking link). The platform fills in the number or link; never write them inside the marker.
 - Show Call when the visitor should phone now (an urgent problem, or they want to talk to someone), and Book when they want to book and <business_profile> has a booking link. Only use a button the business has the phone number or booking link for, and each one at most once per reply.
+
+- A service or product in <services> marked "(button: quote)" or "(button: book)" has a button of its own: [[action:quote:s3]] or [[action:book:s3]], with the item's id from <services>. It lets the visitor ask for a quote for, or book, that item in one tap. Add it at the end of a reply that answers a question about that item (what it is, its price, whether the business does it). Use only the button named on the item's line, for one item per reply (the one the visitor asked about), and don't repeat it once the visitor has tapped it or declined. Never add one when the visitor has an urgent problem, a complaint, or asks for advice or a diagnosis: those are about getting them help, not selling.
 
 # Urgent problems
 - <triage> (when present) tells you how the visitor's latest message was sorted before you read it. Follow it, and use your own judgement too.
@@ -165,9 +167,20 @@ export interface CatalogEntry {
   description: string | null;
   priceText: string | null;
   category: string | null;
+  /** Short id the model names the item by in markers and tools ("s1"); none = no id shown. */
+  ref?: string;
+  /** The button the owner chose for the item's card; "quote" and "book" can be shown under a reply. */
+  action?: "ask" | "quote" | "book";
 }
 
 const oneLine = (text: string) => text.replace(/[\r\n<>]+/g, " ").trim();
+
+/** How to write when the conversation is by text message (docs/PHONE_AND_SMS.md §4.2). */
+const SMS_RULES = `# This conversation is by text message (SMS)
+- Write plain text only: no Markdown, no bullet symbols, no headings.
+- Keep it short: one to three sentences, under about 300 characters when you can, and one question at a time.
+- Buttons and photos can't be shown in a text. Never write [[action:...]] or [[photo:...]] markers here. Where you would show a Call button, write the business's phone number; where you would show a Book button, write the booking link in full; for a quote or a booking of a service, offer to pass the request on.
+- The customer is texting from their own phone number, and the business gets that number with any request you pass on, so don't ask for it. You still need their name. Use another number or an email only if they give one.`;
 
 /** The business's services and products as a list, or null when it has none. */
 export function servicesBlock(items: CatalogEntry[]): string | null {
@@ -175,11 +188,12 @@ export function servicesBlock(items: CatalogEntry[]): string | null {
   return items
     .map((item) =>
       [
-        `- ${oneLine(item.name)}`,
+        item.ref ? `- [${item.ref}] ${oneLine(item.name)}` : `- ${oneLine(item.name)}`,
         item.kind === "product" ? " (product)" : "",
         item.category ? ` [${oneLine(item.category)}]` : "",
         item.priceText ? ` — price: ${oneLine(item.priceText)}` : "",
         item.description ? `: ${oneLine(item.description)}` : "",
+        item.ref && (item.action === "quote" || item.action === "book") ? ` (button: ${item.action})` : "",
       ].join(""),
     )
     .join("\n");
@@ -216,6 +230,8 @@ export function buildSystemBlocks(input: {
   notices?: string[];
   /** How the visitor's latest message was sorted (keyword rules and the auxiliary model). */
   triage?: { urgency: "urgent" | "danger" | null; advice: boolean };
+  /** Where the conversation happens; "sms" changes how the reply is written. */
+  channel?: Channel;
   now: Date;
 }): SystemBlock[] {
   const { bot, profile, passages, now } = input;
@@ -255,7 +271,7 @@ export function buildSystemBlocks(input: {
     { text: PLATFORM_RULES },
     { text: botBlock, cacheBreakpoint: true },
     {
-      text: `Current local date and time at the business: ${localTime} (${timezone}).${
+      text: `${input.channel === "sms" ? `${SMS_RULES}\n\n` : ""}Current local date and time at the business: ${localTime} (${timezone}).${
         running.length ? `\n\n<notices>\n${running.map((n) => `- ${n}`).join("\n")}\n</notices>` : ""
       }${triageBlock(input.triage)}\n\n<knowledge>\n${knowledge}\n</knowledge>${
         photos.length

@@ -44,16 +44,29 @@ if (onPage) {
     }
   });
 
-  // Page statistics: count taps on the contact buttons (Call, Book, Directions…). Only which button,
-  // never who; the owner's preview isn't counted.
+  // Page statistics: the visit and taps on the contact buttons (Call, Book, Directions…). Only
+  // which button, never who; the owner's preview isn't counted.
   if (!preview) {
+    const send = (action: string) => {
+      const body = new Blob([JSON.stringify({ publicKey, action })], { type: "application/json" });
+      navigator.sendBeacon?.("/v1/public/page-events", body);
+    };
+    // One view per visit: a refresh, or coming back to the page in the same tab, isn't counted
+    // again. Session storage stays in this tab and is never sent anywhere.
+    const seenKey = `tb:viewed:${publicKey}`;
+    let seen = false;
+    try {
+      seen = sessionStorage.getItem(seenKey) === "1";
+      sessionStorage.setItem(seenKey, "1");
+    } catch {
+      // Storage blocked: count the view anyway.
+    }
+    if (!seen) send("view");
     document.addEventListener("click", (event) => {
       const action = (event.target as Element | null)
         ?.closest?.("a[data-action]")
         ?.getAttribute("data-action");
-      if (!action) return;
-      const body = new Blob([JSON.stringify({ publicKey, action })], { type: "application/json" });
-      navigator.sendBeacon?.("/v1/public/page-events", body);
+      if (action) send(action);
     });
   }
 }

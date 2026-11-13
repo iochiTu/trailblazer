@@ -1,5 +1,6 @@
 import { type EmbeddingProvider, OpenAICompatibleEmbeddings } from "./embeddings.js";
 import { LLMGateway, parseRoutes } from "./gateway.js";
+import { LocalEmbeddings } from "./local-embeddings.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { OfflineProvider } from "./providers/offline.js";
 import {
@@ -91,15 +92,72 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv = process.env): {
 }
 
 /**
- *   EMBEDDINGS_BASE_URL / EMBEDDINGS_API_KEY / EMBEDDINGS_MODEL   e.g. Voyage AI or OpenAI
- *   EMBEDDINGS_INPUT_TYPE=true                                    send input_type (Voyage)
+ * Search by meaning (docs/EMBEDDINGS.md). Off unless EMBEDDINGS_BASE_URL and EMBEDDINGS_MODEL are set.
+ *   EMBEDDINGS_BASE_URL / EMBEDDINGS_API_KEY / EMBEDDINGS_MODEL   e.g. Voyage AI, OpenAI or OpenRouter
+ *                                      (OpenRouter: OPENROUTER_API_KEY is used when no key is given)
+ *   EMBEDDINGS_DIMENSIONS=512          vector size kept (default 512; 0 keeps the model's own size)
+ *   EMBEDDINGS_DIMENSIONS_PARAM        how to ask the provider for it: dimensions (OpenAI),
+ *                                      output_dimension (Voyage), none (cut here); guessed from the URL
+ *                                      (OpenRouter takes dimensions for every model)
+ *   EMBEDDINGS_INPUT_TYPE=true         send input_type (Voyage)
+ *   EMBEDDINGS_QUERY_PREFIX / EMBEDDINGS_DOCUMENT_PREFIX   e.g. "query: " / "passage: " (e5 models)
+ *   EMBEDDINGS_MAX_DISTANCE=0.85       cosine distance beyond which a result doesn't count; set it
+ *                                      per model with pnpm evals:retrieval (voyage-4-lite: 0.75)
+ *   EMBEDDINGS_PRICE_PER_MTOK=0.02     US dollars per million tokens, for usage records
  */
 export function createEmbeddingsFromEnv(env: NodeJS.ProcessEnv = process.env): EmbeddingProvider | null {
+  const number = (value: string | undefined) =>
+    value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : undefined;
+  // A model run in this process: nothing leaves the server (docs/EMBEDDINGS.md §4.1).
+  if (env.EMBEDDINGS_PROVIDER === "local") {
+    if (!env.EMBEDDINGS_MODEL) return null;
+    return new LocalEmbeddings({
+      model: env.EMBEDDINGS_MODEL,
+      dtype: env.EMBEDDINGS_LOCAL_DTYPE || undefined,
+      // The model's own size unless one is set: small local models aren't trained to be cut.
+      dimensions: Number(env.EMBEDDINGS_DIMENSIONS) || null,
+      queryPrefix: env.EMBEDDINGS_QUERY_PREFIX,
+      documentPrefix: env.EMBEDDINGS_DOCUMENT_PREFIX,
+      maxDistance: number(env.EMBEDDINGS_MAX_DISTANCE),
+      cacheDir: env.EMBEDDINGS_CACHE_DIR || undefined,
+      offline: env.EMBEDDINGS_LOCAL_OFFLINE === "true",
+    });
+  }
   if (!env.EMBEDDINGS_BASE_URL || !env.EMBEDDINGS_MODEL) return null;
+  const dims = env.EMBEDDINGS_DIMENSIONS === undefined ? 512 : Number(env.EMBEDDINGS_DIMENSIONS) || null;
+  const host = (() => {
+    try {
+      return new URL(env.EMBEDDINGS_BASE_URL).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  const param = env.EMBEDDINGS_DIMENSIONS_PARAM;
+  const dimensionsParam =
+    param === "dimensions" || param === "output_dimension"
+      ? param
+      : param === "none"
+        ? null
+        : host.endsWith("voyageai.com")
+          ? "output_dimension"
+          : host.endsWith("openai.com") || host.endsWith("openrouter.ai")
+            ? "dimensions"
+            : null;
   return new OpenAICompatibleEmbeddings({
     baseURL: env.EMBEDDINGS_BASE_URL,
-    apiKey: env.EMBEDDINGS_API_KEY ?? "",
+    // Through OpenRouter, the chat key works for embeddings too.
+    apiKey: (
+      env.EMBEDDINGS_API_KEY ||
+      (host.endsWith("openrouter.ai") ? env.OPENROUTER_API_KEY : "") ||
+      ""
+    ).trim(),
     model: env.EMBEDDINGS_MODEL,
+    dimensions: dims,
+    dimensionsParam,
     sendInputType: env.EMBEDDINGS_INPUT_TYPE === "true",
+    queryPrefix: env.EMBEDDINGS_QUERY_PREFIX,
+    documentPrefix: env.EMBEDDINGS_DOCUMENT_PREFIX,
+    maxDistance: number(env.EMBEDDINGS_MAX_DISTANCE),
+    pricePerMillionTokens: number(env.EMBEDDINGS_PRICE_PER_MTOK),
   });
 }

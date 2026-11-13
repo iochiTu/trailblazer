@@ -11,6 +11,7 @@ const outcome = (over: Partial<Outcome> = {}): Outcome => ({
   advice: false,
   unanswered: false,
   actions: [],
+  itemButtons: [],
   tools: [],
   requests: [],
   error: null,
@@ -99,22 +100,55 @@ describe("scoring", () => {
     ]);
   });
 
+  it("checks the button for a service, and the service named on the request", () => {
+    const button = { kind: "quote", item: "Sump pump installation" } as const;
+    const c = evalCase({ itemButton: button });
+    expect(score(c, outcome({ reply: "Yes." }))).toEqual(['no "quote" button for Sump pump installation']);
+    expect(
+      score(c, outcome({ reply: "Yes.", itemButtons: [{ kind: "book", item: "Drain cleaning" }] })),
+    ).toEqual(['no "quote" button for Sump pump installation (showed book for Drain cleaning)']);
+    expect(score(c, outcome({ reply: "Yes.", itemButtons: [button] }))).toEqual([]);
+    expect(
+      score(evalCase({ itemButton: "none" }), outcome({ reply: "Call us.", itemButtons: [button] })),
+    ).toEqual(['showed a "quote" button for Sump pump installation']);
+    const named = evalCase({ request: { item: "Sump pump installation" } });
+    const request = { kind: "quote", urgent: false, details: {} } as const;
+    expect(score(named, outcome({ reply: "Done.", requests: [{ ...request, itemName: null }] }))).toEqual([
+      "request about no service, expected Sump pump installation",
+    ]);
+    expect(
+      score(
+        named,
+        outcome({ reply: "Done.", requests: [{ ...request, itemName: "Sump pump installation" }] }),
+      ),
+    ).toEqual([]);
+  });
+
   it("checks the request passed on, its kind, urgency and details", () => {
     const c = evalCase({ request: { kind: ["booking", "callback"], urgent: false, details: ["vehicle"] } });
     expect(score(c, outcome({ reply: "Done." }))).toEqual(["no request passed on"]);
     expect(
-      score(c, outcome({ reply: "Done.", requests: [{ kind: "quote", urgent: false, details: {} }] })),
+      score(
+        c,
+        outcome({
+          reply: "Done.",
+          requests: [{ kind: "quote", urgent: false, details: {}, itemName: null }],
+        }),
+      ),
     ).toEqual(["request saved as quote, expected booking or callback"]);
     expect(
       score(
         c,
-        outcome({ reply: "Done.", requests: [{ kind: "booking", urgent: true, details: { vehicle: " " } }] }),
+        outcome({
+          reply: "Done.",
+          requests: [{ kind: "booking", urgent: true, details: { vehicle: " " }, itemName: null }],
+        }),
       ),
     ).toEqual(["request wrongly marked urgent", 'request without its "vehicle" detail']);
     expect(
       score(
         evalCase({ request: "none" }),
-        outcome({ reply: "Ok.", requests: [{ kind: "other", urgent: false, details: {} }] }),
+        outcome({ reply: "Ok.", requests: [{ kind: "other", urgent: false, details: {}, itemName: null }] }),
       ),
     ).toEqual(["passed on a request the visitor didn't make"]);
   });

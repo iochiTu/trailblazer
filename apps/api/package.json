@@ -25,6 +25,7 @@
     "@traiblazer/integrations": "workspace:*",
     "@traiblazer/llm": "workspace:*",
     "@traiblazer/shared": "workspace:*",
+    "@traiblazer/telephony": "workspace:*",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
     "ioredis": "6.0.0",

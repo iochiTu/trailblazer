@@ -49,9 +49,10 @@ export {
 } from "./integrations/crm.js";
 export * from "./jobs.js";
 export { crawlSite } from "./knowledge/crawl.js";
+export { botsNeedingVectors, embedChunks, enqueueEmbedding, warmQuestions } from "./knowledge/embed.js";
 export { extractPage } from "./knowledge/extract.js";
 export { FILE_LIMITS, FileReadError, fileSections, readSourceFile } from "./knowledge/files.js";
-export { clearSource, indexDocuments, tsvectorSql } from "./knowledge/index-documents.js";
+export { clearSource, indexDocuments, searchableText, tsvectorSql } from "./knowledge/index-documents.js";
 export { assertPublicUrl, publicFetch, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";
 export { runUrgentAlert, type UrgentAlertDeps, type UrgentAlertPayload } from "./requests/urgent-alert.js";
@@ -68,3 +69,16 @@ export {
   type SetupPage,
   selectPages,
 } from "./setup/setup.js";
+export {
+  applyMessageStatus,
+  handleInboundText,
+  handleMissedCall,
+  type InboundTextOutcome,
+  type MissedCallResult,
+  queueText,
+  type SendDeps,
+  SMS_DAILY_LIMIT,
+  SMS_THREAD_HOURS,
+  type SmsNumber,
+  sendQueuedText,
+} from "./sms/sms.js";

@@ -145,7 +145,9 @@ export function AddonsTab({ base }: { base: string }) {
               <li
                 key={addon.id}
                 className={`panel flex flex-col gap-3 p-4 ${isOpen ? "sm:col-span-2" : ""} ${
-                  addon.status === "coming_soon" ? "opacity-70" : ""
+                  addon.status === "coming_soon"
+                    ? "border border-dashed border-[var(--border)] bg-transparent"
+                    : ""
                 }`}
               >
                 <div className="flex items-start gap-3">

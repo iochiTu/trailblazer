@@ -22,10 +22,11 @@ export { type AreaCheck, checkServiceArea, checkServiceAreaTool, type ServiceAre
  */
 export function chatTools(
   bot: { settings: BotSettings },
-  options: { leadFields?: LeadField[]; serviceArea?: boolean } = {},
+  options: { leadFields?: LeadField[]; serviceArea?: boolean; catalog?: boolean } = {},
 ): AnyChatTool[] {
   const tools: AnyChatTool[] = [searchKnowledge];
-  if (bot.settings.followUps !== false) tools.push(requestFollowUpTool(options.leadFields ?? []));
+  if (bot.settings.followUps !== false)
+    tools.push(requestFollowUpTool(options.leadFields ?? [], { items: options.catalog }));
   if (options.serviceArea) tools.push(checkServiceAreaTool);
   return tools;
 }

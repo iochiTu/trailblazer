@@ -218,7 +218,7 @@ export function PlansTab() {
         ) : (
           <div
             key={plan.id}
-            className={`card flex flex-wrap items-center gap-4 p-4 ${plan.active ? "" : "opacity-70"}`}
+            className={`card flex flex-wrap items-center gap-4 p-4 ${plan.active ? "" : "border-dashed border-[var(--border)] shadow-none"}`}
           >
             <div className="min-w-48 flex-1">
               <div className="flex flex-wrap items-center gap-2 font-medium">

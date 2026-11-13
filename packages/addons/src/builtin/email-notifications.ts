@@ -53,6 +53,7 @@ const TEXT = {
     phone: "Phone",
     bestTime: "Best time",
     request: "Request",
+    item: "About",
     photos: (n: number) =>
       n === 1
         ? "The visitor sent 1 photo: see it with the request."
@@ -88,6 +89,7 @@ const TEXT = {
     phone: "Téléphone",
     bestTime: "Meilleur moment",
     request: "Demande",
+    item: "Au sujet de",
     photos: (n: number) =>
       n === 1
         ? "Le visiteur a envoyé 1 photo : voyez-la avec la demande."
@@ -208,6 +210,7 @@ export const emailNotifications = defineAddon<EmailNotificationsConfig>({
             line(t.email, event.email),
             line(t.phone, event.phone),
             line(t.bestTime, event.bestTime),
+            line(t.item, event.item ?? null),
             ...event.details.map((d) => line(d.label[ctx.ownerLanguage], d.value)),
             line(t.request, event.message.trim()),
             event.photoCount ? t.photos(event.photoCount) : null,

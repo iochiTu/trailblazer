@@ -290,10 +290,16 @@ export const chatImageSchema = z.object({
 export const PAGE_ACTIONS = ["call", "book", "email", "directions", "website", "link"] as const;
 export type PageAction = (typeof PAGE_ACTIONS)[number];
 
-/** A tap on a contact button of the business page, sent by the page itself (no visitor data). */
+/**
+ * What the business page reports about itself (no visitor data): "view" once per visit (a refresh
+ * in the same browser tab isn't sent again), or a tap on a contact button.
+ */
+export const PAGE_EVENTS = ["view", ...PAGE_ACTIONS] as const;
+export type PageEvent = (typeof PAGE_EVENTS)[number];
+
 export const pageEventSchema = z.object({
   publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
-  action: z.enum(PAGE_ACTIONS),
+  action: z.enum(PAGE_EVENTS),
 });
 
 export const publicChatSchema = z
@@ -501,5 +507,49 @@ export const handOverDemoSchema = z.object({
     .max(254)
     .transform((e) => e.toLowerCase()),
 });
+
+/**
+ * Steps of the done-for-you setup (PLAN §7: a page live within one working day of receiving the
+ * business's materials), in order.
+ */
+export const ONBOARDING_STEPS = [
+  "sources",
+  "page",
+  "services",
+  "photos",
+  "review",
+  "google",
+  "live",
+] as const;
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+/** Steps staff tick themselves. The others are checked from the business's own data. */
+export const MANUAL_ONBOARDING_STEPS: readonly OnboardingStep[] = ["review", "google"];
+
+/** Starts the checklist for a business (one per business). */
+export const createOnboardingSchema = z.object({
+  tenantId: z.uuid(),
+  /** The assistant whose page is being set up; the business's first one when left out. */
+  botId: z.uuid().nullish(),
+  /** When the business's materials arrived: the clock starts here. Now when left out. */
+  receivedAt: z.iso.datetime({ offset: true }).nullish(),
+  note: z.string().trim().max(500).nullish(),
+});
+
+export const updateOnboardingSchema = z
+  .object({
+    receivedAt: z.iso.datetime({ offset: true }).optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+    /**
+     * Marks one step: "done" (staff steps only), "skipped" (not needed for this business) or "open"
+     * again. Go-live is never marked: it is done when the page is published.
+     */
+    step: z
+      .object({
+        id: z.enum(["sources", "page", "services", "photos", "review", "google"]),
+        state: z.enum(["done", "skipped", "open"]),
+      })
+      .optional(),
+  })
+  .refine((input) => Object.values(input).some((value) => value !== undefined), "Nothing to change");
 
 export * from "./plans.js";

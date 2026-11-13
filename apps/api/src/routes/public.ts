@@ -23,6 +23,7 @@ import {
   catalogItems,
   conversations,
   knowledgeImages,
+  listListedPages,
   messages,
   notices,
   type ReplyImage,
@@ -48,7 +49,7 @@ import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guar
 import { HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
 import { prepareChatImage } from "../lib/images.js";
-import { countPageEvent, isPersonVisit } from "../lib/page-stats.js";
+import { countPageEvent, fromPerson } from "../lib/page-stats.js";
 import { renderBusinessPage, renderChatOnly, schemaTypeFor } from "../page/render.js";
 import { pageLanguage } from "../page/strings.js";
 import { publicAssetUrl } from "./assets.js";
@@ -119,7 +120,9 @@ const UNAVAILABLE_PAGE = `<!doctype html><html lang="en"><head><meta charset="ut
  *   POST /v1/public/chat             send a message (optionally with images); the answer streams
  *                                    back as server-sent events
  *   GET  /v1/public/conversations/:id?key&visitorId   restore a visitor's conversation
- *   POST /v1/public/page-events      a tap on a contact button of the business page (counted)
+ *   GET  /robots.txt, /sitemap.xml  for search engines: the listed business pages
+ *   POST /v1/public/page-events      the business page was opened, or a contact button tapped
+ *                                    (page statistics; the page sends a view once per visit)
  */
 export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db, config } = ctx;
@@ -222,15 +225,6 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const html = request.query.embed
       ? renderChatOnly(template, publicKey)
       : await businessPage(template, found, publicKey, preview, request);
-
-    // Page statistics: a person opening the published page (not the owner's preview or a robot).
-    // A prospect demo counts from the start: whether it was opened is what operators want to know.
-    const counted = found.bot.status === "active" || found.demo;
-    if (!request.query.embed && !preview && counted && isPersonVisit(request.headers)) {
-      await countPageEvent(db, found.tenantId, found.botId, "views").catch((error) =>
-        request.log.warn(error, "page view not counted"),
-      );
-    }
 
     const ancestors = ["'self'", adminOrigin, ...found.allowedOrigins].join(" ");
     reply.header(
@@ -342,6 +336,30 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .send(UNAVAILABLE_PAGE);
     }
     return serveChatPage(publicKey, request, reply);
+  });
+
+  // ---- Search engines -------------------------------------------------------------------------
+
+  app.get("/robots.txt", async (_request, reply) =>
+    reply.type("text/plain; charset=utf-8").header("cache-control", "public, max-age=3600").send(
+      // Pages say themselves whether they may be listed (robots meta tag); the API isn't a page.
+      `User-agent: *\nDisallow: /v1/\nAllow: /\n\nSitemap: ${config.PUBLIC_URL}/sitemap.xml\n`,
+    ),
+  );
+
+  // The business pages that may be listed, at their friendly link when they have one.
+  app.get("/sitemap.xml", async (_request, reply) => {
+    const pages = await listListedPages(db);
+    const urls = pages.map(({ pageSlug, publicKey }) => {
+      const url = pageSlug ? `${config.PUBLIC_URL}/${pageSlug}` : `${config.PUBLIC_URL}/c/${publicKey}`;
+      return `  <url><loc>${escapeXml(url)}</loc></url>`;
+    });
+    return reply
+      .type("application/xml; charset=utf-8")
+      .header("cache-control", "public, max-age=3600")
+      .send(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}${urls.length ? "\n" : ""}</urlset>\n`,
+      );
   });
 
   app.get("/widget.js", async (_request, reply) => {
@@ -509,6 +527,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             db,
             gateway: ctx.gateway,
             embeddings: ctx.embeddings,
+            embeddingWaitMs: ctx.config.EMBEDDINGS_QUERY_WAIT_MS,
             log: (msg, data) => request.log.error(data, msg),
             adminUrl: adminOrigin,
           },
@@ -551,9 +570,13 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       const parsed = pageEventSchema.safeParse(request.body);
       // Nothing for the page to do with an answer: it only says whether the tap was counted.
       if (!parsed.success) return reply.code(400).send({ error: "invalid", message: "Unknown event" });
+      if (!fromPerson(request.headers)) return reply.code(204).send();
       const found = await loadBot(parsed.data.publicKey);
+      // Counted once the assistant is live. A prospect demo counts from the start: whether it was
+      // opened is what operators want to know.
       if (found && (found.bot.status === "active" || found.demo) && found.bot.hostedPageEnabled) {
-        await countPageEvent(db, found.tenantId, found.botId, parsed.data.action);
+        const { action } = parsed.data;
+        await countPageEvent(db, found.tenantId, found.botId, action === "view" ? "views" : action);
       }
       return reply.code(204).send();
     },
@@ -607,3 +630,9 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     },
   );
 }
+
+const escapeXml = (text: string) =>
+  text.replace(
+    /[<>&'"]/g,
+    (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c]!,
+  );

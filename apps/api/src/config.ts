@@ -30,6 +30,11 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   /** Public origin of this service: chat page links, widget script and same-origin checks. */
   PUBLIC_URL: z.url().default("http://localhost:4000"),
+  /**
+   * Public origin the telephony provider calls for webhooks, when it differs from PUBLIC_URL (a
+   * tunnel in development). Signatures are checked against this address.
+   */
+  TELEPHONY_WEBHOOK_URL: z.url().optional(),
   /** Admin portal origin; allowed to frame the chat page (playground). */
   ADMIN_ORIGIN: z.url().default("http://localhost:3000"),
   /**
@@ -42,6 +47,8 @@ const envSchema = z.object({
   PLATFORM_CACHE_SECONDS: z.coerce.number().int().min(0).default(30),
   /** Shared rate limits and counters across API servers. Without it, limits are per server. */
   REDIS_URL: z.string().optional(),
+  /** How long an answer waits for the question's vector once the keyword search is ready (docs/EMBEDDINGS.md). */
+  EMBEDDINGS_QUERY_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(250),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

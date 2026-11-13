@@ -13,6 +13,10 @@ export const JOB_TYPES = {
   urgentAlert: "request.urgent_alert",
   /** Fills a prospect demo page in once its sources are read (payload: { demoId }). */
   demoBuild: "demo.build",
+  /** Gives an assistant's chunks vectors for search by meaning (payload: { botId }). */
+  embedChunks: "embed.chunks",
+  /** Sends one queued text message through the telephony provider (payload: { messageId }). */
+  messageSend: "message.send",
 } as const;
 
 /** Job priorities: higher runs first. */

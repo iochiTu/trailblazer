@@ -80,7 +80,7 @@ function typedByVisitor(detail: { email?: string | null; phone?: string | null }
  * This is how the assistant captures a lead or hands a conversation to a person. It never books,
  * orders or confirms anything itself.
  */
-export const requestFollowUpTool = (fields: LeadField[]) =>
+export const requestFollowUpTool = (fields: LeadField[], options: { items?: boolean } = {}) =>
   defineTool({
     name: "request_follow_up",
     description: `Pass a visitor's request to the business's staff so a person can follow up: a call back, a quote, a booking request, a question you couldn't answer, a complaint. It saves the request and notifies the business. It does not book, order or confirm anything.
@@ -116,6 +116,18 @@ After it succeeds, tell the visitor their request was passed on and the business
         .describe(
           "What the visitor wants, in one to three sentences for the business's staff: what, for when, how many. Keep the visitor's own details. Leave out health, legal, financial or other sensitive details; name only the general topic.",
         ),
+      ...(options.items
+        ? {
+            item: z
+              .string()
+              .trim()
+              .max(16)
+              .nullish()
+              .describe(
+                'The id from <services> of the service or product this request is about (e.g. "s3"), when it is about one. Leave out otherwise; never guess.',
+              ),
+          }
+        : {}),
       bestTime: z
         .string()
         .trim()
@@ -149,7 +161,11 @@ After it succeeds, tell the visitor their request was passed on and the business
       const rawEmail = clean(input.email);
       const email = rawEmail?.includes("@") ? rawEmail.toLowerCase() : null;
       const rawPhone = clean(input.phone);
-      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : null;
+      // By text message, the number the customer writes from stands in when they gave no other.
+      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : (ctx.visitorPhone ?? null);
+      const ownNumber = Boolean(
+        phone && ctx.visitorPhone && digits(ctx.visitorPhone).endsWith(digits(phone).slice(-10)),
+      );
       if (!email && !phone) {
         return {
           isError: true,
@@ -177,7 +193,7 @@ After it succeeds, tell the visitor their request was passed on and the business
             .from(messages)
             .where(and(eq(messages.conversationId, ctx.conversationId), eq(messages.role, "user")))
         ).map((m) => m.content);
-        for (const detail of [email && { email }, phone && { phone }]) {
+        for (const detail of [email && { email }, phone && !ownNumber && { phone }]) {
           if (detail && !typedByVisitor(detail, visitorText)) {
             const value = "email" in detail ? detail.email : detail.phone;
             return {
@@ -209,6 +225,26 @@ After it succeeds, tell the visitor their request was passed on and the business
               .where(and(eq(messages.conversationId, ctx.conversationId), eq(messages.role, "assistant")))
           ).some((m) => Boolean((m.flags as MessageFlags).urgency));
         const urgent = Boolean(input.urgent) || triaged;
+
+        // The service or product the request is about: the one the assistant named, otherwise the
+        // one whose quote or booking button was last shown in this conversation.
+        const named = (input as { item?: string | null }).item?.trim();
+        let item: { id: string; name: string } | null =
+          (named && ctx.catalog?.find((c) => c.ref === named)) || null;
+        const buttonKind = input.kind === "quote" ? "quote" : input.kind === "booking" ? "book" : null;
+        if (!item && buttonKind) {
+          const recent = await tx
+            .select({ flags: messages.flags })
+            .from(messages)
+            .where(and(eq(messages.conversationId, ctx.conversationId), eq(messages.role, "assistant")))
+            .orderBy(desc(messages.createdAt))
+            .limit(6);
+          const shown = recent
+            .flatMap((m) => (m.flags as MessageFlags).actions ?? [])
+            .find((a) => a.item && a.kind === buttonKind)?.item;
+          // Still one of the business's items (it may have been removed since).
+          item = (shown && ctx.catalog?.find((c) => c.id === shown.id)) || null;
+        }
 
         // Only the industry's own fields, with what the visitor said.
         const given = (input as { details?: Record<string, string | undefined> }).details ?? {};
@@ -242,6 +278,8 @@ After it succeeds, tell the visitor their request was passed on and the business
             language: ctx.language,
             urgent,
             details,
+            catalogItemId: item?.id ?? null,
+            itemName: item?.name ?? null,
             attachmentIds: photos.map((p) => p.id).reverse(),
           })
           .returning();
@@ -263,6 +301,7 @@ After it succeeds, tell the visitor their request was passed on and the business
               message: lead!.message,
               language: lead!.language,
               urgent: lead!.urgent,
+              item: lead!.itemName,
               details: fields
                 .filter((f) => details[f.key])
                 .map((f) => ({ key: f.key, label: f.label, value: details[f.key]! })),
