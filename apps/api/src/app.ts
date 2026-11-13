@@ -21,6 +21,7 @@ import { integrationRoutes } from "./routes/integrations.js";
 import { interviewRoutes } from "./routes/interview.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
 import { leadRoutes } from "./routes/leads.js";
+import { mcpRoutes } from "./routes/mcp.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { pageRoutes } from "./routes/page.js";
@@ -71,6 +72,8 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   app.addHook("onRequest", async (request) => {
     if (request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS") return;
     if (request.url.startsWith("/v1/public/")) return;
+    // The public MCP server ignores the session cookie, so there is nothing for another site to abuse.
+    if (request.url === "/mcp") return;
     if (!request.cookies[SESSION_COOKIE] && !request.url.startsWith("/v1/auth/")) return;
     const origin = request.headers.origin;
     const crossSite = origin
@@ -129,6 +132,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => operatorRoutes(scope, ctx));
   await app.register(async (scope) => demoRoutes(scope, ctx));
   await app.register(async (scope) => onboardingRoutes(scope, ctx));
+  await app.register(async (scope) => mcpRoutes(scope, ctx));
   await app.register(async (scope) => publicRoutes(scope, ctx));
   await app.register(async (scope) => telephonyRoutes(scope, ctx));
   await app.register(async (scope) => phoneRoutes(scope, ctx));

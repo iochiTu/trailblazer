@@ -581,6 +581,9 @@ export const fr: Record<MessageKey, string> = {
   "portal.cta.title": "Prêt à rencontrer votre nouvel assistant?",
   "portal.cta.body": "Créez votre compte et obtenez vos premières réponses en quelques minutes.",
   "portal.footer.rights": "© {year} Traiblazer",
+  "portal.footer.cities": "Villes",
+  "portal.footer.pricing": "Tarifs",
+  "portal.footer.forAi": "Pour les assistants IA",
   "tenants.limitReached":
     "Vous avez atteint le nombre maximal d'entreprises pour un compte. Contactez-nous si vous en avez besoin de plus.",
   "portal.plans.businesses":
