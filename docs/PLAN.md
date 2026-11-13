@@ -85,7 +85,7 @@ only (no health or case details), to learn their workflow before the full packs 
 |---|---|
 | **Local businesses** — restaurants, cafés, retail, salons, lodging, attractions | Self-serve: sign up, add the website or build the page, paste the widget. The same product at a low price; a good offer for agency partners |
 | **Car dealerships** | Phase 3 — inventory feeds, CRM and lead-response tooling |
-| **Industrial & institutions** | Phase 4 — long enterprise sales, procurement, security reviews |
+| **Industrial & institutions** | Phase 4 — long enterprise sales, procurement, security reviews. Universities, colleges and municipalities: what they need and what to respect while building now is in §18 |
 
 **Needs that come up in every early-stage industry:**
 
@@ -975,3 +975,95 @@ Plan allowances stay editable in the operator console.
     Persian, Ukrainian, Tagalog, Spanish) and budget for native-speaker review.
 12. Indigenous languages: owner-provided phrases + human routing vs. deeper support with community partners.
 13. Product name, team size and target launch date.
+14. **Institutions (§18):** which comes first (a college or a mid-size municipality), whether the first
+    deal is a pilot under the open-competition threshold, and when to start SOC 2.
+
+## 18. Institutions: universities, colleges and municipalities
+
+A later market (Phase 4), written down now so that what we build for small businesses doesn't have to
+be rebuilt for it. These buyers don't choose the best chat; they choose a vendor that **passes their
+reviews** (security, privacy, accessibility, procurement) and then solves a real service problem.
+Legal and procurement points below were checked in November 2026 and must be confirmed with a lawyer
+and with each institution's procurement office before a bid.
+
+### 18.1 Why they would buy
+
+| Buyer | The problem | What the assistant does |
+|---|---|---|
+| **University, college** | The same questions by the thousand at peak times (admissions, registration, fees and aid, residence, IT help desk); international students in other time zones and languages | Answers from the institution's own pages and documents, with the source linked; hands off to the right office; works at 2 am and in the student's language |
+| **Municipality** | 311-style questions (waste collection, by-laws, permits, property tax, recreation programs, road and snow notices); small staff; after-hours calls | Answers from by-laws and service pages with the source linked; takes a service request and routes it to the department; notices for closures and emergencies |
+
+Our existing strengths apply directly: grounded answers with sources, "I don't know" plus a knowledge
+gap for staff, EN/FR and newcomer languages, requests routed to people, notices, urgent triage.
+
+### 18.2 What they require (the gates)
+
+| Area | What they ask for | Where we are | Gap |
+|---|---|---|---|
+| **Accessibility** | AODA: WCAG 2.x AA for the public widget and page, in practice 2.1/2.2 AA; a completed VPAT/ACR; keyboard, screen reader and zoom use; accessible support channels | WCAG 2.2 AA axe checks pass on desktop and phone (`pnpm a11y`) | A written ACR (VPAT), a manual screen-reader test, an accessibility statement |
+| **Privacy** | FIPPA (universities, colleges) and MFIPPA (municipalities), not PIPEDA: the institution stays accountable for records we hold. A privacy impact assessment (PIA) with our help; data kept in Canada; retention periods they set; export and deletion for access requests; breach notice terms; no training of models on their data | RLS per tenant; audit log; hashed question cache (no question text); usage records without content | Canadian hosting and Canadian or self-hosted model routes; per-tenant retention settings and purge job; conversation export; a subprocessor list; a data processing agreement |
+| **Security** | Single sign-on (SAML or OIDC with Entra ID, Google), enforced MFA, roles; audit logs they can export; encryption in transit and at rest; penetration test report; incident response plan; backups with stated recovery times; SOC 2 Type II or ISO 27001; in higher education the **HECVAT** questionnaire (version 4 includes AI, privacy and accessibility sections) | Tenant roles, audit logs, session cookies, rate limits | SSO and SCIM; exportable audit log; pen test; SOC 2; a filled-in HECVAT |
+| **AI governance** | Say clearly it is an AI; cite sources; a person can be reached; a record of what was answered; evaluation results; which models and providers process data; controls on what it may talk about. Ontario's Enhancing Digital Security and Trust Act, 2024 (Bill 194) puts AI and cyber security duties on public sector entities, with the detail left to regulations | Disclosure line, sources, requests to staff, scope policy and classifier, evals with a safety bar, knowledge gaps | Per-answer review and correction by staff; published eval results per deployment; an "AI use" page the institution can link to |
+| **Language** | English and French service where required (French Language Services Act areas, bilingual institutions); plain language | EN/FR throughout; Tier 2 languages for answers | French review of all public strings by a native speaker |
+| **Procurement** | Broader Public Sector Procurement Directive: open competition from about $139,000, quotes below that (April 2026 version); the Buy Ontario directive favours Ontario and Canadian suppliers; RFP responses; insurance (cyber, errors and omissions, general liability); references; annual invoicing against a purchase order; multi-year terms; group buying through OECM (education) and similar bodies | An Ontario company | A pilot offer priced under the quote threshold; insurance; two or three reference customers; standard contract terms and an SLA |
+| **Reliability** | Uptime commitment (99.9 %), status page, support hours, peak load (registration week, a storm) | Stateless services, limits per business, job queue | SLA, status page, load tests, on-call |
+
+### 18.3 What the product needs
+
+1. **Organization → departments.** One institution, many units (Registrar, Financial Aid, IT; Public
+   Works, Clerk, Recreation), each with its own knowledge, staff and inbox, under shared rules and
+   branding. Today: one tenant, several assistants. Needed: department-level roles, routing a request
+   to a department, and one front assistant that searches across them.
+2. **Large, changing knowledge.** Thousands of pages and PDFs (calendars, by-laws, council minutes,
+   policies). Needs: scheduled re-crawls with change detection (the chunk hash reuse already avoids
+   re-embedding), an approximate vector index past ~20,000 chunks (EMBEDDINGS §4.4), document dates and
+   "last updated" on sources, and an expiry date on time-limited content.
+3. **Sign-in and administration.** SSO, SCIM, enforced MFA, department admins, an exportable audit log.
+4. **Records.** Retention period per organization, purge job, export of conversations and requests,
+   legal hold.
+5. **Hand-off into their systems.** Email first; then ticketing and 311 (ServiceNow, Jira Service
+   Management, Salesforce, a municipal CRM), SharePoint and Google Drive as sources, and for campuses
+   an authenticated mode later (answers about *my* file need the student system: out of scope at first).
+6. **Reporting.** Questions by topic and department, answered and unanswered rates, languages, peak
+   hours, exportable; the knowledge-gap list is already the core of this.
+7. **Deployment choices.** Canada-only region; a model route that keeps data in Canada or on our own
+   servers (the local embedding backend exists; chat needs a Canadian-hosted or self-hosted model).
+8. **Embedding in their site.** The widget on their own pages with their branding and their
+   accessibility standard; the hosted business page matters less here.
+
+### 18.4 Rules to respect while building now
+
+These cost little today and are expensive to retrofit. Every new feature is checked against them.
+
+- **Every table that holds customer data has `tenant_id` and RLS**, and its rows can be exported and
+  deleted per tenant. No shared caches that contain customer text (the question cache keeps a hash).
+- **Nothing depends on one model provider or on a US-only service.** Each provider sits behind our
+  interface, with a route that can stay in Canada. New third parties go on a subprocessor list.
+- **Every staff action that changes data writes to the audit log**, with who and when.
+- **Every public surface meets WCAG 2.2 AA** and is added to the `pnpm a11y` checks: new buttons,
+  cards and banners need names, focus order, contrast and keyboard use.
+- **Every visitor-facing string exists in English and French.**
+- **Answers stay grounded and traceable:** sources shown, the stored message records what was shown
+  (buttons, photos, tools), and a new behaviour gets eval cases, with safety cases where it could harm.
+- **Selling features are optional per organization.** Offers and service buttons (SELL_AND_PROMOTE)
+  make no sense for a registrar: they stay off unless the organization uses them.
+- **No visitor identity in statistics.** Daily totals, as page statistics do today.
+- **Retention in mind:** new stores of conversation content get a created-at index and a tenant
+  filter, so a purge job can cover them.
+- **Sign-in is replaceable:** no feature assumes email and password; roles are checked through one
+  function, so SSO and department roles can be added behind it.
+
+### 18.5 Order of work (when Phase 4 starts)
+
+| Step | Work | Why first |
+|---|---|---|
+| 1 | Paperwork that needs no code: ACR (VPAT), security overview, subprocessor list, data processing agreement, filled-in HECVAT, insurance | Most reviews stop here; cheap to prepare |
+| 2 | Canada-only deployment and model route; retention settings, purge and export | The privacy gate |
+| 3 | SSO, department roles, exportable audit log | The security gate |
+| 4 | Departments, cross-department search, scheduled re-crawl, vector index | The product fit |
+| 5 | Reporting, ticketing hand-off, SLA and status page | What a renewal depends on |
+| 6 | SOC 2 Type II (start the observation period early: it takes 6–12 months) | Asked for by larger institutions |
+
+A realistic first deal: a college department or a mid-size municipality's service desk, as a paid
+pilot below the open-competition threshold, public information only, widget on their site, EN/FR.
+
