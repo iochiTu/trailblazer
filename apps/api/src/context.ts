@@ -1,4 +1,5 @@
 import type { Db } from "@traiblazer/db";
+import type { IntegrationsConfig } from "@traiblazer/integrations";
 import type { LLMGateway, QueryEmbedder } from "@traiblazer/llm";
 import type { TelephonyProvider } from "@traiblazer/telephony";
 import type { Redis } from "ioredis";
@@ -22,4 +23,8 @@ export interface AppContext {
   limiter?: Limiter;
   /** Plans and policies from the operator console; created from `db` when not provided. */
   platform?: PlatformConfig;
+  /** CRM connections: the key that seals credentials and the platform's own CRM keys. Off when absent. */
+  integrations?: IntegrationsConfig;
+  /** Outbound HTTP for CRM calls; defaults to one that refuses private addresses. Tests pass a fake. */
+  integrationsFetch?: typeof fetch;
 }

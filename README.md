@@ -26,7 +26,8 @@ packages/
   core/             Chat engine, tools, retrieval, prompt (locked platform rules), crawler, job queue
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
   db/               Drizzle schema, migrations (incl. row-level security), withTenant()
-  addons/           Add-on market: add-on contract, registry, built-in add-ons (email notifications, online shop)
+  addons/           Add-on market: add-on contract, registry, built-in add-ons (email notifications, online shop, CRMs)
+  integrations/     CRM connectors (Jobber, Housecall Pro, ServiceTitan, webhook) and credential sealing
   i18n/             Language registry (tiers, RTL), UI messages (ICU), language negotiation
   industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)
   evals/            Answer-quality and safety evals for the pilot packs, EN/FR (`pnpm evals`)
@@ -103,6 +104,51 @@ worker, which re-checks the add-on is still on. Installations live in `bot_addon
 re-validated on every save and read, and `version`/`migrate` handle setting changes. Emails go through
 `SMTP_URL`/`MAIL_FROM`; without them the worker logs each email instead. The owner's test chat
 (playground) never triggers notifications.
+
+## CRM integrations
+
+Requests visitors leave can go straight into the software the business already runs on. Each CRM is
+an add-on in the market's **CRM & job software** category:
+
+| Add-on | How the business connects | What a request becomes | Platform needs |
+| --- | --- | --- | --- |
+| **Jobber** | Signs in at Jobber (OAuth 2.0) | A request on a client (matched by email/phone, or created), with a note | `JOBBER_CLIENT_ID` / `JOBBER_CLIENT_SECRET` (our app in Jobber's Developer Center) |
+| **Housecall Pro** | Pastes a company API key (MAX plan) | A lead in the Job Inbox ("API Leads") | nothing |
+| **ServiceTitan** | Pastes tenant ID, client ID and secret | A booking for the office to confirm | `SERVICETITAN_APP_KEY` (partner program) |
+| **Webhook** | Pastes an address (optional signing secret) | A signed JSON `POST` | nothing |
+
+The webhook is the route to everything else today: with Zapier, Make, n8n or Power Automate it reaches
+HubSpot, Salesforce, Zoho, Pipedrive, Monday and the rest without new code. An add-on whose platform
+keys aren't set is listed but can't be connected ("not available on this platform yet").
+
+How it fits together:
+
+- **Connectors** live in `packages/integrations` (`CrmConnector` in `types.ts`): how to connect, a
+  cheap `verify`, optional token `refresh`, and `pushLead`. They hold no state and never touch the
+  database. **Adding a CRM** is one connector file, one line in `registry.ts`, one `crmAddon({...})`
+  entry in `packages/addons/src/builtin/crm.ts` (same id), and tests with a fake `fetch`. The portal
+  builds the connect form from the connector's field list, so it needs no changes.
+- **Credentials** are checked with the CRM before they are saved, then stored in
+  `integration_connections` (RLS) sealed with AES-256-GCM under `INTEGRATIONS_SECRET_KEY` and bound
+  to their tenant, assistant and provider. No route returns them. Disconnecting, or removing the
+  add-on, erases them. Without `INTEGRATIONS_SECRET_KEY` no CRM can be connected.
+- **Sending**: the add-on turns `request.created` into a `crm.lead` effect; the worker reads the
+  request, opens the credentials (refreshing tokens under a row lock, since Jobber rotates refresh
+  tokens), and calls the connector. `lead_syncs` (RLS) keeps one row per request and CRM, so a
+  retried job never creates a record twice, and the Requests tab shows "Sent to Jobber" with a link,
+  or the reason it failed with **Send again**.
+- **Failures**: an outage or rate limit is retried with the job queue's backoff; refused credentials
+  flag the connection ("connect again") and a refused request is recorded, neither retried.
+- Outbound calls go through `publicFetch` (public addresses only, no redirects), so a webhook
+  address can't reach the private network. Test-chat requests are never sent.
+
+**Before selling a connector**, run it once against a real account: the Housecall Pro and webhook
+connectors follow fully public documentation; Jobber's `requestCreate`, `requestCreateNote`,
+`clients(searchTerm:)` and `phones` input, and ServiceTitan's `Authorization` header form and
+booking-provider-tags list, could not be confirmed without developer/partner access (noted at the
+top of each connector). Jobber apps work for up to 5 accounts as drafts, then need Jobber's review
+(which also expects an `APP_DISCONNECT` webhook handler, not built yet); ServiceTitan requires its
+partner program.
 
 ## AI providers
 

@@ -40,13 +40,20 @@ export {
   type DemoBuildOutcome,
   type DemoBuildPayload,
 } from "./demo/build.js";
+export {
+  type ConnectionRef,
+  type CrmLeadPayload,
+  connectIntegration,
+  type IntegrationDeps,
+  pushLeadToCrm,
+} from "./integrations/crm.js";
 export * from "./jobs.js";
 export { crawlSite } from "./knowledge/crawl.js";
 export { botsNeedingVectors, embedChunks, enqueueEmbedding, warmQuestions } from "./knowledge/embed.js";
 export { extractPage } from "./knowledge/extract.js";
 export { FILE_LIMITS, FileReadError, fileSections, readSourceFile } from "./knowledge/files.js";
 export { clearSource, indexDocuments, searchableText, tsvectorSql } from "./knowledge/index-documents.js";
-export { assertPublicUrl, UnsafeUrlError } from "./knowledge/safe-fetch.js";
+export { assertPublicUrl, publicFetch, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";
 export { runUrgentAlert, type UrgentAlertDeps, type UrgentAlertPayload } from "./requests/urgent-alert.js";
 export { type AppliedSetup, applySetup, CatalogLimitError, suggestionToInput } from "./setup/apply.js";

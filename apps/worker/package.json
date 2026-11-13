@@ -13,6 +13,7 @@
   "dependencies": {
     "@traiblazer/core": "workspace:*",
     "@traiblazer/db": "workspace:*",
+    "@traiblazer/integrations": "workspace:*",
     "@traiblazer/llm": "workspace:*",
     "@traiblazer/telephony": "workspace:*",
     "nodemailer": "8.0.11"

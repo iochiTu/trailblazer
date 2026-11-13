@@ -90,6 +90,9 @@ importers:
       '@traiblazer/industry-packs':
         specifier: workspace:*
         version: link:../../packages/industry-packs
+      '@traiblazer/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@traiblazer/llm':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -167,6 +170,9 @@ importers:
       '@traiblazer/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@traiblazer/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@traiblazer/llm':
         specifier: workspace:*
         version: link:../../packages/llm
@@ -226,6 +232,9 @@ importers:
       '@traiblazer/industry-packs':
         specifier: workspace:*
         version: link:../industry-packs
+      '@traiblazer/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@traiblazer/llm':
         specifier: workspace:*
         version: link:../llm
@@ -335,6 +344,18 @@ importers:
 
   packages/industry-packs:
     devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 5.1.0
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
+  packages/integrations:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
       typescript:
         specifier: ~6.0.3
         version: 6.0.3

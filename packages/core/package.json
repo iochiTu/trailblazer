@@ -20,6 +20,7 @@
     "@traiblazer/db": "workspace:*",
     "@traiblazer/i18n": "workspace:*",
     "@traiblazer/industry-packs": "workspace:*",
+    "@traiblazer/integrations": "workspace:*",
     "@traiblazer/llm": "workspace:*",
     "@traiblazer/shared": "workspace:*",
     "@traiblazer/telephony": "workspace:*",

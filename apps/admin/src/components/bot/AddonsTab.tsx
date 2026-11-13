@@ -9,9 +9,11 @@ import {
   ApiError,
   api,
   type InstalledAddon,
+  type Integration,
   type Localized,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { ConnectionPanel } from "./ConnectionPanel";
 
 type Filter = "all" | "installed" | AddonCategory;
 
@@ -29,25 +31,64 @@ export function AddonsTab({ base }: { base: string }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  /** CRMs the add-ons connect to, with this assistant's connections. */
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  /** Add-on whose CRM sign-in didn't finish (the owner just came back from it). */
+  const [signInFailed, setSignInFailed] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const data = await api<{ catalog: AddonCatalogEntry[]; installed: InstalledAddon[] }>(`${base}/addons`);
+      const [data, connections] = await Promise.all([
+        api<{ catalog: AddonCatalogEntry[]; installed: InstalledAddon[] }>(`${base}/addons`),
+        api<{ integrations: Integration[] }>(`${base}/integrations`),
+      ]);
       setCatalog(data.catalog);
       setInstalled(data.installed);
+      setIntegrations(connections.integrations);
+      return data;
     } catch {
       setLoadError(true);
+      return null;
     }
   }, [base]);
 
+  /** Adds a CRM add-on with its default settings once its account is connected. */
+  const installDefaults = useCallback(
+    async (addon: AddonCatalogEntry) => {
+      await api(`${base}/addons/${addon.id}`, {
+        method: "PUT",
+        body: { enabled: true, config: addon.defaults },
+      });
+      await load();
+    },
+    [base, load],
+  );
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void (async () => {
+      const data = await load();
+      // Back from signing in at a CRM (?integration=jobber&result=connected|error): open that add-on.
+      const params = new URLSearchParams(window.location.search);
+      const provider = params.get("integration");
+      const result = params.get("result");
+      if (!data || !provider || !result) return;
+      params.delete("integration");
+      params.delete("result");
+      window.history.replaceState(null, "", `${window.location.pathname}?${params}`);
+      const addon = data.catalog.find((a) => a.integration === provider);
+      if (!addon) return;
+      setOpen(addon.id);
+      if (result !== "connected") setSignInFailed(addon.id);
+      else if (!data.installed.some((i) => i.addonId === addon.id))
+        await installDefaults(addon).catch(() => {});
+    })();
+  }, [load, installDefaults]);
 
   if (loadError) return <p className="error text-sm">{t("common.error")}</p>;
   if (!catalog) return <p className="muted text-sm">{t("common.loading")}</p>;
 
   const installedById = new Map(installed.map((i) => [i.addonId, i]));
+  const integrationById = new Map(integrations.map((i) => [i.id, i]));
   const categories = [...new Set(catalog.map((a) => a.category))];
   const needle = query.trim().toLowerCase();
   const visible = catalog.filter((a) => {
@@ -99,6 +140,7 @@ export function AddonsTab({ base }: { base: string }) {
           {visible.map((addon) => {
             const current = installedById.get(addon.id);
             const isOpen = open === addon.id;
+            const integration = addon.integration ? integrationById.get(addon.integration) : undefined;
             return (
               <li
                 key={addon.id}
@@ -118,7 +160,7 @@ export function AddonsTab({ base }: { base: string }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="font-medium">{loc(addon.name)}</h4>
-                      <StatusBadge addon={addon} current={current} />
+                      <StatusBadge addon={addon} current={current} integration={integration} />
                     </div>
                     <p className="muted mt-0.5 text-sm">{loc(addon.summary)}</p>
                   </div>
@@ -137,7 +179,30 @@ export function AddonsTab({ base }: { base: string }) {
                   ))}
                 </p>
 
-                {isOpen && (
+                {isOpen && integration && !current && <p className="text-sm">{loc(addon.description)}</p>}
+
+                {isOpen && integration && (
+                  <ConnectionPanel
+                    key={`${integration.connection?.status ?? "none"}-${integration.connection?.connectedAt ?? ""}`}
+                    integration={integration}
+                    base={base}
+                    loc={loc}
+                    notice={
+                      signInFailed === addon.id
+                        ? t("integrations.oauthFailed", { name: integration.name })
+                        : null
+                    }
+                    onChange={async (connected) => {
+                      setSignInFailed(null);
+                      // Connecting is the point of a CRM add-on: add it without a second click.
+                      if (connected && !current) await installDefaults(addon);
+                      else await load();
+                    }}
+                  />
+                )}
+
+                {/* A CRM add-on is added by connecting it; its settings show once it is installed. */}
+                {isOpen && (!integration || current) && (
                   <AddonSettings
                     key={current?.updatedAt ?? "new"}
                     addon={addon}
@@ -159,11 +224,20 @@ export function AddonsTab({ base }: { base: string }) {
   );
 }
 
-function StatusBadge({ addon, current }: { addon: AddonCatalogEntry; current?: InstalledAddon }) {
+function StatusBadge(props: {
+  addon: AddonCatalogEntry;
+  current?: InstalledAddon;
+  integration?: Integration;
+}) {
+  const { addon, current, integration } = props;
   const { t } = useI18n();
   if (addon.status === "coming_soon") return <span className="badge">{t("addons.comingSoon")}</span>;
   if (!current) return null;
   if (current.status !== "ok") return <span className="badge error">{t("addons.needsAttention")}</span>;
+  // A CRM add-on that is on but has no working connection sends nothing.
+  if (addon.integration && current.enabled && integration?.connection?.status !== "connected") {
+    return <span className="badge error">{t("addons.connectNeeded")}</span>;
+  }
   return current.enabled ? (
     <span className="badge badge-accent">✓ {t("addons.on")}</span>
   ) : (

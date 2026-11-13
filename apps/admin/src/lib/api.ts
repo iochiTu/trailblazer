@@ -233,8 +233,8 @@ export type AddonField =
       options: { value: string; label: Localized }[];
     };
 
-export type AddonCategory = "notifications" | "commerce" | "booking" | "marketing" | "productivity";
-export type AddonCapability = "prompt" | "chat_links" | "notifications";
+export type AddonCategory = "notifications" | "commerce" | "booking" | "marketing" | "productivity" | "crm";
+export type AddonCapability = "prompt" | "chat_links" | "notifications" | "crm";
 
 /** An add-on in the market (from @traiblazer/addons). */
 export interface AddonCatalogEntry {
@@ -248,7 +248,37 @@ export interface AddonCatalogEntry {
   description: Localized;
   capabilities: AddonCapability[];
   fields: AddonField[];
+  /** Id of the outside account (CRM) this add-on needs connected, if any. */
+  integration: string | null;
   defaults: Record<string, unknown>;
+}
+
+/** A CRM the assistant can connect to, and this assistant's connection to it (never its credentials). */
+export interface Integration {
+  id: string;
+  name: string;
+  /** "fields": the owner pastes keys. "oauth2": the owner signs in at the CRM. */
+  auth: "fields" | "oauth2";
+  fields: {
+    key: string;
+    label: Localized;
+    hint?: Localized;
+    secret: boolean;
+    required: boolean;
+    placeholder?: string;
+    maxLength?: number;
+  }[];
+  /** False when the platform can't connect it yet (its own keys for this CRM are missing). */
+  available: boolean;
+  connection: {
+    /** "error": the CRM refused the saved credentials; connect again. */
+    status: "connected" | "error";
+    accountName: string | null;
+    lastError: string | null;
+    lastErrorAt: string | null;
+    lastSuccessAt: string | null;
+    connectedAt: string;
+  } | null;
 }
 
 /** An add-on installed on an assistant. */
@@ -336,6 +366,16 @@ export interface Lead {
   itemName: string | null;
   /** Photos the visitor sent in the conversation. */
   attachmentIds: string[];
+  /** Where the request stands with each connected CRM. */
+  syncs: {
+    provider: string;
+    providerName: string;
+    status: "sent" | "failed";
+    /** Where to open it in the CRM, when the CRM gives a link. */
+    externalUrl: string | null;
+    error: string | null;
+    updatedAt: string;
+  }[];
   createdAt: string;
 }
 

@@ -478,8 +478,8 @@ export const businessProfiles = pgTable(
  * Add-ons installed on an assistant from the add-on market (definitions live in
  * @traiblazer/addons). `config` is validated by the add-on's schema on every save and read;
  * `config_version` is the add-on version that saved it, so later versions can migrate it.
- * Credentials for future integrations (OAuth tokens, API keys) don't belong in `config`: they will
- * get their own encrypted store, referenced from here.
+ * Credentials for integrations (OAuth tokens, API keys) don't belong in `config`: they live sealed
+ * in `integration_connections`, which a CRM add-on names by its connector id.
  */
 export const botAddons = pgTable(
   "bot_addons",
@@ -1019,6 +1019,90 @@ export const leads = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------------
+// CRM integrations (RLS enforced)
+// ---------------------------------------------------------------------------------------------
+
+export const connectionStatuses = ["connected", "error"] as const;
+export type ConnectionStatus = (typeof connectionStatuses)[number];
+
+/**
+ * An assistant's connection to an outside system (Jobber, ServiceTitan, Housecall Pro, a
+ * webhook…; connectors live in @traiblazer/integrations). `credentials` holds the API keys or
+ * OAuth tokens, sealed with AES-256-GCM under INTEGRATIONS_SECRET_KEY and bound to this row's
+ * tenant, assistant and provider: the database never sees them in the clear, and the API never
+ * sends them back to the portal.
+ */
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** Connector id, e.g. "jobber". */
+    provider: text("provider").notNull(),
+    /** "error": the CRM refused the credentials; the owner must connect again. */
+    status: text("status").$type<ConnectionStatus>().notNull().default("connected"),
+    /** The connected account's name at the CRM, shown to the owner. */
+    accountName: text("account_name"),
+    /** Sealed JSON (see `seal` in @traiblazer/integrations). */
+    credentials: text("credentials").notNull(),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    connectedBy: uuid("connected_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("integration_connections_bot_provider_uq").on(t.botId, t.provider),
+    index("integration_connections_tenant_bot_idx").on(t.tenantId, t.botId),
+    foreignKey({
+      name: "integration_connections_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const leadSyncStatuses = ["sent", "failed"] as const;
+export type LeadSyncStatus = (typeof leadSyncStatuses)[number];
+
+/**
+ * Where a request stands with each connected CRM: sent (with the CRM's id and link) or failed
+ * (with the reason, shown to staff, who can send it again). One row per request and provider, so
+ * a retried job never creates the same record twice.
+ */
+export const leadSyncs = pgTable(
+  "lead_syncs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    status: text("status").$type<LeadSyncStatus>().notNull(),
+    externalId: text("external_id"),
+    externalUrl: text("external_url"),
+    error: text("error"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("lead_syncs_lead_provider_uq").on(t.leadId, t.provider),
+    index("lead_syncs_tenant_bot_idx").on(t.tenantId, t.botId),
+    foreignKey({
+      name: "lead_syncs_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+// ---------------------------------------------------------------------------------------------
 // Knowledge gaps (RLS enforced)
 // ---------------------------------------------------------------------------------------------
 
@@ -1455,6 +1539,8 @@ export const rlsTables = [
   "messages",
   "message_attachments",
   "leads",
+  "integration_connections",
+  "lead_syncs",
   "knowledge_gaps",
   "setup_runs",
   "usage_events",

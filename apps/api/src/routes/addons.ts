@@ -1,5 +1,5 @@
 import { addonCatalog, getAddon, parseAddonConfig } from "@traiblazer/addons";
-import { botAddons, bots, withTenant } from "@traiblazer/db";
+import { botAddons, bots, integrationConnections, withTenant } from "@traiblazer/db";
 import { updateAddonSchema } from "@traiblazer/shared";
 import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -128,6 +128,15 @@ export async function addonRoutes(app: FastifyInstance, { db }: AppContext) {
           .where(and(eq(botAddons.botId, botId), eq(botAddons.addonId, addonId)))
           .returning({ id: botAddons.id });
         if (!deleted.length) throw notFound("Add-on");
+        // Removing a CRM add-on also disconnects it: its credentials aren't kept around unused.
+        const provider = getAddon(addonId)?.integration;
+        if (provider) {
+          await tx
+            .delete(integrationConnections)
+            .where(
+              and(eq(integrationConnections.botId, botId), eq(integrationConnections.provider, provider)),
+            );
+        }
         await audit(tx, {
           tenantId,
           actorUserId: request.user!.id,

@@ -9,7 +9,10 @@ import { Agent, fetch } from "undici";
  * every redirect hop is resolved and rejected if any address is not public.
  */
 
-export class UnsafeUrlError extends Error {}
+export class UnsafeUrlError extends Error {
+  // Named so code that can't import this class (CRM connectors) still recognises a refused address.
+  override name = "UnsafeUrlError";
+}
 
 export interface SafeFetchOptions {
   /** Tests only: allow loopback/private addresses. */
@@ -139,6 +142,21 @@ export async function assertPublicUrl(url: URL, allowPrivate = false): Promise<v
     throw new UnsafeUrlError("URL resolves to a private address");
   }
 }
+
+/**
+ * `fetch` for addresses a business gives us to call (webhooks) and for outside APIs: the address
+ * must be public, the connection is pinned to the checked addresses, and redirects are refused
+ * (the caller sets `redirect: "error"`; a redirect could point anywhere).
+ */
+export const publicFetch: typeof globalThis.fetch = async (input, init) => {
+  const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  await assertPublicUrl(url);
+  return (await fetch(url, {
+    ...(init as Record<string, unknown>),
+    redirect: "error",
+    dispatcher: publicOnlyAgent,
+  })) as unknown as Response;
+};
 
 export interface SafeResponse {
   url: string;

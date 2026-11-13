@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { createDb } from "@traiblazer/db";
+import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import {
   createEmbeddingsFromEnv,
   createGatewayFromEnv,
@@ -56,7 +57,20 @@ if (embeddingProvider instanceof LocalEmbeddings) {
 // Phone and SMS (docs/PHONE_AND_SMS.md): the webhook routes exist only when a provider is configured.
 const telephony = createTelephonyFromEnv();
 
-const app = await buildApp({ db, config, gateway, embeddings, telephony, chatDistDir, redis, limiter });
+// CRM connections (Jobber, ServiceTitan…): off without INTEGRATIONS_SECRET_KEY.
+const integrations = loadIntegrationsConfig(process.env);
+
+const app = await buildApp({
+  db,
+  config,
+  gateway,
+  embeddings,
+  telephony,
+  chatDistDir,
+  redis,
+  limiter,
+  integrations,
+});
 if (offline) {
   app.log.warn(
     "No LLM API key configured: chat answers come from the offline test provider (set ANTHROPIC_API_KEY).",
@@ -66,6 +80,9 @@ if (offline) {
   app.log.warn(
     "No chat model can call tools: assistants can't save visitors' requests or check service areas. List the model in OPENROUTER_TOOL_MODELS or OPENAI_COMPATIBLE_TOOL_MODELS.",
   );
+}
+if (!integrations.secretKey) {
+  app.log.warn("INTEGRATIONS_SECRET_KEY not set: CRM add-ons (Jobber, ServiceTitan…) can't be connected.");
 }
 if (!redis) app.log.warn("REDIS_URL not set: rate limits are kept per server (fine for one server).");
 

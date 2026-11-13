@@ -25,6 +25,7 @@ import {
   type UrgentAlertPayload,
 } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
+import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
 import { createTelephonyFromEnv } from "@traiblazer/telephony";
 import { createMailerFromEnv } from "./mailer.js";
@@ -53,6 +54,8 @@ const mailer = createMailerFromEnv(process.env, log);
 const setupInputChars = Number(process.env.SETUP_MAX_INPUT_CHARS) || undefined;
 /** Admin portal origin, for links in urgent alerts. */
 const adminUrl = process.env.ADMIN_ORIGIN ? new URL(process.env.ADMIN_ORIGIN).origin : undefined;
+/** CRM connections (Jobber, ServiceTitan…): off without INTEGRATIONS_SECRET_KEY. */
+const integrations = loadIntegrationsConfig(process.env);
 
 async function run(job: JobRow): Promise<void> {
   switch (job.type) {
@@ -81,7 +84,7 @@ async function run(job: JobRow): Promise<void> {
     }
     case JOB_TYPES.addonEffect: {
       const payload = job.payload as unknown as AddonEffectPayload;
-      const outcome = await runAddonEffect({ db, mailer }, job.tenantId, payload);
+      const outcome = await runAddonEffect({ db, mailer, integrations, adminUrl }, job.tenantId, payload);
       log("add-on effect", { id: job.id, addonId: payload.addonId, kind: payload.effect.kind, outcome });
       return;
     }
@@ -129,7 +132,12 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-log("worker started", { workerId, embeddings: embeddings?.model ?? null, smtp: !!process.env.SMTP_URL });
+log("worker started", {
+  workerId,
+  embeddings: embeddings?.model ?? null,
+  smtp: !!process.env.SMTP_URL,
+  integrations: !!integrations.secretKey,
+});
 while (!stopping) {
   let job: JobRow | null = null;
   try {

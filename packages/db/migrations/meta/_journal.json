@@ -295,6 +295,20 @@
       "when": 1794573154450,
       "tag": "0041_phone_sms",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794603085302,
+      "tag": "0042_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794603086402,
+      "tag": "0043_integrations_rls",
+      "breakpoints": true
     }
   ]
 }

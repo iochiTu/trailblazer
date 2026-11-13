@@ -61,6 +61,14 @@ export function RequestsTab({
     void change(() => api(`${base}/leads/${lead.id}`, { method: "DELETE" }));
   }
 
+  /** Queues the request for the CRM again; the worker sends it within moments. */
+  const resend = (lead: Lead, provider: string) =>
+    change(async () => {
+      await api(`${base}/leads/${lead.id}/sync/${provider}`, { method: "POST" });
+      // Give the worker a moment so the reload shows the outcome.
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    });
+
   const toggle = (on: boolean) =>
     change(async () => {
       await api(base, { method: "PATCH", body: { settings: { followUps: on } } });
@@ -202,6 +210,41 @@ export function RequestsTab({
                     </span>
                   )}
                 </div>
+
+                {lead.syncs?.length > 0 && (
+                  <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {lead.syncs.map((sync) => (
+                      <li key={sync.provider} className="flex flex-wrap items-center gap-2">
+                        {sync.status === "sent" ? (
+                          <span className="badge badge-accent">
+                            ✓ {t("requests.sync.sent", { name: sync.providerName })}
+                          </span>
+                        ) : (
+                          <span className="badge error" title={sync.error ?? undefined}>
+                            {t("requests.sync.failed", { name: sync.providerName })}
+                          </span>
+                        )}
+                        {sync.status === "sent" && sync.externalUrl && (
+                          <a className="underline" href={sync.externalUrl} target="_blank" rel="noreferrer">
+                            {t("requests.sync.open", { name: sync.providerName })}
+                          </a>
+                        )}
+                        {sync.status === "failed" && (
+                          <>
+                            {sync.error && <span className="muted">{sync.error}</span>}
+                            <button
+                              type="button"
+                              className="btn-text"
+                              onClick={() => resend(lead, sync.provider)}
+                            >
+                              {t("requests.sync.retry")}
+                            </button>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2">
                   {lead.status === "new" && (
