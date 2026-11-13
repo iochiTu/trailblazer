@@ -45,6 +45,25 @@ const envSchema = z.object({
   CONVERSATION_MAX_QUESTIONS: z.coerce.number().int().positive().optional(),
   /** How long plans and policies are cached per API server. */
   PLATFORM_CACHE_SECONDS: z.coerce.number().int().min(0).default(30),
+  /**
+   * Public marketing site (pricing and local pages, llms.txt) the MCP server links to; defaults to
+   * ADMIN_ORIGIN, where those pages are served.
+   */
+  SITE_URL: z.url().optional(),
+  /** Public address of the MCP server, as announced to AI assistants (default: SITE_URL + /api/mcp). */
+  MCP_PUBLIC_URL: z.url().optional(),
+  /**
+   * Company details published on the marketing pages, llms.txt and the MCP server. Each one is
+   * optional and simply left out when not set.
+   */
+  BUSINESS_LEGAL_NAME: z.string().optional(),
+  BUSINESS_EMAIL: z.string().optional(),
+  BUSINESS_PHONE: z.string().optional(),
+  BUSINESS_STREET: z.string().optional(),
+  BUSINESS_CITY: z.string().optional(),
+  BUSINESS_REGION: z.string().optional(),
+  BUSINESS_POSTAL_CODE: z.string().optional(),
+  BUSINESS_COUNTRY: z.string().optional(),
   /** Shared rate limits and counters across API servers. Without it, limits are per server. */
   REDIS_URL: z.string().optional(),
   /** How long an answer waits for the question's vector once the keyword search is ready (docs/EMBEDDINGS.md). */

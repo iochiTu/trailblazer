@@ -32,6 +32,7 @@ packages/
   industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)
   evals/            Answer-quality and safety evals for the pilot packs, EN/FR (`pnpm evals`)
   shared/           Zod request schemas shared by API and admin
+  marketing/        Our own public site as data: cities, industries, landing pages, structured data, llms.txt, MCP facts
 infra/postgres/     Local database init (roles, test database)
 ```
 
@@ -149,6 +150,87 @@ booking-provider-tags list, could not be confirmed without developer/partner acc
 top of each connector). Jobber apps work for up to 5 accounts as drafts, then need Jobber's review
 (which also expects an `APP_DISCONNECT` webhook handler, not built yet); ServiceTitan requires its
 partner program.
+
+## Marketing site, llms.txt and MCP server
+
+Traiblazer's own public pages live in the admin app next to the landing page (`/`), and are built
+from one data package, `packages/marketing`, so the pages, the sitemap, `llms.txt` and the MCP
+server can't disagree.
+
+| Address | What it is |
+| --- | --- |
+| `/en/local/<city>/<industry>`, `/fr/local/…` | Landing page for one industry in one city ("AI assistant for … in Thunder Bay"): one template (`buildLandingPage`), own title, description, canonical and `hreflang` links, and `Service` + `FAQPage` + `BreadcrumbList` structured data |
+| `/en/local/<city>`, `/en/local` | City page and the index of cities |
+| `/en/pricing`, `/fr/pricing` | Plans and prices, with one schema.org `Offer` per priced plan |
+| `/sitemap.xml`, `/robots.txt` | Every marketing page in both languages; the portal and `/api/` are closed to crawlers |
+| `/llms.txt`, `/llms-full.txt` | Plain-text description for AI assistants ([llmstxt.org](https://llmstxt.org)) |
+| `/api/mcp` (API: `/mcp`) | Public, read-only MCP server |
+
+- **Prices are never written in code or copy.** The pricing page, `llms.txt` and the MCP server read
+  the active plans from the operator console (`GET /v1/catalog/plans`). Change a price there and all
+  three follow within five minutes. If the API can't be reached, they show no numbers.
+- **Company details come from settings** (`BUSINESS_LEGAL_NAME`, `BUSINESS_EMAIL`, `BUSINESS_PHONE`,
+  `BUSINESS_STREET`…, see `.env.example`). Anything not set is left out of the pages, the structured
+  data, `llms.txt` and the MCP answers.
+- **`SITE_URL`** is the public address (admin app and API). Until it is an `https` address on a real
+  domain, every marketing page is `noindex` and `robots.txt` blocks everything, so previews and
+  local copies don't get listed.
+- The language is in the address; `src/proxy.ts` passes it to the root layout so `<html lang>`
+  matches. Page text is in `packages/marketing` (EN/FR side by side), not in the UI message catalog.
+
+**Add a city:** add an entry to `packages/marketing/src/cities.ts` (slug, EN/FR name and region, two
+short true paragraphs about the place, the communities around it, search aliases). **Add an
+industry:** add an entry to `packages/marketing/src/industries.ts` for an industry pack businesses
+can already choose (rollout phase 1); the business types must line up with the pack's variants, and
+the suggested questions come from the pack's template. Then `pnpm --filter @traiblazer/marketing
+test`: it checks both languages are complete and that every page has its own title, description
+and address. Nothing else needs editing: pages, sitemap, `llms.txt` and MCP answers pick it up.
+Write only what the product does today and what is true of the place.
+
+### MCP server
+
+`apps/api/src/mcp/server.ts` (tools) and `apps/api/src/routes/mcp.ts` (transport). It lives in the
+API rather than a new app because the API already has per-address rate limits shared through Redis,
+the live plans, logging and deployment; it needs no session and no database access of its own.
+
+- Streamable HTTP, stateless (spec revision 2026-07-28; 2025-era clients are served too), JSON
+  responses, official TypeScript SDK (`@modelcontextprotocol/server`). `GET`/`DELETE` answer 405.
+- No sign-in, no tenant data, no writes. Tools: `get_company_info`, `list_industries`,
+  `get_pricing`, `list_cities`, `check_city_served`, `get_started`; each takes an optional
+  `language` (`en`/`fr`), is marked read-only and returns structured content.
+- 60 calls per minute per address (on top of the API-wide limit), 64 KB request limit. Any website
+  may call it (`Access-Control-Allow-Origin: *`): it never reads the session cookie.
+
+Try it locally with the MCP Inspector (`npx @modelcontextprotocol/inspector`, transport "Streamable
+HTTP", URL `http://localhost:4000/mcp`), or add it to an assistant:
+
+```bash
+claude mcp add --transport http traiblazer https://<your-domain>/api/mcp
+```
+
+In Claude (web/desktop) add it under Settings → Connectors → Add custom connector with the same URL;
+other assistants that support remote MCP servers take the URL the same way.
+
+**Register it so assistants can find it** (after the site is live on its domain):
+
+1. `llms.txt` already links it; nothing to do.
+2. List it in the official MCP Registry (still in preview). Create `server.json`:
+
+   ```json
+   {
+     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+     "name": "<reversed-domain>/traiblazer",
+     "title": "Traiblazer",
+     "description": "Public information about Traiblazer: what it is, industries, pricing, cities, how to start.",
+     "version": "1.0.0",
+     "remotes": [{ "type": "streamable-http", "url": "https://<your-domain>/api/mcp" }]
+   }
+   ```
+
+   Then install the `mcp-publisher` CLI (releases of `modelcontextprotocol/registry`), prove you own
+   the domain (`mcp-publisher login dns …` with a TXT record, or `login http`), and run
+   `mcp-publisher publish`. Check the registry's quickstart first: the format may still change.
+3. Submit the same URL to the connector directories of the assistants you care about.
 
 ## AI providers
 

@@ -15,8 +15,11 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const cookieLang = (await cookies()).get("tb_lang")?.value;
-  const headerLang = (await headers()).get("accept-language")?.split(",")[0];
-  const language = resolveUiLanguage(cookieLang ?? headerLang);
+  const requestHeaders = await headers();
+  // Marketing pages (/en/…, /fr/…) carry their language in the address; see src/proxy.ts.
+  const pathLang = requestHeaders.get("x-tb-lang");
+  const headerLang = requestHeaders.get("accept-language")?.split(",")[0];
+  const language = resolveUiLanguage(pathLang ?? cookieLang ?? headerLang);
 
   return (
     <html lang={language} dir={getDirection(language)} className={sans.variable}>

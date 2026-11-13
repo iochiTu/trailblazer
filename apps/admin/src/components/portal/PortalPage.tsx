@@ -16,7 +16,9 @@ type PlanCatalog = { plans: PublicPlan[]; defaultPlan: string; maxBusinessesPerA
 
 /** Public landing page: what the product does, how to use it, and the subscription plans. */
 export function PortalPage({ signedIn }: { signedIn: boolean }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  // The marketing pages exist in English and French.
+  const siteLang = language === "fr" ? "fr" : "en";
   const [plans, setPlans] = useState<PlanCatalog | null | "error">(null);
   const [languageCount, setLanguageCount] = useState<number | null>(null);
 
@@ -187,6 +189,11 @@ export function PortalPage({ signedIn }: { signedIn: boolean }) {
           <BrandMark size={24} />
           {t("portal.footer.rights", { year: new Date().getFullYear() })}
         </span>
+        <nav className="flex flex-wrap gap-x-5 gap-y-2">
+          <Link href={`/${siteLang}/local`}>{t("portal.footer.cities")}</Link>
+          <Link href={`/${siteLang}/pricing`}>{t("portal.footer.pricing")}</Link>
+          <a href="/llms.txt">{t("portal.footer.forAi")}</a>
+        </nav>
         <LanguageSwitcher />
       </footer>
     </div>
