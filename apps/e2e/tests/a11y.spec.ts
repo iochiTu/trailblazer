@@ -149,6 +149,7 @@ test.describe("business owners", () => {
       "appearance",
       "test",
       "share",
+      "phone",
       "requests",
       "conversations",
     ]) {

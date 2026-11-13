@@ -1,5 +1,6 @@
 import type { Db } from "@traiblazer/db";
 import type { LLMGateway, QueryEmbedder } from "@traiblazer/llm";
+import type { TelephonyProvider } from "@traiblazer/telephony";
 import type { Redis } from "ioredis";
 import type { AppConfig } from "./config.js";
 import type { Limiter } from "./lib/limiter.js";
@@ -11,6 +12,8 @@ export interface AppContext {
   gateway: LLMGateway;
   /** Embeds visitors' questions for search by meaning (null: keyword search only). */
   embeddings?: QueryEmbedder | null;
+  /** Phone and SMS provider (docs/PHONE_AND_SMS.md); null or absent: those routes don't exist. */
+  telephony?: TelephonyProvider | null;
   /** Directory with the built chat page and widget (apps/chat/dist). */
   chatDistDir?: string;
   /** Shared store for rate limits (needed with several API servers). */

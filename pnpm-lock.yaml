@@ -96,6 +96,9 @@ importers:
       '@traiblazer/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@traiblazer/telephony':
+        specifier: workspace:*
+        version: link:../../packages/telephony
       drizzle-orm:
         specifier: 0.45.4
         version: 0.45.4(@opentelemetry/api@1.10.0)(postgres@3.4.9)
@@ -167,6 +170,9 @@ importers:
       '@traiblazer/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@traiblazer/telephony':
+        specifier: workspace:*
+        version: link:../../packages/telephony
       nodemailer:
         specifier: 8.0.11
         version: 8.0.11
@@ -226,6 +232,9 @@ importers:
       '@traiblazer/shared':
         specifier: workspace:*
         version: link:../shared
+      '@traiblazer/telephony':
+        specifier: workspace:*
+        version: link:../telephony
       cheerio:
         specifier: 1.2.0
         version: 1.2.0
@@ -374,6 +383,18 @@ importers:
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
+
+  packages/telephony:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 5.1.0
+        version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
 packages:
 

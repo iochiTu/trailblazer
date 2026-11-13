@@ -339,6 +339,29 @@ export interface Lead {
   createdAt: string;
 }
 
+/** An assistant's phone number and what it does (Phone tab). */
+export interface PhoneNumber {
+  id: string;
+  e164: string;
+  /** The number as people write it, e.g. "+1 807 555 0142". */
+  display: string;
+  provider: string;
+  smsEnabled: boolean;
+  /** What a call does: "text_back" = one sentence, then a text; "off" = calls are refused. */
+  callMode: "text_back" | "off";
+}
+
+export interface PhoneSettings {
+  phone: PhoneNumber | null;
+  /** Phone and SMS are set up on this platform. */
+  available: boolean;
+  stats: { textsSent30Days: number; optOuts: number };
+  /** True for Traiblazer staff in support mode: only they assign or remove a number. */
+  canAssign: boolean;
+  /** Addresses to enter at the telephony provider (staff only). */
+  webhooks: { sms: string; voice: string } | null;
+}
+
 export interface Conversation {
   id: string;
   channel: string;
