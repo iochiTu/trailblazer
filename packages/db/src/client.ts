@@ -50,6 +50,30 @@ export async function resolveBotKey(
   return row ? { tenantId: row.tenant_id, botId: row.bot_id, allowedOrigins: row.allowed_origins } : null;
 }
 
+/** The assistant a phone number belongs to, without tenant context (an incoming text or call names only the number). */
+export async function resolvePhoneNumber(
+  db: Db,
+  e164: string,
+): Promise<{ id: string; tenantId: string; botId: string; smsEnabled: boolean; callMode: string } | null> {
+  const rows = await db.execute<{
+    id: string;
+    tenant_id: string;
+    bot_id: string;
+    sms_enabled: boolean;
+    call_mode: string;
+  }>(sql`select id, tenant_id, bot_id, sms_enabled, call_mode from app_resolve_phone_number(${e164})`);
+  const row = rows[0];
+  return row
+    ? {
+        id: row.id,
+        tenantId: row.tenant_id,
+        botId: row.bot_id,
+        smsEnabled: row.sms_enabled,
+        callMode: row.call_mode,
+      }
+    : null;
+}
+
 /** The public key of the assistant whose business page has this friendly link, without tenant context. */
 export async function resolvePageSlug(db: Db, slug: string): Promise<string | null> {
   const rows = await db.execute<{ public_key: string }>(

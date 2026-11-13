@@ -23,8 +23,10 @@ import { leadRoutes } from "./routes/leads.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { pageRoutes } from "./routes/page.js";
+import { phoneRoutes } from "./routes/phone.js";
 import { publicRoutes } from "./routes/public.js";
 import { setupRoutes } from "./routes/setup.js";
+import { telephonyRoutes } from "./routes/telephony.js";
 import { tenantRoutes } from "./routes/tenants.js";
 import { usageRoutes } from "./routes/usage.js";
 
@@ -126,6 +128,8 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => demoRoutes(scope, ctx));
   await app.register(async (scope) => onboardingRoutes(scope, ctx));
   await app.register(async (scope) => publicRoutes(scope, ctx));
+  await app.register(async (scope) => telephonyRoutes(scope, ctx));
+  await app.register(async (scope) => phoneRoutes(scope, ctx));
 
   return app;
 }

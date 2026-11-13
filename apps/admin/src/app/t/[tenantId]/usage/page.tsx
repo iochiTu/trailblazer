@@ -218,7 +218,7 @@ export default function UsagePage() {
   const refused = report.month.blockedQuota + report.month.blockedBusy + report.month.blockedVisitor;
   const canManage = tenant.role === "owner" || tenant.role === "admin";
   const channelName = (c: string) =>
-    ["hosted", "inline", "widget", "playground"].includes(c) ? t(`usage.channel.${c as "hosted"}`) : c;
+    ["hosted", "inline", "widget", "playground", "sms"].includes(c) ? t(`usage.channel.${c as "hosted"}`) : c;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6">

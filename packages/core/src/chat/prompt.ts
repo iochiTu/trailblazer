@@ -1,4 +1,4 @@
-import type { bots, businessProfiles, WeeklyHours } from "@traiblazer/db";
+import type { bots, businessProfiles, Channel, WeeklyHours } from "@traiblazer/db";
 import { getLanguage } from "@traiblazer/i18n";
 import { resolveBehavior, type Workflow } from "@traiblazer/industry-packs";
 import type { SystemBlock } from "@traiblazer/llm";
@@ -175,6 +175,13 @@ export interface CatalogEntry {
 
 const oneLine = (text: string) => text.replace(/[\r\n<>]+/g, " ").trim();
 
+/** How to write when the conversation is by text message (docs/PHONE_AND_SMS.md §4.2). */
+const SMS_RULES = `# This conversation is by text message (SMS)
+- Write plain text only: no Markdown, no bullet symbols, no headings.
+- Keep it short: one to three sentences, under about 300 characters when you can, and one question at a time.
+- Buttons and photos can't be shown in a text. Never write [[action:...]] or [[photo:...]] markers here. Where you would show a Call button, write the business's phone number; where you would show a Book button, write the booking link in full; for a quote or a booking of a service, offer to pass the request on.
+- The customer is texting from their own phone number, and the business gets that number with any request you pass on, so don't ask for it. You still need their name. Use another number or an email only if they give one.`;
+
 /** The business's services and products as a list, or null when it has none. */
 export function servicesBlock(items: CatalogEntry[]): string | null {
   if (!items.length) return null;
@@ -223,6 +230,8 @@ export function buildSystemBlocks(input: {
   notices?: string[];
   /** How the visitor's latest message was sorted (keyword rules and the auxiliary model). */
   triage?: { urgency: "urgent" | "danger" | null; advice: boolean };
+  /** Where the conversation happens; "sms" changes how the reply is written. */
+  channel?: Channel;
   now: Date;
 }): SystemBlock[] {
   const { bot, profile, passages, now } = input;
@@ -262,7 +271,7 @@ export function buildSystemBlocks(input: {
     { text: PLATFORM_RULES },
     { text: botBlock, cacheBreakpoint: true },
     {
-      text: `Current local date and time at the business: ${localTime} (${timezone}).${
+      text: `${input.channel === "sms" ? `${SMS_RULES}\n\n` : ""}Current local date and time at the business: ${localTime} (${timezone}).${
         running.length ? `\n\n<notices>\n${running.map((n) => `- ${n}`).join("\n")}\n</notices>` : ""
       }${triageBlock(input.triage)}\n\n<knowledge>\n${knowledge}\n</knowledge>${
         photos.length

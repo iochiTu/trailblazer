@@ -258,6 +258,27 @@ that follows records the service (`leads.catalog_item_id`, `item_name`), shown o
 in the notification emails. One item per reply, once per conversation, and never on an urgent problem
 or a request for advice.
 
+## Text messages (SMS) and missed calls
+
+Design and status: [docs/PHONE_AND_SMS.md](docs/PHONE_AND_SMS.md). With `TWILIO_ACCOUNT_SID` and
+`TWILIO_AUTH_TOKEN` set, an assistant that has a phone number answers texts and follows up missed calls:
+
+- **A text** to the number is answered by the same assistant as the chat (channel `sms`): plain,
+  short replies; the phone number or link written out instead of a button; a request carries the
+  number the customer writes from. One thread per customer number, a new one after 24 hours.
+- **STOP, START and HELP** (and ARRET, AIDE) are handled before the assistant; opt-outs are kept per
+  assistant (`sms_opt_outs`) and nothing more is sent to that number.
+- **A call** in "text back" mode hears one sentence, then gets one text a day that opens the
+  conversation. Answering calls by voice is the next phase.
+- **Sending** is a worker job (`message.send`) with retries; every text is kept in `outbound_messages`
+  with its delivery status, and its parts are recorded as usage (kind `sms`).
+- **Webhooks** (`/v1/telephony/twilio/sms`, `/voice`, `/status`) accept only requests signed by the
+  provider. The provider sits behind `packages/telephony`, so it can be changed.
+- **The number** is assigned by Traiblazer staff in support mode (`PUT /v1/tenants/:t/bots/:b/phone`);
+  the business turns texting on or off and chooses what a call does (`PATCH`). Both are on the
+  assistant's **Phone & texts** tab, which also explains how to forward missed calls to the number.
+- **Trying it locally** without a Twilio account: `TELEPHONY_PROVIDER=fake` (see `.env.example`).
+
 ## Questions the assistant couldn't answer (knowledge gaps)
 
 When the business's information doesn't contain the answer, the assistant says so and ends its reply

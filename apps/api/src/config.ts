@@ -30,6 +30,11 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   /** Public origin of this service: chat page links, widget script and same-origin checks. */
   PUBLIC_URL: z.url().default("http://localhost:4000"),
+  /**
+   * Public origin the telephony provider calls for webhooks, when it differs from PUBLIC_URL (a
+   * tunnel in development). Signatures are checked against this address.
+   */
+  TELEPHONY_WEBHOOK_URL: z.url().optional(),
   /** Admin portal origin; allowed to frame the chat page (playground). */
   ADMIN_ORIGIN: z.url().default("http://localhost:3000"),
   /**

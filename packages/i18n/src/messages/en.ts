@@ -320,6 +320,47 @@ export const en = {
   "share.sitesHint": "The widget and iframe only work on these websites.",
   "share.addSite": "Add website",
   "bots.tab.requests": "Requests",
+  "bots.tab.phone": "Phone & texts",
+  "phone.title": "Phone number",
+  "phone.intro":
+    "Your assistant can answer text messages and follow up calls you miss, with the same information as the chat on your page.",
+  "phone.unavailable": "Phone and text messages aren't available on this platform yet.",
+  "phone.none":
+    "This assistant doesn't have a phone number yet. Traiblazer sets it up for you: contact us to get one in your area code.",
+  "phone.number": "Number",
+  "phone.texts.title": "Text messages",
+  "phone.texts.enable": "Answer text messages sent to this number",
+  "phone.texts.hint":
+    "Customers can text STOP at any time to stop getting messages, and HELP to get your phone number.",
+  "phone.calls.title": "Calls",
+  "phone.calls.label": "When someone calls this number",
+  "phone.calls.textBack": "Say we can't take the call, then text the caller",
+  "phone.calls.off": "Don't answer",
+  "phone.calls.hint":
+    "The caller hears one sentence and gets one text message a day, so they can write what they need. Answering calls by voice isn't available yet.",
+  "phone.forward.title": "Send your missed calls here",
+  "phone.forward.intro":
+    "Keep your own number. Ask your phone company to forward the calls you don't answer (no answer, busy, after hours) to the number above. Each company does it differently:",
+  "phone.forward.mobile":
+    'Mobile: look for "conditional call forwarding" in your carrier\'s app or help pages.',
+  "phone.forward.landline":
+    'Landline or office phone system: ask for "call forward no answer" and "call forward busy".',
+  "phone.forward.test":
+    "Then call your own number from another phone, don't answer, and check that the text arrives.",
+  "phone.stats":
+    "{texts, plural, one {# text message} other {# text messages}} sent in the last 30 days · {stopped, plural, one {# number} other {# numbers}} opted out",
+  "phone.saved": "Saved",
+  "phone.staff.title": "Set up by Traiblazer staff",
+  "phone.staff.hint":
+    "Buy the number at the provider, point its message and call webhooks at the addresses below, then enter it here.",
+  "phone.staff.number": "Phone number",
+  "phone.staff.assign": "Assign number",
+  "phone.staff.replace": "Replace number",
+  "phone.staff.remove": "Remove number",
+  "phone.staff.removeConfirm":
+    "Remove this number from the assistant? Texts and calls to it will no longer be answered.",
+  "phone.staff.webhookSms": "A message comes in",
+  "phone.staff.webhookVoice": "A call comes in",
   "requests.intro":
     "When a visitor wants to be called back, asks for a quote or needs something only you can do, your assistant takes their name and how to reach them, and saves the request here.",
   "requests.enable": "Let the assistant take requests",
@@ -380,6 +421,7 @@ export const en = {
   "usage.channel.inline": "Embedded page",
   "usage.channel.widget": "Website widget",
   "usage.channel.playground": "Admin tests",
+  "usage.channel.sms": "Text messages",
   "usage.limits": "Limits",
   "usage.monthlyLimit": "Monthly question limit",
   "usage.monthlyLimitHint":

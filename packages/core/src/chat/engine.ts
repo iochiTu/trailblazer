@@ -654,7 +654,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       const [passages, photos] = queries.length
         ? await withTenant(deps.db, input.tenantId, async (tx) => [
             await retrievePassages(tx, { botId: bot.id, queries, embedding }),
-            await retrievePhotos(tx, { botId: bot.id, queries, embedding }),
+            // A text message can't show a photo.
+            input.channel === "sms" ? [] : await retrievePhotos(tx, { botId: bot.id, queries, embedding }),
           ])
         : [[], []];
       offeredPhotos = photos as PhotoPassage[];
@@ -688,6 +689,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           catalog,
           notices: runningNotices,
           triage: { urgency, advice },
+          channel: input.channel,
           addons: addonPrompt(addons, addonCtx, addonLog),
           now: deps.now?.() ?? new Date(),
         }),
@@ -785,6 +787,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             language,
             urgent: Boolean(urgency),
             catalog,
+            // By text, the customer's own number is how the business reaches them.
+            visitorPhone: input.channel === "sms" ? input.visitorId : undefined,
             embeddings: deps.embeddings,
             onEmbedding: countEmbedding,
             signal: input.signal,

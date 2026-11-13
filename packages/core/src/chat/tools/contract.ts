@@ -30,6 +30,8 @@ export interface ToolContext {
   language: string | null;
   /** The visitor's latest message was triaged as urgent or a danger (see triage.ts). */
   urgent?: boolean;
+  /** The number the customer is texting from (SMS): a way to reach them without asking. */
+  visitorPhone?: string;
   /** The business's services and products, with the short ids the model was shown ("s1"). */
   catalog?: { ref: string; id: string; name: string; action: string }[];
   embeddings?: QueryEmbedder | null;

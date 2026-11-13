@@ -710,7 +710,8 @@ export const qaPairs = pgTable(
 // Conversations & usage (RLS enforced)
 // ---------------------------------------------------------------------------------------------
 
-export const channels = ["hosted", "inline", "widget", "playground"] as const;
+/** Where a conversation happens. "sms" is a text thread with a phone number (docs/PHONE_AND_SMS.md). */
+export const channels = ["hosted", "inline", "widget", "playground", "sms"] as const;
 export type Channel = (typeof channels)[number];
 
 /**
@@ -1332,6 +1333,106 @@ export const assets = pgTable(
   (t) => [index("assets_tenant_idx").on(t.tenantId)],
 );
 
+// ---------------------------------------------------------------------------------------------
+// Phone and SMS (RLS enforced; docs/PHONE_AND_SMS.md)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * What the assistant does with a call to its number: "text_back" answers with one sentence, hangs
+ * up and texts the caller; "off" refuses the call. (Answering by voice comes with the voice phase.)
+ */
+export const phoneCallModes = ["text_back", "off"] as const;
+export type PhoneCallMode = (typeof phoneCallModes)[number];
+
+/** A phone number that belongs to an assistant: texts to it are answered, calls follow `callMode`. */
+export const phoneNumbers = pgTable(
+  "phone_numbers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** E.164, e.g. "+18075550142". One assistant per number across the platform. */
+    e164: text("e164").notNull(),
+    /** Telephony provider the number is with ("twilio"). */
+    provider: text("provider").notNull(),
+    smsEnabled: boolean("sms_enabled").notNull().default(true),
+    callMode: text("call_mode").$type<PhoneCallMode>().notNull().default("text_back"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("phone_numbers_e164_uq").on(t.e164),
+    index("phone_numbers_bot_idx").on(t.tenantId, t.botId),
+    foreignKey({
+      name: "phone_numbers_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** "reply": an answer to a text; "text_back": the text after a missed call; "system": HELP and the like. */
+export const outboundMessageKinds = ["reply", "text_back", "system"] as const;
+export type OutboundMessageKind = (typeof outboundMessageKinds)[number];
+export const outboundMessageStatuses = ["queued", "sent", "delivered", "failed"] as const;
+export type OutboundMessageStatus = (typeof outboundMessageStatuses)[number];
+
+/** A text message we send: queued here, sent by the worker, updated by the provider's delivery reports. */
+export const outboundMessages = pgTable(
+  "outbound_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** Not a foreign key: the record of what was sent outlives the conversation. */
+    conversationId: uuid("conversation_id"),
+    kind: text("kind").$type<OutboundMessageKind>().notNull(),
+    fromNumber: text("from_number").notNull(),
+    toNumber: text("to_number").notNull(),
+    body: text("body").notNull(),
+    status: text("status").$type<OutboundMessageStatus>().notNull().default("queued"),
+    /** The provider's id once it accepted the message; its error code when it failed. */
+    providerId: text("provider_id"),
+    error: text("error"),
+    /** Parts the carrier bills the text as. */
+    segments: integer("segments").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [
+    index("outbound_messages_bot_created_idx").on(t.tenantId, t.botId, t.createdAt),
+    index("outbound_messages_to_idx").on(t.tenantId, t.toNumber, t.createdAt),
+    foreignKey({
+      name: "outbound_messages_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Numbers that texted STOP to an assistant: nothing more is sent to them until they text START. */
+export const smsOptOuts = pgTable(
+  "sms_opt_outs",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    number: text("number").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "sms_opt_outs_pk", columns: [t.tenantId, t.botId, t.number] }),
+    foreignKey({
+      name: "sms_opt_outs_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 /** Tables protected by row-level security. Keep in sync with migrations. */
 export const rlsTables = [
   "usage_counters",
@@ -1357,4 +1458,7 @@ export const rlsTables = [
   "knowledge_gaps",
   "setup_runs",
   "usage_events",
+  "phone_numbers",
+  "outbound_messages",
+  "sms_opt_outs",
 ] as const;

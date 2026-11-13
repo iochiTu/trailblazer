@@ -161,7 +161,11 @@ After it succeeds, tell the visitor their request was passed on and the business
       const rawEmail = clean(input.email);
       const email = rawEmail?.includes("@") ? rawEmail.toLowerCase() : null;
       const rawPhone = clean(input.phone);
-      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : null;
+      // By text message, the number the customer writes from stands in when they gave no other.
+      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : (ctx.visitorPhone ?? null);
+      const ownNumber = Boolean(
+        phone && ctx.visitorPhone && digits(ctx.visitorPhone).endsWith(digits(phone).slice(-10)),
+      );
       if (!email && !phone) {
         return {
           isError: true,
@@ -189,7 +193,7 @@ After it succeeds, tell the visitor their request was passed on and the business
             .from(messages)
             .where(and(eq(messages.conversationId, ctx.conversationId), eq(messages.role, "user")))
         ).map((m) => m.content);
-        for (const detail of [email && { email }, phone && { phone }]) {
+        for (const detail of [email && { email }, phone && !ownNumber && { phone }]) {
           if (detail && !typedByVisitor(detail, visitorText)) {
             const value = "email" in detail ? detail.email : detail.phone;
             return {

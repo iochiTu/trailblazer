@@ -9,6 +9,7 @@ import { ConversationsTab } from "@/components/bot/ConversationsTab";
 import { GeneralTab } from "@/components/bot/GeneralTab";
 import { KnowledgeTab } from "@/components/bot/KnowledgeTab";
 import { PageTab } from "@/components/bot/PageTab";
+import { PhoneTab } from "@/components/bot/PhoneTab";
 import { RequestsTab } from "@/components/bot/RequestsTab";
 import { ShareTab } from "@/components/bot/ShareTab";
 import { WorkflowsTab } from "@/components/bot/WorkflowsTab";
@@ -27,6 +28,7 @@ type Tab =
   | "appearance"
   | "test"
   | "share"
+  | "phone"
   | "requests"
   | "conversations";
 const TABS: Tab[] = [
@@ -38,6 +40,7 @@ const TABS: Tab[] = [
   "appearance",
   "test",
   "share",
+  "phone",
   "requests",
   "conversations",
 ];
@@ -165,6 +168,7 @@ export default function BotPage() {
           <AppearanceTab detail={detail} base={base} tenantId={tenantId} onChange={load} />
         )}
         {tab === "share" && <ShareTab detail={detail} base={base} onChange={load} />}
+        {tab === "phone" && <PhoneTab base={base} />}
         {tab === "requests" && (
           <RequestsTab
             detail={detail}

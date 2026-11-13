@@ -1,6 +1,7 @@
 # Phone reception and SMS answering: design
 
-Status: draft for review (November 2026). Nothing here is built. Related: PLAN §7.3 (flows), §8.3
+Status: phase 1 partly built (November 2026): texts in and out and missed-call text-back work in
+tests and against the real model, not yet against a live Twilio number. See "Phase 1 as built". Related: PLAN §7.3 (flows), §8.3
 (where it runs), §9.3 (turns), §12 (CASL, CRTC, recording), §18.4 (rules for institutions).
 
 PLAN §7.3 already describes what the caller and the owner experience. This document decides **how to
@@ -247,11 +248,62 @@ The result goes into §3.3 and sets the default backend. Until then nothing in v
 | Phase | Work | Size |
 |---|---|---|
 | **0. Registration** | Twilio account, sender registration or toll-free verification, legal check of the greeting and text wording | Starts now; waits on the provider |
-| **1. SMS and missed-call text-back** | `packages/telephony` with the Twilio adapter; number purchase; inbound and status webhooks; `sms` channel and reply shape; STOP/HELP; `message.send` job; Phone tab (number, forwarding sheet, test call, mode); owner alerts by text; usage and caps; evals for SMS replies | 1–1.5 weeks |
+| **1. SMS and missed-call text-back** (partly built) | `packages/telephony` with the Twilio adapter; number purchase; inbound and status webhooks; `sms` channel and reply shape; STOP/HELP; `message.send` job; Phone tab (number, forwarding sheet, test call, mode); owner alerts by text; usage and caps; evals for SMS replies | 1–1.5 weeks |
 | **2. Voice test** | Two prototypes, the measurements in §6, decision | 3 days |
 | **3. Voice v1** | `apps/voice`; `voice` channel, fast profile, reply shape; greeting and disclosure; `transfer_call`, `send_text`; voicemail fallback; transcript, summary, owner alert; call log; limits | 2–3 weeks |
 | **4. Emergencies and hardening** | On-call list escalation; recordings with retention; drain on deploy; load test for seasonal peaks; voice eval set; status page for telephony | 1–2 weeks |
 | Later | Reminders and confirmations (transactional); appointment booking by voice once calendar integrations exist; a second telephony provider | — |
+
+### Phase 1 as built
+
+Built (`packages/telephony`, `packages/core/src/sms`, `apps/api/src/routes/telephony.ts` and
+`phone.ts`, the worker's `message.send` job, migration 0041):
+
+- **Provider interface and Twilio adapter** without the SDK: signature check, inbound text, incoming
+  call, delivery report, sending, TwiML answers. A fake provider for tests.
+- **Tables** `phone_numbers`, `outbound_messages`, `sms_opt_outs`, all with RLS; a number is found
+  without tenant context through `app_resolve_phone_number`, like page links.
+- **Inbound text:** signature → number → STOP / START / HELP (English and French) → daily limit per
+  customer number (40) → the assistant answers on channel `sms` in the customer's thread (a new
+  thread after 24 hours) → the reply is queued. The webhook is acknowledged at once and the answer
+  is written after it. A webhook delivered twice is answered once.
+- **Reply shape:** an SMS section in the prompt (plain text, short, no button or photo markers, phone
+  number and links written out), and `toSmsText` on the way out (Markdown removed, typographic
+  punctuation made plain so an English text stays in the cheap 7-bit format, cut at a sentence above
+  1,200 characters).
+- **Requests by text** carry the number the customer writes from, without asking for it.
+- **Missed-call text-back:** a call to a number in "text back" mode hears one sentence and gets one
+  text a day, which opens the conversation; nothing is sent to a withheld or opted-out number.
+- **Sending:** job `message.send` in the worker, retried when the provider is down, marked failed
+  when the number can't receive texts; the carrier's own opt-out (Twilio 21610) is remembered;
+  usage recorded per message part (`usage_events` kind `sms`); delivery reports update the message.
+- **Phone settings API:** staff assign or remove an assistant's number (support mode, audited); the
+  business turns texting on or off and chooses what a call does.
+- **Phone & texts tab** in the admin portal (EN/FR): the number, texts sent and opt-outs in the last
+  30 days, the two settings, how to forward missed calls, and for staff the webhook addresses and
+  assigning the number. It passes the `pnpm a11y` checks on desktop and phone (owner view).
+- **`TELEPHONY_PROVIDER=fake`** for local development without a provider account.
+
+Checked with the real model (DeepSeek V4.1 Flash, voyage-4-lite): an English question, a French one,
+a burst pipe and a callback request were answered correctly in 80–250 characters; simple answers
+took 2.5–4 s, turns that save a request 15–23 s.
+
+Not built yet, in this order:
+
+1. **A test call the portal can see** ("we received your test call") and per-carrier forwarding
+   sheets; the tab gives general instructions for now.
+2. **A live test with Twilio.** Nothing has been sent through a real number: needs the account and
+   the sender registration of phase 0.
+3. **Owner alerts by text**, and the daily spend cap (usage is recorded; nothing stops at a cap).
+4. **Photos in by MMS** (the text says only text can be read), and "reply QUOTE" for a service.
+5. **Buying numbers through the provider** (staff enter a number bought in Twilio's console).
+6. **SMS eval cases.**
+
+Known limits: repeated webhooks are recognised in the memory of one API server (two servers could
+both answer a retry); an answer being written when the API restarts is lost; French texts usually
+contain a character outside the 7-bit alphabet (ê, ç, â), so they are billed in 70-character parts.
+Seen once in the real-model check: the assistant passed the same request on twice when the customer
+added a detail in a later text (the web chat can do the same).
 
 ## 10. Open decisions
 

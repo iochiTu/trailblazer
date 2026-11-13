@@ -6,6 +6,7 @@ import {
   LocalEmbeddings,
   QueryEmbedder,
 } from "@traiblazer/llm";
+import { createTelephonyFromEnv } from "@traiblazer/telephony";
 import { Redis } from "ioredis";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
@@ -52,7 +53,10 @@ if (embeddingProvider instanceof LocalEmbeddings) {
   );
 }
 
-const app = await buildApp({ db, config, gateway, embeddings, chatDistDir, redis, limiter });
+// Phone and SMS (docs/PHONE_AND_SMS.md): the webhook routes exist only when a provider is configured.
+const telephony = createTelephonyFromEnv();
+
+const app = await buildApp({ db, config, gateway, embeddings, telephony, chatDistDir, redis, limiter });
 if (offline) {
   app.log.warn(
     "No LLM API key configured: chat answers come from the offline test provider (set ANTHROPIC_API_KEY).",
