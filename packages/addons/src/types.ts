@@ -26,6 +26,7 @@ export const ADDON_CATEGORIES = [
   "booking",
   "marketing",
   "productivity",
+  "crm",
 ] as const;
 export type AddonCategory = (typeof ADDON_CATEGORIES)[number];
 
@@ -39,7 +40,9 @@ export type AddonCapability =
   /** Shows buttons on the chat page. */
   | "chat_links"
   /** Sends notifications to the business (email today; SMS later). */
-  | "notifications";
+  | "notifications"
+  /** Sends visitors' requests to the business's CRM or field-service software. */
+  | "crm";
 
 /** A setting the owner fills in; the admin portal renders the form from these. */
 export type AddonField =
@@ -120,7 +123,14 @@ export type AddonEvent =
 export type AddonEventType = AddonEvent["type"];
 
 /** Work an add-on asks the platform to do. Run by the worker, with retries. */
-export type AddonEffect = { kind: "email"; to: string[]; subject: string; text: string };
+export type AddonEffect =
+  | { kind: "email"; to: string[]; subject: string; text: string }
+  /**
+   * Hand a visitor's request to a connected CRM. `provider` is a connector id from
+   * @traiblazer/integrations; the worker reads the request and the connection itself, so no
+   * personal data or credentials sit in the job.
+   */
+  | { kind: "crm.lead"; provider: string; leadId: string };
 
 /** A button on the chat page (e.g. "Shop online"). */
 export interface ChatLink {
@@ -148,6 +158,11 @@ export interface AddonDefinition<C = unknown> {
   description: Localized;
   capabilities: AddonCapability[];
   fields: AddonField[];
+  /**
+   * Connector id (in @traiblazer/integrations) of the outside account this add-on needs. The
+   * portal shows a "Connect" step for it; credentials are stored sealed, never in `config`.
+   */
+  integration?: string;
   /** Validates the owner's settings (unknown keys are dropped). */
   schema: z.ZodType<C>;
   /** Settings a new installation starts with. */

@@ -1,6 +1,7 @@
-import { bots, leads, withTenant } from "@traiblazer/db";
+import { bots, leadSyncs, leads, withTenant } from "@traiblazer/db";
+import { getConnector } from "@traiblazer/integrations";
 import { LEAD_STATUSES, updateLeadSchema } from "@traiblazer/shared";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
@@ -13,7 +14,8 @@ type LeadParams = { Params: { tenantId: string; botId: string; leadId: string } 
 
 /**
  * Requests visitors left with the assistant (contact details + what they want):
- *   GET    /v1/tenants/:t/bots/:b/leads[?status=new]     newest first, with how many are new
+ *   GET    /v1/tenants/:t/bots/:b/leads[?status=new]     newest first, with how many are new and
+ *                                                        where each stands with connected CRMs
  *   PATCH  /v1/tenants/:t/bots/:b/leads/:leadId          move to new / in_progress / done
  *   DELETE /v1/tenants/:t/bots/:b/leads/:leadId          remove (e.g. on the visitor's request)
  *
@@ -48,7 +50,37 @@ export async function leadRoutes(app: FastifyInstance, { db }: AppContext) {
         .select({ newCount: sql<number>`count(*) filter (where ${leads.status} = 'new')::int` })
         .from(leads)
         .where(eq(leads.botId, botId));
-      return { leads: list, newCount: counts?.newCount ?? 0 };
+      // Where each request stands with the connected CRMs (sent, or failed and why).
+      const syncs = list.length
+        ? await tx
+            .select({
+              leadId: leadSyncs.leadId,
+              provider: leadSyncs.provider,
+              status: leadSyncs.status,
+              externalUrl: leadSyncs.externalUrl,
+              error: leadSyncs.error,
+              updatedAt: leadSyncs.updatedAt,
+            })
+            .from(leadSyncs)
+            .where(
+              inArray(
+                leadSyncs.leadId,
+                list.map((l) => l.id),
+              ),
+            )
+        : [];
+      return {
+        leads: list.map((lead) => ({
+          ...lead,
+          syncs: syncs
+            .filter((s) => s.leadId === lead.id)
+            .map(({ leadId: _, ...sync }) => ({
+              ...sync,
+              providerName: getConnector(sync.provider)?.name ?? sync.provider,
+            })),
+        })),
+        newCount: counts?.newCount ?? 0,
+      };
     });
   });
 

@@ -22,6 +22,7 @@
     "@traiblazer/db": "workspace:*",
     "@traiblazer/i18n": "workspace:*",
     "@traiblazer/industry-packs": "workspace:*",
+    "@traiblazer/integrations": "workspace:*",
     "@traiblazer/llm": "workspace:*",
     "@traiblazer/shared": "workspace:*",
     "drizzle-orm": "0.45.4",

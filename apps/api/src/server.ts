@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { createDb } from "@traiblazer/db";
+import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
 import { Redis } from "ioredis";
 import { buildApp } from "./app.js";
@@ -16,7 +17,10 @@ const chatDistDir = process.env.CHAT_DIST_DIR ?? fileURLToPath(new URL("../../ch
 const redis = config.REDIS_URL ? new Redis(config.REDIS_URL, { maxRetriesPerRequest: 2 }) : null;
 const limiter = redis ? new RedisLimiter(redis) : new MemoryLimiter();
 
-const app = await buildApp({ db, config, gateway, embeddings, chatDistDir, redis, limiter });
+// CRM connections (Jobber, ServiceTitan…): off without INTEGRATIONS_SECRET_KEY.
+const integrations = loadIntegrationsConfig(process.env);
+
+const app = await buildApp({ db, config, gateway, embeddings, chatDistDir, redis, limiter, integrations });
 if (offline) {
   app.log.warn(
     "No LLM API key configured: chat answers come from the offline test provider (set ANTHROPIC_API_KEY).",
@@ -26,6 +30,9 @@ if (offline) {
   app.log.warn(
     "No chat model can call tools: assistants can't save visitors' requests or check service areas. List the model in OPENROUTER_TOOL_MODELS or OPENAI_COMPATIBLE_TOOL_MODELS.",
   );
+}
+if (!integrations.secretKey) {
+  app.log.warn("INTEGRATIONS_SECRET_KEY not set: CRM add-ons (Jobber, ServiceTitan…) can't be connected.");
 }
 if (!redis) app.log.warn("REDIS_URL not set: rate limits are kept per server (fine for one server).");
 
