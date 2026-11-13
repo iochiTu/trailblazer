@@ -465,6 +465,9 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 
 ### 7.3 Phone and SMS — later phase
 
+How it will be built (provider, voice pipeline, phases, the test that decides the voice backend):
+[PHONE_AND_SMS.md](PHONE_AND_SMS.md).
+
 Starts after the paid launch, when pilots ask for it (§14). SMS comes first and sends customers to the
 business page; voice follows. The same assistant, knowledge and services list answer on every channel.
 
@@ -648,7 +651,8 @@ the metering and the admin portal; a second repository would duplicate all of th
 1. **SMS first.** Missed-call text-back needs no voice AI: the forwarded call hits the provider number, the
    call-status webhook queues a text, and the SMS conversation runs on the existing engine. It can be sold
    on its own.
-2. **Voice on a managed orchestrator** (Vapi or Retell). The orchestrator handles audio, speech-to-text,
+2. **Voice on a managed speech layer** (Twilio ConversationRelay; Vapi or Retell were the earlier
+   candidates; a speech-to-speech model is the alternative, chosen by the test in PHONE_AND_SMS §6). The orchestrator handles audio, speech-to-text,
    text-to-speech and interruptions; `apps/voice` exposes the engine to it as the "brain" and serves its
    tool calls. Our knowledge, scope rules, tools and metering stay ours.
 3. **Own audio pipeline only if cost or control require it** (provider media streams + streaming
