@@ -305,6 +305,16 @@ export const pageEventSchema = z.object({
   action: z.enum(PAGE_EVENTS),
 });
 
+/**
+ * A tap on a service's button: on its card on the business page ("page") or under an answer in the
+ * chat ("chat"). Counted per service and day, never per visitor.
+ */
+export const itemEventSchema = z.object({
+  publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
+  itemId: z.uuid(),
+  surface: z.enum(["page", "chat"]),
+});
+
 export const publicChatSchema = z
   .object({
     publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
@@ -422,10 +432,18 @@ export const noticeSchema = z
     text: z.string().trim().min(1).max(300),
     startsAt: z.iso.datetime({ offset: true }).nullish(),
     endsAt: z.iso.datetime({ offset: true }).nullish(),
+    /** "offer": a promotion with a title, and optionally the service it is about. */
+    kind: z.enum(["notice", "offer"]).default("notice"),
+    title: z.string().trim().max(80).nullish(),
+    itemId: z.uuid().nullish(),
   })
   .refine((n) => !n.startsAt || !n.endsAt || new Date(n.endsAt) > new Date(n.startsAt), {
     path: ["endsAt"],
     message: "The end must be after the start",
+  })
+  .refine((n) => n.kind !== "offer" || Boolean(n.title), {
+    path: ["title"],
+    message: "An offer needs a title",
   });
 export type NoticeInput = z.infer<typeof noticeSchema>;
 

@@ -23,6 +23,7 @@ import {
   notices,
   type ReplyAction,
   type ReplyImage,
+  type ReplyOffer,
   tenants,
   usageEvents,
   withTenant,
@@ -43,6 +44,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
 import { textOwnerAboutRequest } from "../sms/alerts.js";
+import { countItemEvent, itemStatSurface } from "../stats/item-stats.js";
 import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
 import { MarkerFilter } from "./markers.js";
@@ -105,6 +107,8 @@ export type ChatStreamEvent =
   | { type: "urgent"; level: Urgency; phone: string | null }
   /** A button under the reply (sent after the text); the link comes from the business profile. */
   | { type: "action"; action: ReplyAction }
+  /** A promotion shown as a card under the reply (sent after the text). */
+  | { type: "offer"; offer: ReplyOffer }
   | { type: "done"; messageId: string; citations: Citation[]; flags: MessageFlags }
   | { type: "error"; code: "unavailable" | "failed"; message: string };
 
@@ -161,6 +165,12 @@ const BUSY_TEXT: Record<string, string> = {
 
 /** True for "too many requests" from an AI provider (Anthropic and OpenAI SDK errors carry `status`). */
 export const isCapacityError = (error: unknown) => (error as { status?: number } | null)?.status === 429;
+
+/** The last day something runs ("2026-11-30"), in the business's time zone. */
+const lastDay = (endsAt: Date, timeZone: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
+    new Date(endsAt.getTime() - 1),
+  );
 
 /** Adds one model call's usage and cost to the running total for the answer. */
 function addMeta(total: GatewayResultMeta | undefined, next: GatewayResultMeta): GatewayResultMeta {
@@ -275,7 +285,14 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       .orderBy(asc(catalogItems.position), asc(catalogItems.createdAt));
     const at = deps.now?.() ?? new Date();
     const running = await tx
-      .select({ text: notices.text })
+      .select({
+        id: notices.id,
+        text: notices.text,
+        kind: notices.kind,
+        title: notices.title,
+        endsAt: notices.endsAt,
+        itemId: notices.catalogItemId,
+      })
       .from(notices)
       .where(
         and(
@@ -431,7 +448,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       bot,
       profile: profile ?? null,
       catalog,
-      notices: running.map((n) => n.text),
+      notices: running.filter((n) => n.kind !== "offer").map((n) => n.text),
+      offers: running.filter((n) => n.kind === "offer"),
       conversationId: conversation!.id,
       isNew,
       history,
@@ -467,6 +485,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   // Counted whenever it arrives: a vector that came too late for the search was still paid for.
   void vectorRequest?.then(countEmbedding);
   const runningNotices = setup.notices;
+  /** Promotions running now, each with the short id the model names it by. */
+  const runningOffers = setup.offers.map((offer, index) => ({ ...offer, ref: `o${index + 1}` }));
   const addonLog = (msg: string, data?: Record<string, unknown>) =>
     deps.log?.(msg, { ...data, botId: bot.id });
   const lang2 = language === "fr" ? "fr" : "en";
@@ -530,6 +550,31 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     } else if (kind === "book" && bookingUrl) {
       shownActions.push({ kind: "book", href: bookingUrl });
     }
+  };
+
+  /**
+   * Promotions the reply asked to show, in the owner's own words: one per reply, each once per
+   * conversation. A promotion about a service brings that service's button with it.
+   */
+  const shownOffers: ReplyOffer[] = [];
+  const offersBefore = new Set(
+    history.flatMap((m) => ((m.flags as MessageFlags | null)?.offers ?? []).map((o) => o.id)),
+  );
+  const addOffer = (ref: string) => {
+    const offer = runningOffers.find((o) => o.ref === ref);
+    if (!offer) {
+      deps.log?.("offer dropped", { botId: bot.id, ref });
+      return;
+    }
+    if (shownOffers.length || offersBefore.has(offer.id)) return;
+    shownOffers.push({
+      id: offer.id,
+      title: offer.title ?? offer.text,
+      text: offer.text,
+      endsAt: offer.endsAt?.toISOString() ?? null,
+    });
+    const item = catalog.find((c) => c.id === offer.itemId);
+    if (item && (item.action === "quote" || item.action === "book")) addAction(`${item.action}:${item.ref}`);
   };
 
   // Images reach the model only when a chat route can see them; otherwise they become placeholders
@@ -689,6 +734,13 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           photos: offeredPhotos,
           catalog,
           notices: runningNotices,
+          offers: runningOffers.map((o) => ({
+            ref: o.ref,
+            title: o.title ?? o.text,
+            text: o.text,
+            until: o.endsAt ? lastDay(o.endsAt, profile?.timezone ?? "America/Toronto") : null,
+            itemRef: catalog.find((c) => c.id === o.itemId)?.ref ?? null,
+          })),
           triage: { urgency, advice },
           channel: input.channel,
           addons: addonPrompt(addons, addonCtx, addonLog),
@@ -716,6 +768,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         gapTopic = null;
         shownPhotos.length = 0;
         shownActions.length = 0;
+        shownOffers.length = 0;
         yield { type: "reset" };
         if (notice) {
           yield { type: "text", text: notice };
@@ -742,13 +795,14 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           if (withheld) {
             if (event.type !== "text" && event.type !== "reset") meta = event;
           } else if (event.type === "text") {
-            const { text, ids, gaps, actions } = markers.push(event.text);
+            const { text, ids, gaps, actions, offers } = markers.push(event.text);
             if (wroteEarlier && text.trim()) {
               yield* retract();
               wroteEarlier = false;
             }
             choose(ids);
             for (const action of actions) addAction(action);
+            for (const offer of offers) addOffer(offer);
             gapTopic ??= gaps[0] ?? null;
             if (text) {
               yield write(text);
@@ -859,12 +913,16 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   if (urgency || advice) {
     for (let i = shownActions.length - 1; i >= 0; i--) if (shownActions[i]!.item) shownActions.splice(i, 1);
   }
+  // The same goes for promotions.
+  if (urgency || advice || flags.error || flags.busy) shownOffers.length = 0;
+  if (shownOffers.length) flags.offers = [...shownOffers];
   if (flags.error || flags.busy) shownActions.length = 0;
   if (shownActions.length) flags.actions = [...shownActions];
 
   if (notice) answer = answer ? `${notice}\n\n${answer}` : notice;
   answer = answer.replace(/\n{3,}/g, "\n\n").trim();
   for (const image of shownPhotos) yield { type: "image", image };
+  for (const offer of shownOffers) yield { type: "offer", offer };
   for (const action of shownActions) yield { type: "action", action };
 
   // 5. Store the answer, usage and cost.
@@ -970,6 +1028,19 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       })),
     ];
     if (queued.length) await tx.insert(jobs).values(queued);
+    // Statistics: a service's button went out under this answer (docs/SELL_AND_PROMOTE.md §3.3).
+    const surface = itemStatSurface(input.channel);
+    for (const action of shownActions) {
+      if (surface && action.item) {
+        await countItemEvent(tx, {
+          tenantId: input.tenantId,
+          botId: bot.id,
+          itemId: action.item.id,
+          surface,
+          event: "shown",
+        });
+      }
+    }
     // The owner's phone, when they asked for requests by text (docs/PHONE_AND_SMS.md §8).
     for (const event of events) {
       if (event.type === "request.created") {

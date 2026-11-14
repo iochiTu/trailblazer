@@ -4,7 +4,9 @@ import {
   catalogItems,
   createDb,
   type DbHandle,
+  itemStats,
   leads,
+  notices,
   runMigrations,
   tenants,
   withTenant,
@@ -228,6 +230,157 @@ describe("a button for the service the visitor asked about", () => {
     );
     expect(urgent.done.flags.urgency).toBe("urgent");
     expect(urgent.actions).toEqual([{ kind: "call", href: "tel:5195550100" }]);
+  });
+});
+
+describe("offers", () => {
+  const day = 86_400_000;
+  let offerId = "";
+  beforeAll(async () => {
+    const rows = await owner.db
+      .insert(notices)
+      .values([
+        {
+          tenantId,
+          botId,
+          kind: "offer",
+          title: "Heater season special",
+          text: "$100 off a new water heater installed this month.",
+          catalogItemId: items["Water heater installation"],
+          endsAt: new Date(Date.now() + 10 * day),
+        },
+        {
+          tenantId,
+          botId,
+          kind: "offer",
+          title: "Summer special",
+          text: "Ended long ago.",
+          endsAt: new Date(Date.now() - day),
+        },
+        { tenantId, botId, text: "Closed on Monday for the holiday." },
+      ])
+      .returning({ id: notices.id });
+    offerId = rows[0]!.id;
+  });
+  afterAll(async () => {
+    await owner.db.delete(notices).where(eq(notices.botId, botId));
+  });
+
+  it("tells the model the offers running now, apart from plain notices", async () => {
+    const model = saying("of1", "Yes.");
+    await chat(model, "v-offer-prompt", "Any deals?");
+    const prompt = model.requests[0]!.system.map((b) => b.text).join("\n");
+    expect(prompt).toMatch(
+      /<offers>\n- \[o1\] Heater season special: \$100 off a new water heater installed this month\. \(until \d{4}-\d{2}-\d{2}\) \(about s2\)\n<\/offers>/,
+    );
+    expect(prompt).toContain("<notices>\n- Closed on Monday for the holiday.\n</notices>");
+    expect(prompt).not.toContain("Summer special");
+  });
+
+  it("shows the offer in the owner's words, with its service's button, once per conversation", async () => {
+    const first = await chat(
+      saying("of2", "We install them, and there's a special on now.\n[[offer:o1]]"),
+      "v-offer",
+      "Do you install water heaters?",
+    );
+    const offers = first.events.flatMap((e) => (e.type === "offer" ? [e.offer] : []));
+    expect(offers).toEqual([
+      {
+        id: offerId,
+        title: "Heater season special",
+        text: "$100 off a new water heater installed this month.",
+        endsAt: expect.stringMatching(/^\d{4}-/),
+      },
+    ]);
+    expect(first.done.flags.offers).toEqual(offers);
+    expect(first.actions.map((a) => `${a.kind}:${a.item?.name}`)).toEqual([
+      "quote:Water heater installation",
+    ]);
+    expect(first.reply.trim()).toBe("We install them, and there's a special on now.");
+
+    const again = await chat(
+      saying("of3", "Still on.\n[[offer:o1]]"),
+      "v-offer",
+      "Is the special still on?",
+      first.conversationId,
+    );
+    expect(again.events.some((e) => e.type === "offer")).toBe(false);
+  });
+
+  it("drops an offer that isn't running, and any offer on an urgent problem", async () => {
+    const unknown = await chat(saying("of4", "Sure.\n[[offer:o2]]\n[[offer:o9]]"), "v-offer2", "Any deals?");
+    expect(unknown.events.some((e) => e.type === "offer")).toBe(false);
+    expect(unknown.reply.trim()).toBe("Sure.");
+
+    const urgent = await chat(
+      saying("of5", "Call us now.\n[[offer:o1]]"),
+      "v-offer3",
+      "My water heater burst and the basement is flooding!",
+    );
+    expect(urgent.done.flags.urgency).toBe("urgent");
+    expect(urgent.done.flags.offers).toBeUndefined();
+    expect(urgent.actions.map((a) => a.kind)).toEqual(["call"]);
+  });
+});
+
+describe("statistics per service", () => {
+  const counts = async (name: string) => {
+    const rows = await owner.db.select().from(itemStats).where(eq(itemStats.itemId, items[name]!));
+    return Object.fromEntries(rows.map((r) => [r.surface, [r.shown, r.tapped, r.requested]]));
+  };
+
+  it("counts the button shown and the request that names the service, but not the owner's tests", async () => {
+    const before = (await counts("Water heater installation")).chat ?? [0, 0, 0];
+    await chat(
+      saying("st1", "We install them.\n[[action:quote:s2]]"),
+      "v-stat",
+      "Do you install water heaters?",
+    );
+    const model = new Scripted("st2", (_request, call) =>
+      call === 1
+        ? {
+            calls: [
+              {
+                name: "request_follow_up",
+                input: {
+                  kind: "quote",
+                  name: "Alex Doe",
+                  phone: "519-555-0142",
+                  request: "Quote please.",
+                  item: "s2",
+                },
+              },
+            ],
+          }
+        : { text: "Passed on." },
+    );
+    await chat(model, "v-stat2", "I'm Alex Doe, 519-555-0142. Quote for a water heater please.");
+    expect((await counts("Water heater installation")).chat).toEqual([
+      before[0]! + 1,
+      before[1]!,
+      before[2]! + 1,
+    ]);
+
+    // The playground is the owner trying things out.
+    const events: ChatStreamEvent[] = [];
+    for await (const e of runChat(
+      { db: app.db, gateway: gatewayWith(saying("st3", "We do.\n[[action:quote:s2]]")) },
+      {
+        tenantId,
+        botId,
+        visitorId: "owner-test",
+        channel: "playground",
+        message: "Do you install water heaters?",
+      },
+    )) {
+      events.push(e);
+    }
+    expect(events.some((e) => e.type === "action")).toBe(true);
+    expect((await counts("Water heater installation")).chat).toEqual([
+      before[0]! + 1,
+      before[1]!,
+      before[2]! + 1,
+    ]);
   });
 });
 

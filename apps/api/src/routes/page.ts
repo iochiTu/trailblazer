@@ -288,7 +288,30 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
           from leads
           where bot_id = ${botId} and channel <> 'playground' and created_at >= ${since}
           group by 1`);
-        return { page, chats, requests };
+        // Per service: how often its button was shown under an answer, tapped (on its card, in the
+        // chat, by text) and turned into a request. Services with nothing yet are listed too.
+        const items = await tx.execute<{
+          id: string;
+          name: string;
+          action: string;
+          shown: number;
+          tapped_page: number;
+          tapped_chat: number;
+          tapped_sms: number;
+          requested: number;
+        }>(sql`
+          select c.id, c.name, c.action,
+                 coalesce(sum(s.shown), 0)::int as shown,
+                 coalesce(sum(s.tapped) filter (where s.surface = 'page'), 0)::int as tapped_page,
+                 coalesce(sum(s.tapped) filter (where s.surface = 'chat'), 0)::int as tapped_chat,
+                 coalesce(sum(s.tapped) filter (where s.surface = 'sms'), 0)::int as tapped_sms,
+                 coalesce(sum(s.requested), 0)::int as requested
+          from catalog_items c
+          left join item_stats s on s.item_id = c.id and s.day >= ${first}::date
+          where c.bot_id = ${botId} and c.enabled
+          group by c.id, c.name, c.action, c.position, c.created_at
+          order by c.position, c.created_at`);
+        return { page, chats, requests, items };
       });
 
       const pageByDay = new Map(report.page.map((r) => [r.day, r]));
@@ -309,6 +332,14 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
           requests: sum(report.requests, (r) => r.requests),
           urgentRequests: sum(report.requests, (r) => r.urgent),
         },
+        items: report.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          action: item.action,
+          shown: item.shown,
+          taps: { page: item.tapped_page, chat: item.tapped_chat, sms: item.tapped_sms },
+          requests: item.requested,
+        })),
         daily: dates.map((date) => {
           const page = pageByDay.get(date);
           return {
@@ -329,7 +360,25 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
     text: input.text,
     startsAt: input.startsAt ? new Date(input.startsAt) : null,
     endsAt: input.endsAt ? new Date(input.endsAt) : null,
+    kind: input.kind,
+    // A plain notice has neither a title nor a service.
+    title: input.kind === "offer" ? (input.title ?? null) : null,
+    catalogItemId: input.kind === "offer" ? (input.itemId ?? null) : null,
   });
+  /** An offer's service must be one of this assistant's. */
+  const checkItem = async (
+    tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+    botId: string,
+    itemId?: string | null,
+  ) => {
+    if (!itemId) return;
+    const [item] = await tx
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, itemId), eq(catalogItems.botId, botId)))
+      .limit(1);
+    if (!item) throw badRequest("Unknown service or product");
+  };
 
   app.get<BotParams>(`${base}/notices`, { preHandler: requireTenantRole(db, "viewer") }, async (request) => {
     const { tenantId, botId } = request.params;
@@ -350,6 +399,7 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
         if ((used?.n ?? 0) >= NOTICE_LIMIT) {
           throw new HttpError(409, "notice_limit", `An assistant can have up to ${NOTICE_LIMIT} notices`);
         }
+        if (input.kind === "offer") await checkItem(tx, botId, input.itemId);
         const [row] = await tx
           .insert(notices)
           .values({ tenantId, botId, ...toNoticeValues(input) })
@@ -368,6 +418,7 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
       if (!isUuid(itemId)) throw notFound("Notice");
       const input = noticeSchema.parse(request.body);
       const notice = await forBot(tenantId, botId, async (tx) => {
+        if (input.kind === "offer") await checkItem(tx, botId, input.itemId);
         const [row] = await tx
           .update(notices)
           .set(toNoticeValues(input))

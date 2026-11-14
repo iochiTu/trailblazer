@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  catalogItems,
   conversations,
   createDb,
   type DbHandle,
@@ -168,6 +169,7 @@ describe("page statistics", () => {
       requests: 0,
       urgentRequests: 0,
     });
+    expect(report.items).toEqual([]);
     expect((await stats(7)).daily).toHaveLength(7);
     expect((await stats(1000)).daily).toHaveLength(90);
   });
@@ -250,6 +252,44 @@ describe("page statistics", () => {
     const report = await stats();
     expect(report.totals).toMatchObject({ questions: 4, conversations: 2, requests: 2, urgentRequests: 1 });
     expect(report.daily.at(-1)).toMatchObject({ questions: 4, requests: 2 });
+  });
+
+  it("counts taps on a service's buttons, on its card and under an answer", async () => {
+    const [item] = await ownerDb.db
+      .insert(catalogItems)
+      .values({ tenantId: owner.tenantId, botId: owner.botId, name: "Brake inspection", action: "book" })
+      .returning({ id: catalogItems.id });
+    // The card carries the service's id, so the page can say which one was tapped.
+    expect((await open(`/c/${owner.publicKey}`)).body).toContain(`data-item="${item!.id}"`);
+    const itemTap = (payload: object, origin = PUBLIC, agent = BROWSER) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/public/item-events",
+        headers: { origin, "content-type": "application/json", "user-agent": agent },
+        payload: { publicKey: owner.publicKey, ...payload },
+      });
+    expect((await itemTap({ itemId: item!.id, surface: "page" })).statusCode).toBe(204);
+    await itemTap({ itemId: item!.id, surface: "page" });
+    await itemTap({ itemId: item!.id, surface: "chat" });
+    // Not counted: a robot, another site, a service that isn't this assistant's, an unknown surface.
+    await itemTap({ itemId: item!.id, surface: "page" }, PUBLIC, "Mozilla/5.0 (compatible; bingbot/2.0)");
+    expect((await itemTap({ itemId: item!.id, surface: "page" }, "https://elsewhere.test")).statusCode).toBe(
+      403,
+    );
+    await itemTap({ itemId: crypto.randomUUID(), surface: "page" });
+    expect((await itemTap({ itemId: item!.id, surface: "sms" })).statusCode).toBe(400);
+
+    const report = await stats();
+    expect(report.items).toEqual([
+      {
+        id: item!.id,
+        name: "Brake inspection",
+        action: "book",
+        shown: 0,
+        taps: { page: 2, chat: 1, sms: 0 },
+        requests: 0,
+      },
+    ]);
   });
 
   it("is not visible to other businesses", async () => {

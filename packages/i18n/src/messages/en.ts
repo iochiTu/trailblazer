@@ -654,6 +654,15 @@ export const en = {
   "notices.running": "Showing now",
   "notices.scheduled": "Starts {date}",
   "notices.ended": "Ended",
+  "notices.offer.toggle": "This is an offer",
+  "notices.offer.hint":
+    "An offer has a title and can be about one of your services. It shows as a banner on your page, and your assistant shows it under answers about that service, in your own words.",
+  "notices.offer.title": "Offer title",
+  "notices.offer.text": "What the offer is",
+  "notices.offer.item": "About (optional)",
+  "notices.offer.noItem": "No particular service",
+  "notices.offer.badge": "Offer",
+  "notices.offer.add": "Add offer",
   "notices.limit": "You've reached the limit of notices. Delete one to add another.",
   "pageStats.title": "How your page is doing",
   "pageStats.hint":
@@ -680,6 +689,14 @@ export const en = {
   "pageStats.action.directions": "Directions",
   "pageStats.action.website": "Website",
   "pageStats.action.link": "Shop and other links",
+  "pageStats.items.title": "Services and products",
+  "pageStats.items.hint":
+    "How often each one's quote or booking button was offered under an answer, tapped, and turned into a request.",
+  "pageStats.items.service": "Service or product",
+  "pageStats.items.shown": "Offered in answers",
+  "pageStats.items.tapped": "Taps",
+  "pageStats.items.requests": "Requests",
+  "pageStats.items.tapSplit": "page {page} · chat {chat} · text {sms}",
   "pageStats.privacy":
     "Only totals are counted: nothing about who visited. A visit counts once, even if the visitor reloads the page. Your own previews and tests aren't included.",
   "page.preview.title": "Preview",

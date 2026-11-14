@@ -804,6 +804,9 @@ export const catalogItems = pgTable(
  * shown at the top of the business page and known to the assistant while they run. No start =
  * from now on; no end = until removed.
  */
+export const noticeKinds = ["notice", "offer"] as const;
+export type NoticeKind = (typeof noticeKinds)[number];
+
 export const notices = pgTable(
   "notices",
   {
@@ -813,6 +816,15 @@ export const notices = pgTable(
       .references(() => tenants.id, { onDelete: "cascade" }),
     botId: uuid("bot_id").notNull(),
     text: text("text").notNull(),
+    /**
+     * "offer": a promotion with a title, shown as a banner on the page and as a card under answers
+     * about it (docs/SELL_AND_PROMOTE.md §3.2). "notice": a plain announcement (closures, delays).
+     */
+    kind: text("kind").$type<NoticeKind>().notNull().default("notice"),
+    /** An offer's short name ("Winter tire changeover"). */
+    title: text("title"),
+    /** The service or product an offer is about; its quote or booking button goes with the offer. */
+    catalogItemId: uuid("catalog_item_id").references(() => catalogItems.id, { onDelete: "set null" }),
     startsAt: timestamp("starts_at", { withTimezone: true }),
     endsAt: timestamp("ends_at", { withTimezone: true }),
     ...timestamps,
@@ -917,6 +929,18 @@ export interface ReplyAction {
   item?: { id: string; name: string };
 }
 
+/**
+ * A promotion shown under an assistant reply, in the owner's own words (docs/SELL_AND_PROMOTE.md
+ * §3.2): the model only chooses which running offer fits, never its wording or dates.
+ */
+export interface ReplyOffer {
+  id: string;
+  title: string;
+  text: string;
+  /** ISO time the offer ends, or null when it has no end. */
+  endsAt: string | null;
+}
+
 export interface MessageFlags {
   /**
    * The assistant couldn't answer from the business's information and said so (it marked the reply
@@ -945,6 +969,8 @@ export interface MessageFlags {
   advice?: boolean;
   /** Buttons shown under the reply ("call", "book", or "quote"/"book" for a service). */
   actions?: ReplyAction[];
+  /** Promotions shown as cards under the reply. */
+  offers?: ReplyOffer[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
 }
@@ -1417,6 +1443,42 @@ export const assets = pgTable(
   (t) => [index("assets_tenant_idx").on(t.tenantId)],
 );
 
+/** Where a service's button was shown or tapped: its card on the page, an answer in the chat, a text. */
+export const itemStatSurfaces = ["page", "chat", "sms"] as const;
+export type ItemStatSurface = (typeof itemStatSurfaces)[number];
+
+/**
+ * Daily counts per service or product (docs/SELL_AND_PROMOTE.md §3.3): how often its quote or
+ * booking button was shown under an answer, tapped, and turned into a request. Totals only, like
+ * `page_stats`: nothing about who.
+ */
+export const itemStats = pgTable(
+  "item_stats",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "cascade" }),
+    day: date("day", { mode: "string" }).notNull(),
+    surface: text("surface").$type<ItemStatSurface>().notNull(),
+    shown: integer("shown").notNull().default(0),
+    tapped: integer("tapped").notNull().default(0),
+    requested: integer("requested").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: "item_stats_pk", columns: [t.tenantId, t.botId, t.itemId, t.day, t.surface] }),
+    index("item_stats_bot_day_idx").on(t.tenantId, t.botId, t.day),
+    foreignKey({
+      name: "item_stats_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 // ---------------------------------------------------------------------------------------------
 // Phone and SMS (RLS enforced; docs/PHONE_AND_SMS.md)
 // ---------------------------------------------------------------------------------------------
@@ -1562,6 +1624,7 @@ export const rlsTables = [
   "knowledge_gaps",
   "setup_runs",
   "usage_events",
+  "item_stats",
   "phone_numbers",
   "outbound_messages",
   "sms_opt_outs",

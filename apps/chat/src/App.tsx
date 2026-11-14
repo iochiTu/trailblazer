@@ -5,10 +5,12 @@ import { Avatar } from "./Avatar";
 import {
   type AttachmentName,
   type Citation,
+  countItemTap,
   fetchConfig,
   fetchHistory,
   type PublicBotConfig,
   type ReplyAction,
+  type ReplyOffer,
   type ReplyPhoto,
   streamChat,
 } from "./api";
@@ -29,6 +31,8 @@ interface Message {
   images?: ReplyPhoto[];
   /** Buttons under the reply (call, book, or a quote or booking for one service). */
   actions?: ReplyAction[];
+  /** Promotions shown as cards under the reply. */
+  offers?: ReplyOffer[];
   pending?: boolean;
   error?: boolean;
   /** A limit or "busy" message (not an error). */
@@ -133,6 +137,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                 attachments: m.attachments?.map((a) => ({ name: a.name })),
                 images: m.images,
                 actions: m.actions,
+                offers: m.offers,
               })),
             );
           } else {
@@ -266,6 +271,8 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
           setUrgent((current) => (current?.level === "danger" ? current : { level, phone }));
         } else if (event.type === "action") {
           update((m) => ({ ...m, actions: [...(m.actions ?? []), event.action] }));
+        } else if (event.type === "offer") {
+          update((m) => ({ ...m, offers: [...(m.offers ?? []), event.offer] }));
         } else if (event.type === "image") {
           update((m) => ({ ...m, images: [...(m.images ?? []), event.image] }));
         } else if (event.type === "done") {
@@ -303,6 +310,11 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
     window.addEventListener("tb:ask", onAsk);
     return () => window.removeEventListener("tb:ask", onAsk);
   }, [onPage]);
+
+  /** Statistics: a service's button under an answer was tapped (not counted in the owner's tests). */
+  const tapped = (itemId: string) => {
+    if (!preview && mode !== "playground") countItemTap(publicKey, itemId, "chat");
+  };
 
   function newConversation() {
     setUrgent(null);
@@ -507,6 +519,22 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                     ))}
                   </div>
                 )}
+                {m.offers?.map((offer) => (
+                  <div key={offer.id} class="tb-offer">
+                    <span class="tb-offer-label">{ui(lang, "offer")}</span>
+                    <strong dir="auto">{offer.title}</strong>
+                    {offer.text !== offer.title && <span dir="auto">{offer.text}</span>}
+                    {offer.endsAt && (
+                      <span class="tb-offer-until">
+                        {ui(lang, "offerUntil", {
+                          date: new Intl.DateTimeFormat(lang, { month: "long", day: "numeric" }).format(
+                            new Date(new Date(offer.endsAt).getTime() - 1),
+                          ),
+                        })}
+                      </span>
+                    )}
+                  </div>
+                ))}
                 {m.actions && m.actions.length > 0 && (
                   <div class="tb-actions">
                     {m.actions
@@ -525,13 +553,14 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                             type="button"
                             class="tb-action"
                             disabled={busy}
-                            onClick={() =>
+                            onClick={() => {
+                              tapped(a.item!.id);
                               void send(
                                 ui(lang, a.kind === "quote" ? "quoteMessage" : "bookMessage", {
                                   item: a.item!.name,
                                 }),
-                              )
-                            }
+                              );
+                            }}
                           >
                             <Icon name="book" size={16} />
                             {ui(lang, a.kind === "quote" ? "actionQuoteItem" : "actionBookItem", {
@@ -552,6 +581,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                             href={a.href}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => a.item && tapped(a.item.id)}
                           >
                             <Icon name="book" size={16} />
                             {a.item

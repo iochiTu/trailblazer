@@ -19,6 +19,7 @@ export type Pattern = string | { test(text: string): boolean };
  * - sell: a question about a listed service gets that service's quote or booking button, and the
  *   request that follows names the service (docs/SELL_AND_PROMOTE.md);
  * - restraint: no selling when the visitor needs help (urgent, advice, complaint);
+ * - offer: a running promotion is shown where it fits, in the owner's words, and never invented;
  * - sms: the same assistant by text message (docs/PHONE_AND_SMS.md): short plain text, STOP and
  *   HELP, the texter's number on a request. Cases in other categories can run by text too
  *   (`channel: "sms"`), e.g. an urgent problem.
@@ -35,6 +36,7 @@ export const CATEGORIES = [
   "scope",
   "sell",
   "restraint",
+  "offer",
   "sms",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -87,6 +89,8 @@ export interface Expectation {
         fromSender?: boolean;
       }
     | "none";
+  /** The promotion shown as a card under the reply (its title), or "none" when there must be none. */
+  offer?: string;
   /** Exactly this many requests were passed on in the conversation (1: details added later don't make a second). */
   requestCount?: number;
   /** By text: what the platform did with the last message ("answered", "stopped", "help"…). */
@@ -149,6 +153,11 @@ export interface EvalBusiness {
     category?: string;
     action?: "ask" | "quote" | "book";
   }[];
+  /**
+   * Promotions the owner entered: `item` is the name of the service it is about, `endsInDays` when
+   * it ends from now (negative: it ended).
+   */
+  offers?: { title: string; text: string; item?: string; endsInDays?: number }[];
   /** Knowledge sources pasted as text (title and content). */
   knowledge: { title: string; content: string }[];
 }
@@ -162,6 +171,8 @@ export interface Outcome {
   advice: boolean;
   unanswered: boolean;
   actions: string[];
+  /** Titles of the promotions shown as cards under the last reply. */
+  offers: string[];
   /** Buttons for one service under the last reply. */
   itemButtons: { kind: string; item: string }[];
   tools: string[];

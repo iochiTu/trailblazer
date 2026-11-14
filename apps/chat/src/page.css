@@ -235,6 +235,69 @@ body:has(.tbp[data-theme="midnight"]) {
   font-weight: 500;
 }
 
+/* ---- Offers: promotions running now ----------------------------------------------------------- */
+
+.tbp-offers {
+  max-width: 1120px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+}
+
+.tbp-offers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tbp-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 14px 18px;
+  border-radius: calc(var(--tbp-radius) * 0.7);
+  border: 1px solid color-mix(in srgb, var(--tb-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--tb-accent) 8%, var(--tbp-surface));
+}
+
+.tbp-offer-body {
+  min-width: min(100%, 240px);
+  flex: 1;
+}
+
+.tbp-offer h3,
+.tbp-offer p {
+  margin: 0;
+}
+
+.tbp-offer h3 {
+  font-size: 1.05rem;
+}
+
+.tbp-offer-label,
+.tbp-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--tb-accent);
+}
+
+.tbp-offer-label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tbp-offer-until {
+  font-size: 0.875rem;
+  color: var(--tbp-muted);
+}
+
+.tbp-badge {
+  margin: 2px 0 0;
+}
+
 /* ---- Main: chat + content -------------------------------------------------------------------- */
 
 .tbp-main {

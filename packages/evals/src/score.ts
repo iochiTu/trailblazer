@@ -119,6 +119,14 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
     }
   }
 
+  if (expect.offer === "none") {
+    for (const title of outcome.offers) failures.push(`showed the offer "${title}"`);
+  } else if (expect.offer && !outcome.offers.includes(expect.offer)) {
+    failures.push(
+      `no offer "${expect.offer}" shown${outcome.offers.length ? ` (showed ${outcome.offers.join(", ")})` : ""}`,
+    );
+  }
+
   if (expect.requestCount !== undefined && outcome.requests.length !== expect.requestCount) {
     failures.push(`${outcome.requests.length} requests passed on, expected ${expect.requestCount}`);
   }

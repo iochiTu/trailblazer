@@ -12,6 +12,7 @@ const TEXT = {
     resumed: (business: string) => `You'll get messages from ${business} again. Reply STOP to opt out.`,
     nothingToRead:
       "I couldn't read that message. I can read text and photos (JPEG or PNG, up to 2 MB). What can we help you with?",
+    offerUntil: (date: string) => `until ${date}`,
     replyQuote: (item: string) => `Reply QUOTE to ask for a quote for ${item}.`,
     replyBook: (item: string) => `Reply BOOK to book ${item}.`,
     bookLink: (item: string, url: string) => `Book ${item}: ${url}`,
@@ -35,6 +36,7 @@ const TEXT = {
       `Vous recevrez de nouveau les messages de ${business}. Répondez ARRET pour ne plus en recevoir.`,
     nothingToRead:
       "Je n'ai pas pu lire ce message. Je peux lire le texte et les photos (JPEG ou PNG, jusqu'à 2 Mo). Comment pouvons-nous vous aider ?",
+    offerUntil: (date: string) => `jusqu'au ${date}`,
     replyQuote: (item: string) => `Répondez SOUMISSION pour demander une soumission pour : ${item}.`,
     replyBook: (item: string) => `Répondez RESERVER pour réserver : ${item}.`,
     bookLink: (item: string, url: string) => `Réserver ${item} : ${url}`,

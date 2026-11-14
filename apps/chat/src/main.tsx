@@ -1,5 +1,6 @@
 import { render } from "preact";
 import { App, type AppProps } from "./App";
+import { countItemTap } from "./api";
 import "./styles.css";
 import "./page.css";
 
@@ -63,10 +64,12 @@ if (onPage) {
     }
     if (!seen) send("view");
     document.addEventListener("click", (event) => {
-      const action = (event.target as Element | null)
-        ?.closest?.("a[data-action]")
-        ?.getAttribute("data-action");
+      const target = event.target as Element | null;
+      const action = target?.closest?.("a[data-action]")?.getAttribute("data-action");
       if (action) send(action);
+      // A button on a service's card (quote, book, ask): counted for that service.
+      const itemId = target?.closest?.("button, a")?.closest("[data-item]")?.getAttribute("data-item");
+      if (itemId) countItemTap(publicKey, itemId, "page");
     });
   }
 }

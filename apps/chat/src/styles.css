@@ -555,6 +555,32 @@ body {
 
 /* ---- Buttons under replies, urgent banner ---------------------------------------------------- */
 
+.tb-offer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--tb-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--tb-accent) 8%, var(--tb-surface));
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.tb-offer-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tb-accent);
+}
+
+.tb-offer-until {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
 .tb-actions {
   display: flex;
   flex-wrap: wrap;

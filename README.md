@@ -373,6 +373,17 @@ assistant declines kindly). When a message is urgent or a danger:
   notifications add-on's address when that add-on is on, otherwise to the business's owners and
   admins. The add-on doesn't send its own email for it, so it arrives once.
 
+**Offers:** a notice can be an offer, with a title and the service it is about (Business page tab →
+Notices → "This is an offer"). A running offer is a banner on the page with that service's buttons, a
+badge on the service's card, the first suggested question, and a card under answers about that
+service (`[[offer:o1]]`, in the owner's own words; a line of text by SMS). The assistant can only show
+offers that are running, one per reply and once per conversation, and never on an urgent problem.
+
+**Statistics per service:** how often each service's quote or booking button was offered under an
+answer, tapped (on its card, in the chat, or by the reply word in a text) and turned into a request
+(`item_stats`, daily totals only). The Business page tab lists them with the page statistics; the
+owner's own tests aren't counted.
+
 **One request, not two.** When a visitor adds or corrects something after their request was passed on
 (a time, a detail, another way to reach them), the request the business already has is updated: same
 conversation, still marked new, and the same kind of follow-up (a callback, quote and booking count as

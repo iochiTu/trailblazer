@@ -1,12 +1,14 @@
 import {
   bots,
   businessProfiles,
+  catalogItems,
   conversations,
   type Db,
   type MessageFlags,
   messages,
   outboundMessages,
   type ReplyAction,
+  type ReplyOffer,
   smsOptOuts,
   type Tx,
   usageEvents,
@@ -23,6 +25,7 @@ import {
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { type ChatDeps, type ChatImage, runChat } from "../chat/engine.js";
 import { guessLanguage } from "../chat/language.js";
+import { countItemEvent } from "../stats/item-stats.js";
 import { noteCapReached, phoneBudget } from "./alerts.js";
 import { optedOut, queueText } from "./queue.js";
 import { smsLanguage, smsText } from "./strings.js";
@@ -50,6 +53,7 @@ async function business(tx: Tx, botId: string) {
       defaultLanguage: bots.defaultLanguage,
       businessName: businessProfiles.businessName,
       phone: businessProfiles.phone,
+      timezone: businessProfiles.timezone,
     })
     .from(bots)
     .leftJoin(businessProfiles, eq(businessProfiles.botId, bots.id))
@@ -61,6 +65,7 @@ async function business(tx: Tx, botId: string) {
     name: row.businessName?.trim() || row.name,
     phone: row.phone?.trim() || null,
     language: smsLanguage(row.defaultLanguage),
+    timeZone: row.timezone ?? "America/Toronto",
   };
 }
 
@@ -193,14 +198,25 @@ export async function handleInboundText(
       const item = recent
         .flatMap((m) => (m.flags as MessageFlags | null)?.actions ?? [])
         .find((a) => a.item && a.kind === word && !a.href)?.item;
-      if (item) offer = { kind: word, name: item.name };
+      if (item) {
+        offer = { kind: word, name: item.name };
+        // Statistics: the reply word is the tap on that service's button, by text.
+        const [exists] = await tx
+          .select({ id: catalogItems.id })
+          .from(catalogItems)
+          .where(and(eq(catalogItems.id, item.id), eq(catalogItems.botId, number.botId)))
+          .limit(1);
+        if (exists) {
+          await countItemEvent(tx, { ...scope, itemId: item.id, surface: "sms", event: "tapped" });
+        }
+      }
     }
     // A single word doesn't tell the language: the thread's own language does.
     const spoken =
       !word && (guessed === "fr" || guessed === "en")
         ? guessed
         : smsLanguage(thread?.language ?? info.language);
-    return { outcome: null, info, t: smsText(spoken), conversationId: thread?.id ?? null, offer };
+    return { outcome: null, info, t: smsText(spoken), spoken, conversationId: thread?.id ?? null, offer };
   });
   if (before.outcome) {
     // The message at the limit is still stored, so the count moves past it and the notice isn't repeated.
@@ -210,7 +226,7 @@ export async function handleInboundText(
     }
     return before.outcome;
   }
-  const { info, t } = before;
+  const { info, t, spoken } = before;
 
   const images = message.images ?? [];
   // Nothing to answer: no words, and no photo that could be opened.
@@ -232,6 +248,7 @@ export async function handleInboundText(
   let reply = "";
   let failed = false;
   let actions: ReplyAction[] = [];
+  let promotions: ReplyOffer[] = [];
   // The reply word stands for the sentence a tap on the service's button sends in the chat.
   const said = before.offer
     ? before.offer.kind === "quote"
@@ -254,6 +271,7 @@ export async function handleInboundText(
       else if (event.type === "done") {
         if (event.flags.error || event.flags.busy) failed = true;
         actions = event.flags.actions ?? [];
+        promotions = event.flags.offers ?? [];
       }
     }
   } catch (error) {
@@ -271,7 +289,21 @@ export async function handleInboundText(
           ? [t.bookLink(a.item.name, a.href)]
           : [t.replyBook(a.item.name)],
   );
-  const body = !failed && reply.trim() ? [toSmsText(reply), ...offers].join("\n") : t.failed(info.phone);
+  // A promotion goes out in the owner's own words, with its last day.
+  const promoted = promotions.map((offer) => {
+    const until = offer.endsAt
+      ? ` (${t.offerUntil(
+          new Intl.DateTimeFormat(spoken === "fr" ? "fr-CA" : "en-CA", {
+            month: "long",
+            day: "numeric",
+            timeZone: info.timeZone,
+          }).format(new Date(new Date(offer.endsAt).getTime() - 1)),
+        )})`
+      : "";
+    return `${offer.text === offer.title ? offer.title : `${offer.title}: ${offer.text}`}${until}`;
+  });
+  const body =
+    !failed && reply.trim() ? [toSmsText(reply), ...promoted, ...offers].join("\n") : t.failed(info.phone);
   await withTenant(deps.db, number.tenantId, (tx) =>
     queueText(tx, {
       ...scope,

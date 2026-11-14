@@ -5,11 +5,13 @@ import {
   conversations,
   createDb,
   type DbHandle,
+  itemStats,
   jobs,
   leads,
   memberships,
   messageAttachments,
   messages,
+  notices,
   outboundMessages,
   phoneNumbers,
   runMigrations,
@@ -640,6 +642,9 @@ describe("a service's quote or booking offer by text", () => {
     expect(lastUserText()).toContain("I'd like a quote for Water heater installation.");
     // Offered once in a conversation, like the button in the chat.
     expect((await sentTo()).at(-1)!.body).toBe("Happy to. What's your name?");
+    // Statistics: offered once by text, and the reply word counts as the tap.
+    const rows = await owner.db.select().from(itemStats).where(eq(itemStats.itemId, itemIds[0]!));
+    expect(rows.map((r) => [r.surface, r.shown, r.tapped])).toEqual([["sms", 1, 1]]);
   });
 
   it("writes the booking link when the business has one, and BOOK to reply when it hasn't", async () => {
@@ -664,6 +669,34 @@ describe("a service's quote or booking offer by text", () => {
         .update(businessProfiles)
         .set({ bookingUrl: null })
         .where(eq(businessProfiles.botId, number.botId));
+    }
+  });
+
+  it("writes a running offer out in the owner's words", async () => {
+    const [offer] = await owner.db
+      .insert(notices)
+      .values({
+        tenantId: number.tenantId,
+        botId: number.botId,
+        kind: "offer",
+        title: "Heater season special",
+        text: "$100 off a new water heater this month.",
+        catalogItemId: itemIds[0],
+        endsAt: new Date("2030-12-01T04:59:00Z"),
+      })
+      .returning({ id: notices.id });
+    try {
+      model.script = () => ({ text: "Yes, and there's a special on.\n[[offer:o1]]" });
+      await text("Do you install water heaters?");
+      expect((await sentTo()).at(-1)!.body).toBe(
+        [
+          "Yes, and there's a special on.",
+          "Heater season special: $100 off a new water heater this month. (until November 30)",
+          "Reply QUOTE to ask for a quote for Water heater installation.",
+        ].join("\n"),
+      );
+    } finally {
+      await owner.db.delete(notices).where(eq(notices.id, offer!.id));
     }
   });
 

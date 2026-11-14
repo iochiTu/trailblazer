@@ -316,6 +316,20 @@
       "when": 1794628763242,
       "tag": "0044_phone_cap_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1794659215480,
+      "tag": "0045_item_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1794675833635,
+      "tag": "0046_offers",
+      "breakpoints": true
     }
   ]
 }

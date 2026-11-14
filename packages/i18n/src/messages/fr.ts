@@ -682,6 +682,15 @@ export const fr: Record<MessageKey, string> = {
   "notices.running": "Affiché en ce moment",
   "notices.scheduled": "Commence le {date}",
   "notices.ended": "Terminé",
+  "notices.offer.toggle": "Ceci est une offre",
+  "notices.offer.hint":
+    "Une offre a un titre et peut porter sur l'un de vos services. Elle s'affiche en bandeau sur votre page, et votre assistant la montre sous les réponses au sujet de ce service, dans vos propres mots.",
+  "notices.offer.title": "Titre de l'offre",
+  "notices.offer.text": "En quoi consiste l'offre",
+  "notices.offer.item": "Au sujet de (facultatif)",
+  "notices.offer.noItem": "Aucun service en particulier",
+  "notices.offer.badge": "Offre",
+  "notices.offer.add": "Ajouter l'offre",
   "notices.limit": "Vous avez atteint la limite d'avis. Supprimez-en un pour en ajouter un autre.",
   "pageStats.title": "Comment se porte votre page",
   "pageStats.hint":
@@ -709,6 +718,14 @@ export const fr: Record<MessageKey, string> = {
   "pageStats.action.directions": "Itinéraire",
   "pageStats.action.website": "Site Web",
   "pageStats.action.link": "Boutique et autres liens",
+  "pageStats.items.title": "Services et produits",
+  "pageStats.items.hint":
+    "Combien de fois le bouton de soumission ou de réservation de chacun a été proposé sous une réponse, touché, puis transformé en demande.",
+  "pageStats.items.service": "Service ou produit",
+  "pageStats.items.shown": "Proposé dans les réponses",
+  "pageStats.items.tapped": "Touchers",
+  "pageStats.items.requests": "Demandes",
+  "pageStats.items.tapSplit": "page {page} · clavardage {chat} · texto {sms}",
   "pageStats.privacy":
     "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Une visite compte une fois, même si le visiteur recharge la page. Vos propres aperçus et essais ne sont pas inclus.",
   "page.preview.title": "Aperçu",
