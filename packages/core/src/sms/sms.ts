@@ -1,6 +1,7 @@
 import {
   bots,
   businessProfiles,
+  catalogItems,
   conversations,
   type Db,
   type MessageFlags,
@@ -23,6 +24,7 @@ import {
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { type ChatDeps, type ChatImage, runChat } from "../chat/engine.js";
 import { guessLanguage } from "../chat/language.js";
+import { countItemEvent } from "../stats/item-stats.js";
 import { noteCapReached, phoneBudget } from "./alerts.js";
 import { optedOut, queueText } from "./queue.js";
 import { smsLanguage, smsText } from "./strings.js";
@@ -193,7 +195,18 @@ export async function handleInboundText(
       const item = recent
         .flatMap((m) => (m.flags as MessageFlags | null)?.actions ?? [])
         .find((a) => a.item && a.kind === word && !a.href)?.item;
-      if (item) offer = { kind: word, name: item.name };
+      if (item) {
+        offer = { kind: word, name: item.name };
+        // Statistics: the reply word is the tap on that service's button, by text.
+        const [exists] = await tx
+          .select({ id: catalogItems.id })
+          .from(catalogItems)
+          .where(and(eq(catalogItems.id, item.id), eq(catalogItems.botId, number.botId)))
+          .limit(1);
+        if (exists) {
+          await countItemEvent(tx, { ...scope, itemId: item.id, surface: "sms", event: "tapped" });
+        }
+      }
     }
     // A single word doesn't tell the language: the thread's own language does.
     const spoken =

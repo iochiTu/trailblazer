@@ -1,6 +1,6 @@
 # Sell and promote: design
 
-Status: phase 1 built (November 2026); phases 2 to 4 are a draft for review. Related: PLAN §3 (principles), §5
+Status: phases 1 and 3 built (November 2026); phases 2 and 4 are a draft for review. Related: PLAN §3 (principles), §5
 (scope policy), §7.1 (business page), §14 (roadmap); README, "Urgent problems (triage) and buttons in
 answers".
 
@@ -164,7 +164,7 @@ The existing `prices` and `scope` categories run unchanged. Bar: the current 80 
 |---|---|---|
 | **1. Sell in the chat** (built) | Item ids and actions in the prompt; `[[action:<kind>:<item>]]` buttons; `leads.catalog_item_id` and the item on requests and emails; chat page rendering; `sell` and `restraint` evals | 2–3 days |
 | **2. Offers** | Notice fields and admin editor; offer banner and card badge on the page; `[[offer:<id>]]` cards in answers; quick reply while running; `offer` evals | 2–3 days |
-| **3. Funnel statistics** | `offer_stats` table, tap endpoint, owner and operator views, `?offer=` links | 2 days |
+| **3. Funnel statistics** (built for services) | `offer_stats` table, tap endpoint, owner and operator views, `?offer=` links | 2 days |
 | **4. Share kit and related services** | QR code and link per offer; post text drafted from the offer; "goes well with" on services | 1–2 days |
 | Later | Payment and deposit links (roadmap Phase 2); outbound offers and review requests with consent (phone and SMS phase) | — |
 
@@ -188,6 +188,22 @@ Phases 1 and 2 are independent of each other; 3 is more useful after either.
   The service is shown on the Requests tab and in both notification emails.
 - **Evals:** 7 `sell` and 5 `restraint` cases (EN and FR), all passing with DeepSeek V4.1 Flash.
 - Not built in phase 1: counting taps (phase 3).
+
+### Phase 3 as built (services)
+
+- **Table `item_stats`** (RLS): daily counts per service and surface (`page`, `chat`, `sms`) of
+  `shown`, `tapped` and `requested`. Totals only; no visitor, conversation or request id.
+- **Shown:** the engine counts a service's button when it goes out under an answer (chat or text).
+- **Tapped:** the page and the chat send `POST /v1/public/item-events` (same-origin, robots left
+  out, only a service the assistant lists); by text, the reply word (QUOTE, BOOK) is the tap. On the
+  page every button on a service's card counts, "Ask about this" included.
+- **Requested:** counted when a request that names the service is passed on, and when a later detail
+  first gives an existing request its service.
+- The owner's own tests (playground, preview) are never counted.
+- **Owner view:** the Business page tab's statistics list each service with offered, taps (split by
+  page, chat and text) and requests for the chosen period (`items` in the `page-stats` response).
+- Not built: counts for offers (they come with phase 2), `?offer=` links, and a separate operator
+  view (staff see the owner's view in support mode).
 
 ## 8. Open decisions
 

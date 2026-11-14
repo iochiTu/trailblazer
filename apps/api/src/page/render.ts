@@ -269,7 +269,8 @@ function itemHtml(data: PageData, item: PageItem): string {
   }
   buttons.push(askButton(t("askAbout"), t("askMessage", name), item.action === "ask"));
   return [
-    `<li class="tbp-card">`,
+    // The id lets the page count taps on this card's buttons (statistics; nothing about who).
+    `<li class="tbp-card" data-item="${esc(item.id)}">`,
     item.photoUrl ? `<img class="tbp-card-photo" src="${esc(item.photoUrl)}" alt="" loading="lazy">` : "",
     `<div class="tbp-card-body">`,
     `<h3 dir="auto">${esc(item.name)}</h3>`,

@@ -146,3 +146,16 @@ export async function* streamChat(body: {
     }
   }
 }
+
+/**
+ * Statistics: a service's button was tapped, on its card on the page or under an answer. Says which
+ * service, never who; sent in the background and never waited for.
+ */
+export function countItemTap(publicKey: string, itemId: string, surface: "page" | "chat"): void {
+  try {
+    const body = new Blob([JSON.stringify({ publicKey, itemId, surface })], { type: "application/json" });
+    navigator.sendBeacon?.("/v1/public/item-events", body);
+  } catch {
+    // Counting is never worth an error in the chat.
+  }
+}

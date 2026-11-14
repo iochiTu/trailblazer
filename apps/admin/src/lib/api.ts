@@ -131,6 +131,18 @@ export interface PageStats {
     requests: number;
     urgentRequests: number;
   };
+  /**
+   * Per service or product: how often its quote or booking button was shown under an answer, taps
+   * on it (its card on the page, the chat, by text) and requests that named it.
+   */
+  items: {
+    id: string;
+    name: string;
+    action: "ask" | "quote" | "book";
+    shown: number;
+    taps: { page: number; chat: number; sms: number };
+    requests: number;
+  }[];
   daily: { date: string; views: number; taps: number; questions: number; requests: number }[];
 }
 

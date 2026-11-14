@@ -83,3 +83,4 @@ export {
   type SmsNumber,
   sendQueuedText,
 } from "./sms/sms.js";
+export { countItemEvent, type ItemStatEvent, itemStatSurface } from "./stats/item-stats.js";

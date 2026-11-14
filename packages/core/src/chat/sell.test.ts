@@ -4,6 +4,7 @@ import {
   catalogItems,
   createDb,
   type DbHandle,
+  itemStats,
   leads,
   runMigrations,
   tenants,
@@ -228,6 +229,67 @@ describe("a button for the service the visitor asked about", () => {
     );
     expect(urgent.done.flags.urgency).toBe("urgent");
     expect(urgent.actions).toEqual([{ kind: "call", href: "tel:5195550100" }]);
+  });
+});
+
+describe("statistics per service", () => {
+  const counts = async (name: string) => {
+    const rows = await owner.db.select().from(itemStats).where(eq(itemStats.itemId, items[name]!));
+    return Object.fromEntries(rows.map((r) => [r.surface, [r.shown, r.tapped, r.requested]]));
+  };
+
+  it("counts the button shown and the request that names the service, but not the owner's tests", async () => {
+    const before = (await counts("Water heater installation")).chat ?? [0, 0, 0];
+    await chat(
+      saying("st1", "We install them.\n[[action:quote:s2]]"),
+      "v-stat",
+      "Do you install water heaters?",
+    );
+    const model = new Scripted("st2", (_request, call) =>
+      call === 1
+        ? {
+            calls: [
+              {
+                name: "request_follow_up",
+                input: {
+                  kind: "quote",
+                  name: "Alex Doe",
+                  phone: "519-555-0142",
+                  request: "Quote please.",
+                  item: "s2",
+                },
+              },
+            ],
+          }
+        : { text: "Passed on." },
+    );
+    await chat(model, "v-stat2", "I'm Alex Doe, 519-555-0142. Quote for a water heater please.");
+    expect((await counts("Water heater installation")).chat).toEqual([
+      before[0]! + 1,
+      before[1]!,
+      before[2]! + 1,
+    ]);
+
+    // The playground is the owner trying things out.
+    const events: ChatStreamEvent[] = [];
+    for await (const e of runChat(
+      { db: app.db, gateway: gatewayWith(saying("st3", "We do.\n[[action:quote:s2]]")) },
+      {
+        tenantId,
+        botId,
+        visitorId: "owner-test",
+        channel: "playground",
+        message: "Do you install water heaters?",
+      },
+    )) {
+      events.push(e);
+    }
+    expect(events.some((e) => e.type === "action")).toBe(true);
+    expect((await counts("Water heater installation")).chat).toEqual([
+      before[0]! + 1,
+      before[1]!,
+      before[2]! + 1,
+    ]);
   });
 });
 

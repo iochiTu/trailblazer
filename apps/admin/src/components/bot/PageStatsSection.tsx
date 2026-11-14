@@ -132,6 +132,60 @@ export function PageStatsSection({ base }: { base: string }) {
               )}
             </div>
           </div>
+          {stats.items.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div>
+                <h4 className="font-medium">{t("pageStats.items.title")}</h4>
+                <p className="muted text-sm">{t("pageStats.items.hint")}</p>
+              </div>
+              <div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="muted text-start">
+                      <th scope="col" className="py-1 text-start font-normal">
+                        {t("pageStats.items.service")}
+                      </th>
+                      <th scope="col" className="py-1 ps-2 text-end font-normal">
+                        {t("pageStats.items.shown")}
+                      </th>
+                      <th scope="col" className="py-1 text-end font-normal">
+                        {t("pageStats.items.tapped")}
+                      </th>
+                      <th scope="col" className="py-1 text-end font-normal">
+                        {t("pageStats.items.requests")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular-nums">
+                    {stats.items.map((item) => {
+                      const tapped = item.taps.page + item.taps.chat + item.taps.sms;
+                      return (
+                        <tr key={item.id} className="border-t border-[var(--border)]">
+                          <th scope="row" className="py-1 text-start font-normal" dir="auto">
+                            {item.name}
+                          </th>
+                          <td className="py-1 text-end">{fmt.format(item.shown)}</td>
+                          <td className="py-1 text-end">
+                            {fmt.format(tapped)}
+                            {tapped > 0 && (
+                              <span className="muted block text-xs">
+                                {t("pageStats.items.tapSplit", {
+                                  page: item.taps.page,
+                                  chat: item.taps.chat,
+                                  sms: item.taps.sms,
+                                })}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1 text-end">{fmt.format(item.requests)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           <p className="muted text-xs">{t("pageStats.privacy")}</p>
         </>
       )}

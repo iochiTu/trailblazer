@@ -709,6 +709,14 @@ export const fr: Record<MessageKey, string> = {
   "pageStats.action.directions": "Itinéraire",
   "pageStats.action.website": "Site Web",
   "pageStats.action.link": "Boutique et autres liens",
+  "pageStats.items.title": "Services et produits",
+  "pageStats.items.hint":
+    "Combien de fois le bouton de soumission ou de réservation de chacun a été proposé sous une réponse, touché, puis transformé en demande.",
+  "pageStats.items.service": "Service ou produit",
+  "pageStats.items.shown": "Proposé dans les réponses",
+  "pageStats.items.tapped": "Touchers",
+  "pageStats.items.requests": "Demandes",
+  "pageStats.items.tapSplit": "page {page} · clavardage {chat} · texto {sms}",
   "pageStats.privacy":
     "Seuls des totaux sont comptés : rien sur l'identité des visiteurs. Une visite compte une fois, même si le visiteur recharge la page. Vos propres aperçus et essais ne sont pas inclus.",
   "page.preview.title": "Aperçu",

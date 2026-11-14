@@ -5,6 +5,7 @@ import { Avatar } from "./Avatar";
 import {
   type AttachmentName,
   type Citation,
+  countItemTap,
   fetchConfig,
   fetchHistory,
   type PublicBotConfig,
@@ -304,6 +305,11 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
     return () => window.removeEventListener("tb:ask", onAsk);
   }, [onPage]);
 
+  /** Statistics: a service's button under an answer was tapped (not counted in the owner's tests). */
+  const tapped = (itemId: string) => {
+    if (!preview && mode !== "playground") countItemTap(publicKey, itemId, "chat");
+  };
+
   function newConversation() {
     setUrgent(null);
     conversationId.current = null;
@@ -525,13 +531,14 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                             type="button"
                             class="tb-action"
                             disabled={busy}
-                            onClick={() =>
+                            onClick={() => {
+                              tapped(a.item!.id);
                               void send(
                                 ui(lang, a.kind === "quote" ? "quoteMessage" : "bookMessage", {
                                   item: a.item!.name,
                                 }),
-                              )
-                            }
+                              );
+                            }}
                           >
                             <Icon name="book" size={16} />
                             {ui(lang, a.kind === "quote" ? "actionQuoteItem" : "actionBookItem", {
@@ -552,6 +559,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                             href={a.href}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => a.item && tapped(a.item.id)}
                           >
                             <Icon name="book" size={16} />
                             {a.item

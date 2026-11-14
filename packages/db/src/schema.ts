@@ -1417,6 +1417,42 @@ export const assets = pgTable(
   (t) => [index("assets_tenant_idx").on(t.tenantId)],
 );
 
+/** Where a service's button was shown or tapped: its card on the page, an answer in the chat, a text. */
+export const itemStatSurfaces = ["page", "chat", "sms"] as const;
+export type ItemStatSurface = (typeof itemStatSurfaces)[number];
+
+/**
+ * Daily counts per service or product (docs/SELL_AND_PROMOTE.md §3.3): how often its quote or
+ * booking button was shown under an answer, tapped, and turned into a request. Totals only, like
+ * `page_stats`: nothing about who.
+ */
+export const itemStats = pgTable(
+  "item_stats",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => catalogItems.id, { onDelete: "cascade" }),
+    day: date("day", { mode: "string" }).notNull(),
+    surface: text("surface").$type<ItemStatSurface>().notNull(),
+    shown: integer("shown").notNull().default(0),
+    tapped: integer("tapped").notNull().default(0),
+    requested: integer("requested").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: "item_stats_pk", columns: [t.tenantId, t.botId, t.itemId, t.day, t.surface] }),
+    index("item_stats_bot_day_idx").on(t.tenantId, t.botId, t.day),
+    foreignKey({
+      name: "item_stats_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 // ---------------------------------------------------------------------------------------------
 // Phone and SMS (RLS enforced; docs/PHONE_AND_SMS.md)
 // ---------------------------------------------------------------------------------------------
@@ -1562,6 +1598,7 @@ export const rlsTables = [
   "knowledge_gaps",
   "setup_runs",
   "usage_events",
+  "item_stats",
   "phone_numbers",
   "outbound_messages",
   "sms_opt_outs",

@@ -680,6 +680,14 @@ export const en = {
   "pageStats.action.directions": "Directions",
   "pageStats.action.website": "Website",
   "pageStats.action.link": "Shop and other links",
+  "pageStats.items.title": "Services and products",
+  "pageStats.items.hint":
+    "How often each one's quote or booking button was offered under an answer, tapped, and turned into a request.",
+  "pageStats.items.service": "Service or product",
+  "pageStats.items.shown": "Offered in answers",
+  "pageStats.items.tapped": "Taps",
+  "pageStats.items.requests": "Requests",
+  "pageStats.items.tapSplit": "page {page} · chat {chat} · text {sms}",
   "pageStats.privacy":
     "Only totals are counted: nothing about who visited. A visit counts once, even if the visitor reloads the page. Your own previews and tests aren't included.",
   "page.preview.title": "Preview",

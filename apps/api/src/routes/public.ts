@@ -14,7 +14,7 @@ import {
   type PublicAvatar,
   paletteFor,
 } from "@traiblazer/appearance";
-import { type ChatImage, runChat } from "@traiblazer/core";
+import { type ChatImage, countItemEvent, runChat } from "@traiblazer/core";
 import {
   type BotSettings,
   botAddons,
@@ -35,6 +35,7 @@ import {
 import { getLanguage } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
 import {
+  itemEventSchema,
   MAX_CHAT_IMAGE_BYTES,
   MAX_CHAT_IMAGES,
   PAGE_SLUG_RE,
@@ -121,6 +122,7 @@ const UNAVAILABLE_PAGE = `<!doctype html><html lang="en"><head><meta charset="ut
  *                                    back as server-sent events
  *   GET  /v1/public/conversations/:id?key&visitorId   restore a visitor's conversation
  *   GET  /robots.txt, /sitemap.xml  for search engines: the listed business pages
+ *   POST /v1/public/item-events      a service's button was tapped (statistics per service)
  *   POST /v1/public/page-events      the business page was opened, or a contact button tapped
  *                                    (page statistics; the page sends a view once per visit)
  */
@@ -559,6 +561,46 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         res.end();
         await admission.release();
       }
+    },
+  );
+
+  // Statistics per service: a tap on its card's buttons or on its button under an answer.
+  app.post(
+    "/v1/public/item-events",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, bodyLimit: 1024 },
+    async (request, reply) => {
+      assertSameOrigin(request.headers.origin);
+      const parsed = itemEventSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid", message: "Unknown event" });
+      if (!fromPerson(request.headers)) return reply.code(204).send();
+      const found = await loadBot(parsed.data.publicKey);
+      if (found && (found.bot.status === "active" || found.demo)) {
+        const { itemId, surface } = parsed.data;
+        await withTenant(db, found.tenantId, async (tx) => {
+          // Only a service this assistant lists is counted.
+          const [item] = await tx
+            .select({ id: catalogItems.id })
+            .from(catalogItems)
+            .where(
+              and(
+                eq(catalogItems.id, itemId),
+                eq(catalogItems.botId, found.botId),
+                eq(catalogItems.enabled, true),
+              ),
+            )
+            .limit(1);
+          if (item) {
+            await countItemEvent(tx, {
+              tenantId: found.tenantId,
+              botId: found.botId,
+              itemId,
+              surface,
+              event: "tapped",
+            });
+          }
+        });
+      }
+      return reply.code(204).send();
     },
   );
 

@@ -5,12 +5,14 @@ import {
   type MessageFlags,
   messageAttachments,
   messages,
+  type Tx,
   withTenant,
 } from "@traiblazer/db";
 import type { LeadField } from "@traiblazer/industry-packs";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { defineTool } from "./contract.js";
+import { countItemEvent, itemStatSurface } from "../../stats/item-stats.js";
+import { defineTool, type ToolContext } from "./contract.js";
 
 /** Most requests one conversation can leave (a visitor correcting a detail, not a flood). */
 export const MAX_REQUESTS_PER_CONVERSATION = 3;
@@ -282,6 +284,8 @@ After it succeeds, tell the visitor their request was passed on and the business
             })
             .where(eq(leads.id, latest.id))
             .returning();
+          // The request now names a service it didn't before: counted for that service.
+          if (item && !latest.catalogItemId) await countRequested(tx, ctx, item.id);
           return {
             content: becameUrgent
               ? "Added to the request already passed on, which is now marked urgent. The business is being alerted now. Still tell the visitor to call the business's phone number if they haven't."
@@ -325,6 +329,7 @@ After it succeeds, tell the visitor their request was passed on and the business
           })
           .returning();
 
+        if (item) await countRequested(tx, ctx, item.id);
         return {
           content: urgent
             ? "Saved and marked urgent. The business is being alerted now. Still tell the visitor to call the business's phone number if they haven't."
@@ -334,6 +339,20 @@ After it succeeds, tell the visitor their request was passed on and the business
       });
     },
   });
+
+/** Statistics: a request about this service was passed on (not for the owner's own tests). */
+async function countRequested(tx: Tx, ctx: ToolContext, itemId: string) {
+  const surface = itemStatSurface(ctx.channel);
+  if (surface) {
+    await countItemEvent(tx, {
+      tenantId: ctx.tenantId,
+      botId: ctx.botId,
+      itemId,
+      surface,
+      event: "requested",
+    });
+  }
+}
 
 /** Kinds that are one follow-up seen from different sides: "call me" often turns out to be a quote or a booking. */
 const FOLLOW_UP = new Set<string>(["callback", "quote", "booking"]);

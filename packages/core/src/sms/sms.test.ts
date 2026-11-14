@@ -5,6 +5,7 @@ import {
   conversations,
   createDb,
   type DbHandle,
+  itemStats,
   jobs,
   leads,
   memberships,
@@ -640,6 +641,9 @@ describe("a service's quote or booking offer by text", () => {
     expect(lastUserText()).toContain("I'd like a quote for Water heater installation.");
     // Offered once in a conversation, like the button in the chat.
     expect((await sentTo()).at(-1)!.body).toBe("Happy to. What's your name?");
+    // Statistics: offered once by text, and the reply word counts as the tap.
+    const rows = await owner.db.select().from(itemStats).where(eq(itemStats.itemId, itemIds[0]!));
+    expect(rows.map((r) => [r.surface, r.shown, r.tapped])).toEqual([["sms", 1, 1]]);
   });
 
   it("writes the booking link when the business has one, and BOOK to reply when it hasn't", async () => {

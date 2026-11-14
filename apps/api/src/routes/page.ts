@@ -288,7 +288,30 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
           from leads
           where bot_id = ${botId} and channel <> 'playground' and created_at >= ${since}
           group by 1`);
-        return { page, chats, requests };
+        // Per service: how often its button was shown under an answer, tapped (on its card, in the
+        // chat, by text) and turned into a request. Services with nothing yet are listed too.
+        const items = await tx.execute<{
+          id: string;
+          name: string;
+          action: string;
+          shown: number;
+          tapped_page: number;
+          tapped_chat: number;
+          tapped_sms: number;
+          requested: number;
+        }>(sql`
+          select c.id, c.name, c.action,
+                 coalesce(sum(s.shown), 0)::int as shown,
+                 coalesce(sum(s.tapped) filter (where s.surface = 'page'), 0)::int as tapped_page,
+                 coalesce(sum(s.tapped) filter (where s.surface = 'chat'), 0)::int as tapped_chat,
+                 coalesce(sum(s.tapped) filter (where s.surface = 'sms'), 0)::int as tapped_sms,
+                 coalesce(sum(s.requested), 0)::int as requested
+          from catalog_items c
+          left join item_stats s on s.item_id = c.id and s.day >= ${first}::date
+          where c.bot_id = ${botId} and c.enabled
+          group by c.id, c.name, c.action, c.position, c.created_at
+          order by c.position, c.created_at`);
+        return { page, chats, requests, items };
       });
 
       const pageByDay = new Map(report.page.map((r) => [r.day, r]));
@@ -309,6 +332,14 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
           requests: sum(report.requests, (r) => r.requests),
           urgentRequests: sum(report.requests, (r) => r.urgent),
         },
+        items: report.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          action: item.action,
+          shown: item.shown,
+          taps: { page: item.tapped_page, chat: item.tapped_chat, sms: item.tapped_sms },
+          requests: item.requested,
+        })),
         daily: dates.map((date) => {
           const page = pageByDay.get(date);
           return {

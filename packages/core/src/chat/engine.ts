@@ -43,6 +43,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
 import { textOwnerAboutRequest } from "../sms/alerts.js";
+import { countItemEvent, itemStatSurface } from "../stats/item-stats.js";
 import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
 import { MarkerFilter } from "./markers.js";
@@ -970,6 +971,19 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       })),
     ];
     if (queued.length) await tx.insert(jobs).values(queued);
+    // Statistics: a service's button went out under this answer (docs/SELL_AND_PROMOTE.md §3.3).
+    const surface = itemStatSurface(input.channel);
+    for (const action of shownActions) {
+      if (surface && action.item) {
+        await countItemEvent(tx, {
+          tenantId: input.tenantId,
+          botId: bot.id,
+          itemId: action.item.id,
+          surface,
+          event: "shown",
+        });
+      }
+    }
     // The owner's phone, when they asked for requests by text (docs/PHONE_AND_SMS.md §8).
     for (const event of events) {
       if (event.type === "request.created") {
