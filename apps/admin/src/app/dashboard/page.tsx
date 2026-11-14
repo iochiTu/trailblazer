@@ -1,11 +1,12 @@
 "use client";
 
+import { paths } from "@traiblazer/marketing";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { ApiError, api, type Bot, type Language, type Me, type Pack } from "@/lib/api";
+import { ApiError, api, type Bot, type Language, type Me, type Pack, type PublicPlan } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export default function DashboardPage() {
@@ -42,6 +43,7 @@ export default function DashboardPage() {
 
   if (error) return <p className="error p-8">{error}</p>;
   if (!me) return <p className="muted p-8">{t("common.loading")}</p>;
+  const tenant = me.tenants.find((item) => item.id === tenantId);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:py-10">
@@ -84,6 +86,7 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+        {tenant && <PlanSummary planId={tenant.plan} />}
         <CreateTenantForm
           onCreated={async (id) => {
             setTenantId(id);
@@ -93,6 +96,41 @@ export default function DashboardPage() {
       </section>
 
       {tenantId && <BotsSection key={tenantId} tenantId={tenantId} />}
+    </div>
+  );
+}
+
+/** The selected business's plan: its name and what it includes. */
+function PlanSummary({ planId }: { planId: string }) {
+  const { t, language } = useI18n();
+  const [plans, setPlans] = useState<PublicPlan[] | null>(null);
+
+  useEffect(() => {
+    api<{ plans: PublicPlan[] }>("/v1/catalog/plans")
+      .then((d) => setPlans(d.plans))
+      .catch(() => setPlans([]));
+  }, []);
+
+  if (plans === null) return null;
+  // The catalog lists active plans only; a business on a retired plan still sees its plan's id.
+  const plan = plans.find((p) => p.id === planId);
+  const name = plan ? (language === "fr" ? plan.nameFr : plan.nameEn) : planId;
+
+  return (
+    <div className="panel flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm">
+      <span className="font-medium">{t("tenants.plan", { plan: name })}</span>
+      {plan && (
+        <span className="muted">
+          {t("portal.plans.questions", { count: plan.monthlyQuestions })}
+          {plan.insights && ` · ${t("tenants.planInsights")}`}
+        </span>
+      )}
+      <Link
+        href={paths.pricing(language === "fr" ? "fr" : "en")}
+        className="ms-auto underline underline-offset-4"
+      >
+        {t("tenants.planCompare")}
+      </Link>
     </div>
   );
 }
