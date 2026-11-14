@@ -99,6 +99,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           {mode === "login" ? t("auth.signUp") : t("auth.signIn")}
         </Link>
       </p>
+      {mode === "login" && (
+        <p className="muted -mt-3 text-center text-sm">
+          {t("auth.haveDemoCode")}{" "}
+          <Link className="font-medium text-[var(--accent)] underline-offset-4 hover:underline" href="/demo">
+            {t("demo.open")}
+          </Link>
+        </p>
+      )}
     </main>
   );
 }

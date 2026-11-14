@@ -1,11 +1,12 @@
 import { planFeatures } from "@traiblazer/core";
-import { memberships, plans, tenants, users } from "@traiblazer/db";
-import { loginSchema, signupSchema } from "@traiblazer/shared";
-import { eq } from "drizzle-orm";
+import { demos, memberships, plans, tenants, users } from "@traiblazer/db";
+import { demoSignInSchema, loginSchema, signupSchema } from "@traiblazer/shared";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "../auth/password.js";
 import { createSession, deleteSession, SESSION_COOKIE } from "../auth/sessions.js";
 import type { AppContext } from "../context.js";
+import { hashDemoCode } from "../lib/demo-access.js";
 import { conflict, HttpError } from "../lib/errors.js";
 import { requireUser } from "../plugins/auth.js";
 
@@ -69,6 +70,39 @@ export async function authRoutes(app: FastifyInstance, { db, config, limiter }: 
     });
     setSessionCookie(reply, session.token, session.expiresAt);
     return { user: { id: user.id, email: user.email, name: user.name, uiLanguage: user.uiLanguage } };
+  });
+
+  /**
+   * A customer signs in to their demo business with the access code an operator gave them. Limited
+   * per address as well as by the route limit: codes are long and random, but guessing stays slow.
+   */
+  app.post("/v1/auth/demo", authRateLimit, async (request, reply) => {
+    if (!(await limiter!.hit(`demo-code:${request.ip}`, config.LOGIN_ATTEMPTS_PER_ACCOUNT, 15 * 60))) {
+      throw new HttpError(429, "too_many_attempts", "Too many attempts. Try again in a few minutes.");
+    }
+    const { code } = demoSignInSchema.parse(request.body);
+    const [found] = await db
+      .select({ demoId: demos.id, user: users })
+      .from(demos)
+      .innerJoin(tenants, eq(tenants.id, demos.tenantId))
+      .innerJoin(users, eq(users.id, demos.accessUserId))
+      .where(
+        and(eq(demos.accessCodeHash, hashDemoCode(code)), eq(tenants.kind, "demo"), eq(users.demo, true)),
+      )
+      .limit(1);
+    if (!found)
+      throw new HttpError(401, "invalid_code", "This code doesn't work. Check it, or ask us for a new one.");
+
+    await db.update(demos).set({ accessLastUsedAt: new Date() }).where(eq(demos.id, found.demoId));
+    const session = await createSession(db, found.user.id, config.SESSION_TTL_DAYS, {
+      userAgent: request.headers["user-agent"],
+      ip: request.ip,
+    });
+    setSessionCookie(reply, session.token, session.expiresAt);
+    const { user } = found;
+    return {
+      user: { id: user.id, email: user.email, name: user.name, uiLanguage: user.uiLanguage, demo: true },
+    };
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {

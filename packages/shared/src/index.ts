@@ -514,12 +514,39 @@ export const createDemoSchema = z
       .max(500)
       .nullish()
       .transform((value) => value || null),
+    /** Plan the customer tries (an active plan); defaults to the plan new businesses start on. */
+    plan: z.string().trim().min(1).max(40).nullish(),
+    /** Also give the customer an access code to sign in to the demo business. */
+    customerAccess: z.boolean().default(false),
   })
   .refine((demo) => demo.websiteUrl || demo.text, {
     path: ["websiteUrl"],
     message: "Add the business's website, or paste text from its Google listing or Facebook page",
   });
 export type CreateDemoInput = z.infer<typeof createDemoSchema>;
+
+/** Changes the plan a demo business is on (an active plan). */
+export const updateDemoSchema = z.object({ plan: z.string().trim().min(1).max(40) });
+
+/** Letters and digits a person can't misread (no 0/O, 1/I/L, 5/S, 8/B). */
+export const DEMO_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXYZ234679";
+/** Three groups of four: about 57 bits, and sign-in attempts are rate-limited. */
+export const DEMO_CODE_LENGTH = 12;
+
+/**
+ * The code as it is stored and compared: upper case, without spaces or dashes, so "k7mp q2xw-9htr"
+ * and "K7MP-Q2XW-9HTR" are the same code.
+ */
+export const normalizeDemoCode = (code: string) => code.toUpperCase().replace(/[\s-]/g, "");
+
+/** A customer signs in to their demo business with the access code an operator gave them. */
+export const demoSignInSchema = z.object({
+  code: z
+    .string()
+    .max(40)
+    .transform(normalizeDemoCode)
+    .pipe(z.string().length(DEMO_CODE_LENGTH, "Enter the 12-character code you received")),
+});
 
 /** Hands a demo over to the owner's account (which must already exist). */
 export const handOverDemoSchema = z.object({

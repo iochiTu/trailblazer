@@ -29,7 +29,15 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
 
 export interface Me {
   /** platformRole is set only for Traiblazer staff accounts (never for business users). */
-  user: { id: string; email: string; name: string; uiLanguage: string; platformRole: "super_admin" | null };
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    uiLanguage: string;
+    platformRole: "super_admin" | null;
+    /** A prospect's demo account: signed in with an access code, owns its demo business only. */
+    demo: boolean;
+  };
   tenants: {
     id: string;
     name: string;

@@ -21,6 +21,10 @@ export interface OperatorDemo {
   tenantId: string;
   botId: string;
   name: string;
+  /** Plan the customer tries. */
+  plan: string;
+  /** Set while the customer can sign in with an access code (the code is only shown when made). */
+  access: { createdAt: string; lastUsedAt: string | null } | null;
   industry: string | null;
   status: "building" | "ready" | "needs_information" | "failed" | "handed_over";
   error: string | null;

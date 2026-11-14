@@ -578,6 +578,15 @@ export const en = {
   "tenants.plan": "Your plan: {plan}",
   "tenants.planInsights": "Insights included",
   "tenants.planCompare": "Compare plans",
+  "auth.haveDemoCode": "Have a demo access code?",
+  "demo.title": "Open your demo",
+  "demo.intro": "Enter the access code we gave you to try the assistant with your own business.",
+  "demo.code": "Access code",
+  "demo.codeHint": "12 letters and numbers. Dashes and spaces don't matter.",
+  "demo.open": "Open my demo",
+  "demo.invalidCode": "This code doesn't work. Check it, or ask us for a new one.",
+  "demo.banner":
+    "You're using a demo account. Try everything with your business; when you're ready, we'll move it to your own account.",
   "tenants.limitReached":
     "You've reached the maximum number of businesses for one account. Contact us if you need more.",
   "portal.plans.businesses":

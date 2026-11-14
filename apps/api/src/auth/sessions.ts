@@ -14,6 +14,8 @@ export interface SessionUser {
    * effect immediately.
    */
   platformRole: PlatformRole | null;
+  /** A prospect's demo account (signed in with an access code; owns its demo business only). */
+  demo: boolean;
 }
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -44,6 +46,7 @@ export async function getSessionUser(db: Db, token: string): Promise<SessionUser
       name: users.name,
       uiLanguage: users.uiLanguage,
       platformRole: users.platformRole,
+      demo: users.demo,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))

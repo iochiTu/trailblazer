@@ -16,12 +16,13 @@ import {
   withTenant,
 } from "@traiblazer/db";
 import { getPack, isSelectable } from "@traiblazer/industry-packs";
-import { createDemoSchema, handOverDemoSchema } from "@traiblazer/shared";
+import { createDemoSchema, handOverDemoSchema, updateDemoSchema } from "@traiblazer/shared";
 import { and, count, desc, eq, isNull, ne, sql, sum } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
 import { createAssistant } from "../lib/assistants.js";
 import { audit } from "../lib/audit.js";
+import { grantDemoAccess, removeDemoAccess } from "../lib/demo-access.js";
 import { badRequest, HttpError, notFound } from "../lib/errors.js";
 import { isUuid, slugify } from "../lib/ids.js";
 import { requireSuperAdmin } from "../plugins/auth.js";
@@ -37,11 +38,15 @@ const LIST_LIMIT = 50;
  *   GET    /v1/operator/demos                 the demos, with their page link and how they were used
  *   POST   /v1/operator/demos                 build a demo page from a prospect's public information
  *   POST   /v1/operator/demos/:id/build       read the sources again and fill the page in again
+ *   PATCH  /v1/operator/demos/:id             change the plan the demo is on
+ *   POST   /v1/operator/demos/:id/access      give the customer a (new) access code
+ *   DELETE /v1/operator/demos/:id/access      end the customer's access
  *   POST   /v1/operator/demos/:id/hand-over   give the business to its owner's account
  *   DELETE /v1/operator/demos/:id             remove a demo and everything in it
  *
- * A demo is a business of kind "demo" with no members: its page carries a demo notice and is never
- * listed by search engines. Operators edit it like any business, through support access.
+ * A demo is a business of kind "demo": its page carries a demo notice and is never listed by search
+ * engines. Operators edit it like any business, through support access. Its only member, if any, is
+ * the customer's demo account (signs in with an access code, see lib/demo-access.ts).
  */
 export async function demoRoutes(app: FastifyInstance, { db, config, platform }: AppContext) {
   const guard = { preHandler: requireSuperAdmin };
@@ -68,9 +73,21 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
     return row;
   };
 
+  /** The plan id if it is a plan new businesses can be put on (active), else 400. */
+  const activePlan = async (planId: string) => {
+    const plan = (await platform!.plans()).find((p) => p.id === planId && p.active);
+    if (!plan) throw badRequest(`Plan "${planId}" isn't offered`);
+    return plan.id;
+  };
+
+  /** Only a demo still being prepared for its customer can be changed here. */
+  const assertDemo = (tenant: { kind: string }) => {
+    if (tenant.kind !== "demo") throw new HttpError(409, "demo_handed_over", "This demo was handed over");
+  };
+
   app.get("/v1/operator/demos", guard, async () => {
     const rows = await db
-      .select({ demo: demos, tenantName: tenants.name, createdBy: users.email })
+      .select({ demo: demos, tenantName: tenants.name, plan: tenants.plan, createdBy: users.email })
       .from(demos)
       .innerJoin(tenants, eq(tenants.id, demos.tenantId))
       .leftJoin(users, eq(users.id, demos.createdBy))
@@ -78,7 +95,7 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
       .limit(LIST_LIMIT);
 
     const list = [];
-    for (const { demo, tenantName, createdBy } of rows) {
+    for (const { demo, tenantName, plan, createdBy } of rows) {
       // What is on the page and how it was used, read inside the demo's own business (RLS).
       const inside = await withTenant(db, demo.tenantId, async (tx) => {
         const [bot] = await tx
@@ -127,6 +144,11 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
         tenantId: demo.tenantId,
         botId: demo.botId,
         name: tenantName,
+        plan,
+        // Whether the customer can sign in; the code itself is only shown when it is made.
+        access: demo.accessCodeHash
+          ? { createdAt: demo.accessCodeCreatedAt, lastUsedAt: demo.accessLastUsedAt }
+          : null,
         industry: getPack(inside.bot?.pack ?? "")?.name ?? inside.bot?.pack ?? null,
         status: demo.status,
         error: demo.error,
@@ -155,7 +177,9 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
       );
     }
     if (input.websiteUrl) assertLooksPublic(input.websiteUrl);
-    const plan = allPlans.find((p) => p.id === policies.defaultPlan && p.active)?.id ?? "trial";
+    const plan = input.plan
+      ? await activePlan(input.plan)
+      : (allPlans.find((p) => p.id === policies.defaultPlan && p.active)?.id ?? "trial");
     const userId = request.user!.id;
 
     const created = await db.transaction(async (tx) => {
@@ -243,13 +267,22 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
           runAt: new Date(Date.now() + DEMO_RETRY_MS),
         },
       ]);
-      return { demo: demo!, bot, publicKey: key.publicKey };
+      const accessCode = input.customerAccess
+        ? await grantDemoAccess(
+            tx,
+            { id: demo!.id, tenantId, accessUserId: null },
+            { name: input.businessName, uiLanguage: input.language },
+          )
+        : null;
+      return { demo: demo!, bot, publicKey: key.publicKey, accessCode };
     });
 
     await log(request, "demo.created", created.demo.id, {
       business: input.businessName,
       pack: input.pack,
+      plan,
       website: input.websiteUrl ?? null,
+      customerAccess: input.customerAccess,
     });
     return reply.code(201).send({
       demo: {
@@ -258,9 +291,42 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
         botId: created.bot.id,
         name: input.businessName,
         status: created.demo.status,
+        plan,
         pageUrl: `${config.PUBLIC_URL}/c/${created.publicKey}`,
+        // Shown to the operator this once; only its hash is kept.
+        accessCode: created.accessCode,
       },
     });
+  });
+
+  app.patch<IdParams>("/v1/operator/demos/:id", guard, async (request) => {
+    const { demo, tenant } = await find(request.params.id);
+    assertDemo(tenant);
+    const plan = await activePlan(updateDemoSchema.parse(request.body).plan);
+    await db.update(tenants).set({ plan }).where(eq(tenants.id, tenant.id));
+    await log(request, "demo.plan_changed", demo.id, { business: tenant.name, from: tenant.plan, to: plan });
+    return { demo: { id: demo.id, plan } };
+  });
+
+  app.post<IdParams>("/v1/operator/demos/:id/access", guard, async (request) => {
+    const { demo, tenant } = await find(request.params.id);
+    assertDemo(tenant);
+    const renewed = Boolean(demo.accessUserId);
+    const accessCode = await db.transaction((tx) =>
+      grantDemoAccess(tx, demo, { name: tenant.name, uiLanguage: tenant.ownerLanguage }),
+    );
+    await log(request, renewed ? "demo.access_renewed" : "demo.access_granted", demo.id, {
+      business: tenant.name,
+    });
+    return { demo: { id: demo.id, accessCode } };
+  });
+
+  app.delete<IdParams>("/v1/operator/demos/:id/access", guard, async (request, reply) => {
+    const { demo, tenant } = await find(request.params.id);
+    assertDemo(tenant);
+    await db.transaction((tx) => removeDemoAccess(tx, demo));
+    await log(request, "demo.access_removed", demo.id, { business: tenant.name });
+    return reply.code(204).send();
   });
 
   app.post<IdParams>("/v1/operator/demos/:id/build", guard, async (request) => {
@@ -289,7 +355,7 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
       throw new HttpError(409, "demo_building", "Wait until the demo is built");
     }
     const [owner] = await db
-      .select({ id: users.id, platformRole: users.platformRole })
+      .select({ id: users.id, platformRole: users.platformRole, demo: users.demo })
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
@@ -301,6 +367,7 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
       );
     }
     if (owner.platformRole) throw badRequest("Staff accounts can't own businesses");
+    if (owner.demo) throw badRequest("Hand the demo over to the owner's own account, not a demo account");
     const { maxBusinessesPerAccount } = await platform!.policies();
 
     await db.transaction(async (tx) => {
@@ -317,6 +384,8 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
           `This account already owns ${maxBusinessesPerAccount} businesses, the most an account can.`,
         );
       }
+      // The customer's demo account and code end here: the business is now the owner's own.
+      await removeDemoAccess(tx, demo);
       await tx.insert(memberships).values({ tenantId: tenant.id, userId: owner.id, role: "owner" });
       await tx.update(tenants).set({ kind: "business" }).where(eq(tenants.id, tenant.id));
       await tx
@@ -339,7 +408,11 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
     const { demo, tenant } = await find(request.params.id);
     // Only a demo is ever removed here: once handed over it is the owner's business.
     if (tenant.kind !== "demo") throw new HttpError(409, "demo_handed_over", "This demo was handed over");
-    await db.delete(tenants).where(and(eq(tenants.id, tenant.id), eq(tenants.kind, "demo")));
+    await db.transaction(async (tx) => {
+      // The demo account first: deleting the business removes the demo row that points to it.
+      await removeDemoAccess(tx, demo);
+      await tx.delete(tenants).where(and(eq(tenants.id, tenant.id), eq(tenants.kind, "demo")));
+    });
     await log(request, "demo.deleted", demo.id, { business: tenant.name });
     return reply.code(204).send();
   });

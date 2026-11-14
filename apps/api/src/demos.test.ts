@@ -12,6 +12,7 @@ import {
   knowledgeSources,
   memberships,
   operatorAuditLogs,
+  plans,
   runMigrations,
   setupRuns,
   tenants,
@@ -196,7 +197,16 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (ownerDb) {
-    if (tenantIds.length) await ownerDb.db.delete(tenants).where(inArray(tenants.id, tenantIds));
+    if (tenantIds.length) {
+      // Demo accounts belong to no tenant: remove the ones the demos still point to.
+      const accounts = await ownerDb.db
+        .select({ id: demos.accessUserId })
+        .from(demos)
+        .where(inArray(demos.tenantId, tenantIds));
+      const ids = accounts.map((a) => a.id).filter((id): id is string => Boolean(id));
+      if (ids.length) await ownerDb.db.delete(users).where(inArray(users.id, ids));
+      await ownerDb.db.delete(tenants).where(inArray(tenants.id, tenantIds));
+    }
     await ownerDb.db.delete(operatorAuditLogs).where(eq(operatorAuditLogs.targetType, "demo"));
     if (emails.length) await ownerDb.db.delete(users).where(inArray(users.email, emails));
   }
@@ -444,5 +454,176 @@ describe("prospect demos: hand-over and removal", () => {
         .where(and(eq(operatorAuditLogs.targetType, "demo"), eq(operatorAuditLogs.targetId, gone.id)))
     ).map((entry) => entry.action);
     expect(actions.sort()).toEqual(["demo.created", "demo.deleted"]);
+  });
+});
+
+describe("prospect demos: customer access", () => {
+  let demo: Demo & { plan: string; accessCode: string | null };
+  let code: string;
+  let customerCookie: string;
+  /** An active plan other than the one new businesses start on, to see the choice is kept. */
+  let chosenPlan: string;
+
+  const signIn = (value: string) =>
+    app.inject({ method: "POST", url: "/v1/auth/demo", payload: { code: value } });
+  const as = (cookie: string, method: "GET" | "POST", url: string, payload?: object) =>
+    app.inject({ method, url, headers: { cookie }, ...(payload ? { payload } : {}) });
+  const cookieOf = (res: Awaited<ReturnType<typeof signIn>>) =>
+    `tb_session=${res.cookies.find((c) => c.name === "tb_session")!.value}`;
+  const account = async () => {
+    const [row] = await ownerDb.db.select().from(demos).where(eq(demos.id, demo.id));
+    return row!;
+  };
+
+  beforeAll(async () => {
+    const { defaultPlan } = (await op("GET", "/v1/operator/policies")).json().policies;
+    const active = await ownerDb.db.select({ id: plans.id }).from(plans).where(eq(plans.active, true));
+    chosenPlan = active.find((p) => p.id !== defaultPlan)?.id ?? defaultPlan;
+  });
+
+  it("only accepts a plan that is offered", async () => {
+    const res = await op("POST", "/v1/operator/demos", {
+      businessName: "Planless Plumbing",
+      pack: "trades",
+      text: LISTING,
+      plan: "no-such-plan",
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("creates the demo on the chosen plan with a demo account that owns it, and shows the code once", async () => {
+    demo = (await createDemo({
+      businessName: "Rideau Plumbing",
+      plan: chosenPlan,
+      customerAccess: true,
+    })) as typeof demo;
+    expect(demo.plan).toBe(chosenPlan);
+    expect(demo.accessCode).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    code = demo.accessCode!;
+
+    const [tenant] = await ownerDb.db.select().from(tenants).where(eq(tenants.id, demo.tenantId));
+    expect(tenant).toMatchObject({ kind: "demo", plan: chosenPlan });
+    const { accessUserId, accessCodeHash } = await account();
+    // Only a hash is kept, never the code.
+    expect(accessCodeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(accessCodeHash).not.toContain(code.replace(/-/g, ""));
+    const [user] = await ownerDb.db.select().from(users).where(eq(users.id, accessUserId!));
+    expect(user).toMatchObject({ demo: true, name: "Rideau Plumbing", platformRole: null });
+    expect(
+      await ownerDb.db
+        .select({ userId: memberships.userId, role: memberships.role })
+        .from(memberships)
+        .where(eq(memberships.tenantId, demo.tenantId)),
+    ).toEqual([{ userId: accessUserId, role: "owner" }]);
+    const shown = await listed(demo.id);
+    expect(shown).toMatchObject({ plan: chosenPlan, access: { lastUsedAt: null } });
+    expect(JSON.stringify(shown)).not.toContain(code);
+  });
+
+  it("refuses wrong and malformed codes", async () => {
+    expect((await signIn("AAAA-AAAA-AAAA")).statusCode).toBe(401);
+    expect((await signIn("short")).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/v1/auth/demo", payload: {} })).statusCode).toBe(400);
+  });
+
+  it("signs the customer in with the code, however it is typed, to their demo business only", async () => {
+    const res = await signIn(` ${code.toLowerCase().replace(/-/g, " ")} `);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().user).toMatchObject({ demo: true, name: "Rideau Plumbing" });
+    customerCookie = cookieOf(res);
+
+    const me = (await as(customerCookie, "GET", "/v1/auth/me")).json();
+    expect(me.user.demo).toBe(true);
+    expect(me.tenants).toMatchObject([{ id: demo.tenantId, plan: chosenPlan, role: "owner" }]);
+    const bot = await as(customerCookie, "GET", `/v1/tenants/${demo.tenantId}/bots/${demo.botId}`);
+    expect(bot.statusCode).toBe(200);
+    // It can't add businesses, and can't reach the operator console.
+    const added = await as(customerCookie, "POST", "/v1/tenants", { name: "Side Business" });
+    expect(added.statusCode).toBe(403);
+    expect(added.json().error).toBe("demo_account");
+    expect((await as(customerCookie, "GET", "/v1/operator/demos")).statusCode).toBe(404);
+    expect((await listed(demo.id))?.access).toMatchObject({ lastUsedAt: expect.any(String) });
+  });
+
+  it("changes the plan the customer tries", async () => {
+    const res = await op("PATCH", `/v1/operator/demos/${demo.id}`, { plan: "trial" });
+    expect(res.statusCode, res.body).toBe(200);
+    const me = (await as(customerCookie, "GET", "/v1/auth/me")).json();
+    expect(me.tenants[0].plan).toBe("trial");
+    expect((await op("PATCH", `/v1/operator/demos/${demo.id}`, { plan: "no-such-plan" })).statusCode).toBe(
+      400,
+    );
+  });
+
+  it("makes a new code: the old one stops working and the customer is signed out", async () => {
+    const res = await op("POST", `/v1/operator/demos/${demo.id}/access`);
+    expect(res.statusCode, res.body).toBe(200);
+    const fresh = res.json().demo.accessCode as string;
+    expect(fresh).not.toBe(code);
+    expect((await signIn(code)).statusCode).toBe(401);
+    expect((await as(customerCookie, "GET", "/v1/auth/me")).statusCode).toBe(401);
+    const again = await signIn(fresh);
+    expect(again.statusCode).toBe(200);
+    customerCookie = cookieOf(again);
+    code = fresh;
+  });
+
+  it("removes access: the code and the demo account go, the demo page stays", async () => {
+    const { accessUserId } = await account();
+    expect((await op("DELETE", `/v1/operator/demos/${demo.id}/access`)).statusCode).toBe(204);
+    expect((await signIn(code)).statusCode).toBe(401);
+    expect((await as(customerCookie, "GET", "/v1/auth/me")).statusCode).toBe(401);
+    expect(await ownerDb.db.select().from(users).where(eq(users.id, accessUserId!))).toEqual([]);
+    expect(
+      await ownerDb.db.select().from(memberships).where(eq(memberships.tenantId, demo.tenantId)),
+    ).toEqual([]);
+    expect((await listed(demo.id))?.access).toBeNull();
+    expect(await ownerDb.db.select().from(tenants).where(eq(tenants.id, demo.tenantId))).toHaveLength(1);
+  });
+
+  it("removes the demo account on hand-over, and never hands over to a demo account", async () => {
+    await runWorker(demo);
+    code = (await op("POST", `/v1/operator/demos/${demo.id}/access`)).json().demo.accessCode;
+    const { accessUserId } = await account();
+    const [demoUser] = await ownerDb.db.select().from(users).where(eq(users.id, accessUserId!));
+    expect(
+      (await op("POST", `/v1/operator/demos/${demo.id}/hand-over`, { email: demoUser!.email })).statusCode,
+    ).toBe(400);
+
+    const owner = await signup("rideau-owner");
+    const res = await op("POST", `/v1/operator/demos/${demo.id}/hand-over`, { email: owner.email });
+    expect(res.statusCode, res.body).toBe(200);
+    expect((await signIn(code)).statusCode).toBe(401);
+    expect(await ownerDb.db.select().from(users).where(eq(users.id, accessUserId!))).toEqual([]);
+    expect(
+      await ownerDb.db
+        .select({ userId: memberships.userId })
+        .from(memberships)
+        .where(eq(memberships.tenantId, demo.tenantId)),
+    ).toEqual([{ userId: owner.id }]);
+    expect((await op("POST", `/v1/operator/demos/${demo.id}/access`)).statusCode).toBe(409);
+  });
+
+  it("removes the demo account when the demo is deleted, and records what operators did", async () => {
+    const gone = (await createDemo({ businessName: "Brief Plumbing", customerAccess: true })) as typeof demo;
+    const [row] = await ownerDb.db.select().from(demos).where(eq(demos.id, gone.id));
+    expect((await op("DELETE", `/v1/operator/demos/${gone.id}`)).statusCode).toBe(204);
+    expect(await ownerDb.db.select().from(users).where(eq(users.id, row!.accessUserId!))).toEqual([]);
+    expect((await signIn(gone.accessCode!)).statusCode).toBe(401);
+
+    const actions = (
+      await ownerDb.db
+        .select({ action: operatorAuditLogs.action })
+        .from(operatorAuditLogs)
+        .where(and(eq(operatorAuditLogs.targetType, "demo"), eq(operatorAuditLogs.targetId, demo.id)))
+    ).map((entry) => entry.action);
+    expect(actions.sort()).toEqual([
+      "demo.access_granted",
+      "demo.access_removed",
+      "demo.access_renewed",
+      "demo.created",
+      "demo.handed_over",
+      "demo.plan_changed",
+    ]);
   });
 });
