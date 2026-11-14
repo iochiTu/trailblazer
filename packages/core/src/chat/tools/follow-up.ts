@@ -1,3 +1,4 @@
+import type { AddonEvent } from "@traiblazer/addons";
 import {
   leadKinds,
   leads,
@@ -86,6 +87,7 @@ export const requestFollowUpTool = (fields: LeadField[], options: { items?: bool
     description: `Pass a visitor's request to the business's staff so a person can follow up: a call back, a quote, a booking request, a question you couldn't answer, a complaint. It saves the request and notifies the business. It does not book, order or confirm anything.
 Use it when the visitor asks to be contacted or to talk to a person, or accepts your offer to pass their request on. Offer it when you can't answer something the visitor needs, when they want something only staff can do, or when a workflow ends with the business following up.
 Before calling it you need the visitor's name, at least one way to reach them (an email address or phone number that they typed in this conversation) and what they want. Ask for what is missing, one or two things at a time, and call it once you have them; don't ask the visitor to confirm again. Never guess or make up contact details.
+If you already passed a request on in this conversation and the visitor adds or corrects something (a detail, a time, another way to reach them), call it again with the whole request as it now stands: the request the business has is updated, not doubled.
 After it succeeds, tell the visitor their request was passed on and the business will get back to them; don't promise when. If it fails, say so and give the business's phone or email from <business_profile> instead.`,
     input: z.object({
       kind: z
@@ -203,18 +205,6 @@ After it succeeds, tell the visitor their request was passed on and the business
           }
         }
 
-        const [{ sent } = { sent: 0 }] = await tx
-          .select({ sent: count() })
-          .from(leads)
-          .where(eq(leads.conversationId, ctx.conversationId));
-        if (sent >= MAX_REQUESTS_PER_CONVERSATION) {
-          return {
-            isError: true,
-            content:
-              "This conversation's requests were already passed on, and no more can be added. Tell the visitor the business has their details and will get back to them.",
-          };
-        }
-
         // Urgent when the assistant says so, or when a message in this conversation was triaged so.
         const triaged =
           ctx.urgent ||
@@ -262,6 +252,57 @@ After it succeeds, tell the visitor their request was passed on and the business
           .orderBy(desc(messageAttachments.createdAt))
           .limit(MAX_REQUEST_PHOTOS);
 
+        // The visitor adding or correcting details after their request was passed on: the request
+        // the business already has is updated, so they don't get the same request twice. Only while
+        // nobody has started on it, and only for the same kind of follow-up (a complaint after a
+        // quote request is its own request).
+        const [latest] = await tx
+          .select()
+          .from(leads)
+          .where(eq(leads.conversationId, ctx.conversationId))
+          .orderBy(desc(leads.createdAt))
+          .limit(1);
+        if (latest?.status === "new" && sameFollowUp(latest.kind, input.kind)) {
+          const becameUrgent = urgent && !latest.urgent;
+          const [updated] = await tx
+            .update(leads)
+            .set({
+              kind: input.kind,
+              name: clean(input.name) ?? latest.name,
+              email: email ?? latest.email,
+              phone: phone ?? latest.phone,
+              bestTime: clean(input.bestTime) ?? latest.bestTime,
+              message: mergedRequest(latest.message, input.request),
+              urgent: latest.urgent || urgent,
+              details: { ...latest.details, ...details },
+              catalogItemId: item?.id ?? latest.catalogItemId,
+              itemName: item?.name ?? latest.itemName,
+              attachmentIds: [...new Set([...latest.attachmentIds, ...photos.map((p) => p.id).reverse()])],
+              updatedAt: new Date(),
+            })
+            .where(eq(leads.id, latest.id))
+            .returning();
+          return {
+            content: becameUrgent
+              ? "Added to the request already passed on, which is now marked urgent. The business is being alerted now. Still tell the visitor to call the business's phone number if they haven't."
+              : "Added to the request already passed on: the business has the new details with it. Tell the visitor the details were added to their request; don't mention how many requests there are.",
+            // Told again only when it became urgent: the alert must go out.
+            events: becameUrgent ? [requestEvent(updated!, fields, ctx.conversationId)] : [],
+          };
+        }
+
+        const [{ sent } = { sent: 0 }] = await tx
+          .select({ sent: count() })
+          .from(leads)
+          .where(eq(leads.conversationId, ctx.conversationId));
+        if (sent >= MAX_REQUESTS_PER_CONVERSATION) {
+          return {
+            isError: true,
+            content:
+              "This conversation's requests were already passed on, and no more can be added. Tell the visitor the business has their details and will get back to them.",
+          };
+        }
+
         const [lead] = await tx
           .insert(leads)
           .values({
@@ -288,31 +329,52 @@ After it succeeds, tell the visitor their request was passed on and the business
           content: urgent
             ? "Saved and marked urgent. The business is being alerted now. Still tell the visitor to call the business's phone number if they haven't."
             : "Saved. The business has been given this request and the visitor's contact details.",
-          events: [
-            {
-              type: "request.created",
-              leadId: lead!.id,
-              conversationId: ctx.conversationId,
-              kind: lead!.kind,
-              name: lead!.name,
-              email: lead!.email,
-              phone: lead!.phone,
-              bestTime: lead!.bestTime,
-              message: lead!.message,
-              language: lead!.language,
-              urgent: lead!.urgent,
-              item: lead!.itemName,
-              details: fields
-                .filter((f) => details[f.key])
-                .map((f) => ({ key: f.key, label: f.label, value: details[f.key]! })),
-              photoCount: lead!.attachmentIds.length,
-              at: lead!.createdAt,
-            },
-          ],
+          events: [requestEvent(lead!, fields, ctx.conversationId)],
         };
       });
     },
   });
+
+/** Kinds that are one follow-up seen from different sides: "call me" often turns out to be a quote or a booking. */
+const FOLLOW_UP = new Set<string>(["callback", "quote", "booking"]);
+const sameFollowUp = (a: string, b: string) => a === b || (FOLLOW_UP.has(a) && FOLLOW_UP.has(b));
+
+/**
+ * The request's text after an update: the new summary, unless it is much shorter than what the
+ * business already has (then it only adds a detail, and is put after it).
+ */
+function mergedRequest(before: string, now: string): string {
+  if (now.trim() === before.trim()) return before;
+  if (now.length >= before.length * 0.6) return now;
+  return `${before.trim()} ${now.trim()}`.slice(0, 1000);
+}
+
+/** What add-ons and alerts are told about a request. */
+function requestEvent(
+  lead: typeof leads.$inferSelect,
+  fields: LeadField[],
+  conversationId: string,
+): AddonEvent {
+  return {
+    type: "request.created",
+    leadId: lead.id,
+    conversationId,
+    kind: lead.kind,
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    bestTime: lead.bestTime,
+    message: lead.message,
+    language: lead.language,
+    urgent: lead.urgent,
+    item: lead.itemName,
+    details: fields
+      .filter((f) => lead.details[f.key])
+      .map((f) => ({ key: f.key, label: f.label, value: lead.details[f.key]! })),
+    photoCount: lead.attachmentIds.length,
+    at: lead.createdAt,
+  };
+}
 
 /** The request tool without industry fields (generic businesses, tests). */
 export const requestFollowUp = requestFollowUpTool([]);

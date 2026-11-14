@@ -179,7 +179,9 @@ const oneLine = (text: string) => text.replace(/[\r\n<>]+/g, " ").trim();
 const SMS_RULES = `# This conversation is by text message (SMS)
 - Write plain text only: no Markdown, no bullet symbols, no headings.
 - Keep it short: one to three sentences, under about 300 characters when you can, and one question at a time.
-- Buttons and photos can't be shown in a text. Never write [[action:...]] or [[photo:...]] markers here. Where you would show a Call button, write the business's phone number; where you would show a Book button, write the booking link in full; for a quote or a booking of a service, offer to pass the request on.
+- When your reply answers a question about a service or product marked "(button: quote)" or "(button: book)" in <services>, end it with that item's marker on a line of its own, exactly as you would in a chat: [[action:quote:s3]] or [[action:book:s3]]. The platform replaces the marker with a line telling the customer what to reply (or with the booking link), so don't write such a line yourself and don't invite them to "reply here" in your own words.
+- That is the only marker to use in a text. Photos, a Call button and a plain Book button can't be shown: never write [[photo:...]], [[action:call]] or [[action:book]]. Where you would show a Call button, write the business's phone number; where you would show a plain Book button, write the booking link in full.
+- The customer can send photos by text. When a photo of the problem, the part or the place would help the business, say they can text one.
 - The customer is texting from their own phone number, and the business gets that number with any request you pass on, so don't ask for it. You still need their name. Use another number or an email only if they give one.`;
 
 /** The business's services and products as a list, or null when it has none. */

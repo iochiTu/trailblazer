@@ -22,6 +22,23 @@ export function smsKeyword(text: string): SmsKeyword | null {
   return null;
 }
 
+const QUOTE = new Set(["quote", "soumission", "devis"]);
+const BOOK = new Set(["book", "reserver", "reservation"]);
+
+/**
+ * The word a customer texts back to take up a service's offer ("Reply QUOTE to ask for a quote
+ * for…"): "quote" or "book", in English or French, alone in the message.
+ */
+export function smsReplyWord(text: string): "quote" | "book" | null {
+  const word = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!]+$/, "");
+  return QUOTE.has(word) ? "quote" : BOOK.has(word) ? "book" : null;
+}
+
 /** Characters every phone shows in the 7-bit alphabet (GSM 03.38); anything else makes the text Unicode. */
 const GSM =
   "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";

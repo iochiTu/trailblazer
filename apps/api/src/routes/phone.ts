@@ -1,6 +1,8 @@
+import { phoneSpendMicros } from "@traiblazer/core";
 import {
   bots,
   outboundMessages,
+  phoneAlertRequests,
   phoneCallModes,
   phoneNumbers,
   resolvePhoneNumber,
@@ -20,8 +22,17 @@ import { requireTenantRole } from "../plugins/auth.js";
 type BotParams = { Params: { tenantId: string; botId: string } };
 
 const attachSchema = z.object({ number: z.string().trim().min(7).max(32) });
+/** The daily spend cap a business may set: 50 cents to 200 dollars. */
+const CAP_CENTS = { min: 50, max: 20_000 };
 const settingsSchema = z
-  .object({ smsEnabled: z.boolean(), callMode: z.enum(phoneCallModes) })
+  .object({
+    smsEnabled: z.boolean(),
+    callMode: z.enum(phoneCallModes),
+    dailyCapCents: z.number().int().min(CAP_CENTS.min).max(CAP_CENTS.max),
+    /** The owner's mobile number for alerts by text; null or "" turns them off. */
+    alertNumber: z.string().trim().max(32).nullable(),
+    alertRequests: z.enum(phoneAlertRequests),
+  })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "Nothing to change");
 
@@ -31,6 +42,9 @@ const columns = {
   provider: phoneNumbers.provider,
   smsEnabled: phoneNumbers.smsEnabled,
   callMode: phoneNumbers.callMode,
+  dailyCapCents: phoneNumbers.dailyCapCents,
+  alertNumber: phoneNumbers.alertNumber,
+  alertRequests: phoneNumbers.alertRequests,
 };
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000);
 const shown = <T extends { e164: string }>(row: T) => ({ ...row, display: formatPhone(row.e164) });
@@ -71,7 +85,16 @@ export async function phoneRoutes(app: FastifyInstance, { db, telephony, config 
         .from(outboundMessages)
         .where(and(eq(outboundMessages.botId, botId), gte(outboundMessages.createdAt, daysAgo(30))));
       const [stopped] = await tx.select({ n: count() }).from(smsOptOuts).where(eq(smsOptOuts.botId, botId));
-      return { row, stats: { textsSent30Days: texts?.n ?? 0, optOuts: stopped?.n ?? 0 } };
+      const spentMicros = row ? await phoneSpendMicros(tx, botId, new Date()) : 0;
+      return {
+        row,
+        stats: {
+          textsSent30Days: texts?.n ?? 0,
+          optOuts: stopped?.n ?? 0,
+          // What the number cost in the last 24 hours, against the daily cap.
+          spentTodayCents: Math.round(spentMicros / 10_000),
+        },
+      };
     });
     const staff = Boolean(request.tenant?.support);
     return {
@@ -125,10 +148,28 @@ export async function phoneRoutes(app: FastifyInstance, { db, telephony, config 
   app.patch<BotParams>(base, { preHandler: requireTenantRole(db, "admin") }, async (request) => {
     const { tenantId, botId } = request.params;
     const input = settingsSchema.parse(request.body);
+    const changes: Partial<typeof phoneNumbers.$inferInsert> = { ...input };
+    if (input.alertNumber !== undefined) {
+      const alertNumber = input.alertNumber ? toE164(input.alertNumber) : null;
+      if (input.alertNumber && !alertNumber) {
+        throw badRequest("Please enter the full mobile number, e.g. 807 555 0142");
+      }
+      changes.alertNumber = alertNumber;
+    }
+    // A higher cap takes effect at once, and reaching it again is announced again.
+    if (input.dailyCapCents !== undefined) changes.capAlertedAt = null;
     const row = await forBot(tenantId, botId, async (tx) => {
+      if (changes.alertNumber) {
+        const [own] = await tx
+          .select({ e164: phoneNumbers.e164 })
+          .from(phoneNumbers)
+          .where(eq(phoneNumbers.botId, botId))
+          .limit(1);
+        if (own?.e164 === changes.alertNumber) throw badRequest("That is the assistant's own number");
+      }
       const [updated] = await tx
         .update(phoneNumbers)
-        .set(input)
+        .set(changes)
         .where(and(eq(phoneNumbers.botId, botId)))
         .returning(columns);
       if (!updated) throw notFound("Phone number");
@@ -138,7 +179,8 @@ export async function phoneRoutes(app: FastifyInstance, { db, telephony, config 
         action: "phone.updated",
         targetType: "bot",
         targetId: botId,
-        metadata: input,
+        // Which settings changed, not their values: the alert number is the owner's own phone.
+        metadata: { fields: Object.keys(input) },
       });
       return updated;
     });

@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
  * business forwards its missed calls to it, and, for Traiblazer staff, assigning the number.
  */
 export function PhoneTab({ base }: { base: string }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [settings, setSettings] = useState<PhoneSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -40,8 +40,33 @@ export function PhoneTab({ base }: { base: string }) {
     }
   }
 
-  const change = (body: Partial<Pick<PhoneNumber, "smsEnabled" | "callMode">>) =>
-    run(() => api(`${base}/phone`, { method: "PATCH", body }));
+  const change = (
+    body: Partial<
+      Pick<PhoneNumber, "smsEnabled" | "callMode" | "dailyCapCents" | "alertNumber" | "alertRequests">
+    >,
+  ) => run(() => api(`${base}/phone`, { method: "PATCH", body }));
+
+  const money = (cents: number) =>
+    new Intl.NumberFormat(language, {
+      style: "currency",
+      currency: "CAD",
+      currencyDisplay: "narrowSymbol",
+    }).format(cents / 100);
+
+  function saveCap(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const dollars = Number(new FormData(event.currentTarget).get("cap"));
+    if (Number.isFinite(dollars)) void change({ dailyCapCents: Math.round(dollars * 100) });
+  }
+
+  function saveAlerts(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    void change({
+      alertNumber: String(data.get("alertNumber") ?? "").trim() || null,
+      alertRequests: data.get("alertRequests") as PhoneNumber["alertRequests"],
+    });
+  }
 
   async function assign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,6 +141,76 @@ export function PhoneTab({ base }: { base: string }) {
               </select>
             </label>
             <p className="muted max-w-3xl text-sm">{t("phone.calls.hint")}</p>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">{t("phone.cap.title")}</h3>
+            <form className="flex flex-wrap items-end gap-3" onSubmit={saveCap}>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("phone.cap.label")}
+                <input
+                  key={phone.dailyCapCents}
+                  className="input max-w-[10rem]"
+                  name="cap"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.5"
+                  max="200"
+                  step="0.5"
+                  required
+                  defaultValue={(phone.dailyCapCents / 100).toFixed(2)}
+                />
+              </label>
+              <button className="btn btn-ghost" type="submit" disabled={busy}>
+                {t("phone.cap.save")}
+              </button>
+            </form>
+            <p className="text-sm">
+              {t("phone.cap.spent", {
+                spent: money(settings.stats.spentTodayCents),
+                cap: money(phone.dailyCapCents),
+              })}
+            </p>
+            {settings.stats.spentTodayCents >= phone.dailyCapCents && (
+              <p className="error text-sm">{t("phone.cap.reached")}</p>
+            )}
+            <p className="muted max-w-3xl text-sm">{t("phone.cap.hint")}</p>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">{t("phone.alerts.title")}</h3>
+            <form className="flex flex-wrap items-end gap-3" onSubmit={saveAlerts}>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("phone.alerts.number")}
+                <input
+                  key={phone.alertNumber ?? ""}
+                  className="input"
+                  name="alertNumber"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="807 555 0142"
+                  dir="ltr"
+                  defaultValue={phone.alertNumber ?? ""}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                {t("phone.alerts.which")}
+                <select
+                  key={phone.alertRequests}
+                  className="input"
+                  name="alertRequests"
+                  defaultValue={phone.alertRequests}
+                >
+                  <option value="all">{t("phone.alerts.all")}</option>
+                  <option value="urgent">{t("phone.alerts.urgent")}</option>
+                  <option value="off">{t("phone.alerts.off")}</option>
+                </select>
+              </label>
+              <button className="btn btn-ghost" type="submit" disabled={busy}>
+                {t("phone.alerts.save")}
+              </button>
+            </form>
+            <p className="muted max-w-3xl text-sm">{t("phone.alerts.hint")}</p>
           </section>
 
           <section className="flex flex-col gap-2">

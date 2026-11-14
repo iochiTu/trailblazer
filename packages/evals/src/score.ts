@@ -1,5 +1,5 @@
 import { guessLanguage } from "@traiblazer/core";
-import type { EvalCase, Outcome, Pattern } from "./types.js";
+import { type EvalCase, type Outcome, type Pattern, SMS_EVAL_MAX_CHARS } from "./types.js";
 
 /** Lower case, without accents, curly quotes or repeated spaces (what a reader would call equal). */
 export function normalize(text: string): string {
@@ -30,7 +30,9 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
   const expect = evalCase.expect;
 
   if (outcome.error) failures.push(`engine error: ${outcome.error}`);
-  if (!outcome.reply.trim()) failures.push("empty reply");
+  // By text, saying nothing can be right (after STOP, at a limit): only an answer must have words.
+  const silent = outcome.sms && !["answered", "help", "resumed"].includes(outcome.sms.outcomes.at(-1) ?? "");
+  if (!outcome.reply.trim() && !silent) failures.push("empty reply");
 
   for (const group of expect.mentions ?? []) {
     if (!group.some((p) => matches(outcome.reply, p))) {
@@ -71,6 +73,24 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
     }
   }
 
+  // By text: every message sent back is short and plain, whatever else the case checks.
+  if (outcome.sms) {
+    for (const text of outcome.sms.texts) {
+      const shown = `"${text.slice(0, 40)}…"`;
+      if (text.length > SMS_EVAL_MAX_CHARS) {
+        failures.push(`a text of ${text.length} characters (${shown}); at most ${SMS_EVAL_MAX_CHARS}`);
+      }
+      if (/\*\*|^#{1,6} |\]\(https?:|\[\[|`/m.test(text))
+        failures.push(`a text with markup in it (${shown})`);
+    }
+    if (expect.smsOutcome && outcome.sms.outcomes.at(-1) !== expect.smsOutcome) {
+      failures.push(`the last text was "${outcome.sms.outcomes.at(-1)}", expected "${expect.smsOutcome}"`);
+    }
+    if (expect.textsSent !== undefined && outcome.sms.texts.length !== expect.textsSent) {
+      failures.push(`${outcome.sms.texts.length} texts sent back, expected ${expect.textsSent}`);
+    }
+  }
+
   if (expect.request === "none") {
     if (outcome.requests.length) failures.push("passed on a request the visitor didn't make");
   } else if (expect.request) {
@@ -87,6 +107,9 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
       if (wanted.urgent !== undefined && found.urgent !== wanted.urgent) {
         failures.push(wanted.urgent ? "request not marked urgent" : "request wrongly marked urgent");
       }
+      if (wanted.fromSender && found.phone !== outcome.sms?.sender) {
+        failures.push("request without the number the customer texted from");
+      }
       if (wanted.item && found.itemName !== wanted.item) {
         failures.push(`request about ${found.itemName ?? "no service"}, expected ${wanted.item}`);
       }
@@ -94,6 +117,10 @@ export function score(evalCase: EvalCase, outcome: Outcome): string[] {
         if (!found.details[key]?.trim()) failures.push(`request without its "${key}" detail`);
       }
     }
+  }
+
+  if (expect.requestCount !== undefined && outcome.requests.length !== expect.requestCount) {
+    failures.push(`${outcome.requests.length} requests passed on, expected ${expect.requestCount}`);
   }
 
   // Only a clear answer in the other language fails: short replies are often impossible to tell.

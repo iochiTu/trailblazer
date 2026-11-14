@@ -1,7 +1,9 @@
 import {
   auditLogs,
+  conversations,
   createDb,
   type DbHandle,
+  messageAttachments,
   outboundMessages,
   phoneNumbers,
   runMigrations,
@@ -21,6 +23,7 @@ import { telephonyIdle } from "./routes/telephony.js";
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
 
+const telephony = new FakeTelephony();
 let app: FastifyInstance;
 let plain: FastifyInstance;
 let appDb: DbHandle;
@@ -84,7 +87,7 @@ beforeAll(async () => {
     ADMIN_ORIGIN: "http://admin.test.local",
   } as NodeJS.ProcessEnv);
   const gateway = createGatewayFromEnv({}).gateway;
-  app = await buildApp({ db: appDb.db, config, gateway, telephony: new FakeTelephony() });
+  app = await buildApp({ db: appDb.db, config, gateway, telephony });
   plain = await buildApp({ db: appDb.db, config, gateway });
 
   const owner = await signup("phone-owner");
@@ -126,7 +129,7 @@ describe("an assistant's phone number", () => {
     expect((await api("GET", phoneUrl(), ownerCookie)).json()).toEqual({
       phone: null,
       available: true,
-      stats: { textsSent30Days: 0, optOuts: 0 },
+      stats: { textsSent30Days: 0, optOuts: 0, spentTodayCents: 0 },
       canAssign: false,
       webhooks: null,
     });
@@ -178,6 +181,38 @@ describe("an assistant's phone number", () => {
   });
 });
 
+describe("the daily limit and alerts to the owner's phone", () => {
+  it("lets the business set a daily limit within bounds", async () => {
+    const res = await api("PATCH", phoneUrl(), ownerCookie, { dailyCapCents: 1250 });
+    expect(res.json().phone).toMatchObject({ dailyCapCents: 1250 });
+    expect((await api("PATCH", phoneUrl(), ownerCookie, { dailyCapCents: 10 })).statusCode).toBe(400);
+    expect((await api("PATCH", phoneUrl(), ownerCookie, { dailyCapCents: 50_000 })).statusCode).toBe(400);
+    expect((await api("GET", phoneUrl(), ownerCookie)).json()).toMatchObject({
+      phone: { dailyCapCents: 1250, alertNumber: null, alertRequests: "all" },
+      stats: { spentTodayCents: 0 },
+    });
+  });
+
+  it("takes the owner's mobile number however it is written, and can clear it", async () => {
+    const set = await api("PATCH", phoneUrl(), ownerCookie, {
+      alertNumber: "(807) 555-0123",
+      alertRequests: "urgent",
+    });
+    expect(set.json().phone).toMatchObject({ alertNumber: "+18075550123", alertRequests: "urgent" });
+    expect((await api("PATCH", phoneUrl(), ownerCookie, { alertNumber: "555-0123" })).statusCode).toBe(400);
+    // The assistant's own number can't alert itself.
+    expect((await api("PATCH", phoneUrl(), ownerCookie, { alertNumber: OURS })).statusCode).toBe(400);
+    const cleared = await api("PATCH", phoneUrl(), ownerCookie, { alertNumber: "" });
+    expect(cleared.json().phone.alertNumber).toBeNull();
+    // The activity log says which settings changed, not the owner's number.
+    const logged = await ownerDb.db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.tenantId, tenantId), eq(auditLogs.action, "phone.updated")));
+    expect(JSON.stringify(logged.map((l) => l.metadata))).not.toContain("8075550123");
+  });
+});
+
 describe("webhooks from the telephony provider", () => {
   it("exist only when a provider is configured, and need its signature", async () => {
     expect((await webhook("sms", { from: CUSTOMER, to: OURS, text: "Hi" }, "valid", plain)).statusCode).toBe(
@@ -201,6 +236,34 @@ describe("webhooks from the telephony provider", () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ kind: "reply", fromNumber: OURS, status: "queued" });
     expect(out[0]!.body.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a photo sent by text with the conversation, and leaves out what isn't a picture", async () => {
+    const pixel = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    telephony.media.set("https://media.test/photo", { bytes: pixel, contentType: "image/png" });
+    telephony.media.set("https://media.test/video", {
+      bytes: Buffer.from("not a picture"),
+      contentType: "video/mp4",
+    });
+    const sender = "+18075550155";
+    await webhook("sms", {
+      id: "in-photo",
+      from: sender,
+      to: OURS,
+      text: "Here is the cake I'd like copied",
+      media: "https://media.test/photo,https://media.test/video,https://media.test/missing",
+    });
+    await telephonyIdle();
+    expect(await sent(sender)).toHaveLength(1);
+    const kept = await ownerDb.db
+      .select({ contentType: messageAttachments.contentType })
+      .from(messageAttachments)
+      .innerJoin(conversations, eq(conversations.id, messageAttachments.conversationId))
+      .where(and(eq(conversations.botId, botId), eq(conversations.visitorId, sender)));
+    expect(kept).toEqual([{ contentType: "image/png" }]);
   });
 
   it("ignores texts to an unknown number, and when texting is turned off", async () => {

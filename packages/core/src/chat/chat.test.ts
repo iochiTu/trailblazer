@@ -1139,11 +1139,131 @@ describe("requests for the business to follow up", () => {
     expect(await queued()).toEqual([]);
   });
 
-  it("takes only a few requests per conversation", async () => {
+  it("adds later details to the request already passed on instead of making a second one", async () => {
+    await owner.db.delete(jobs).where(eq(jobs.tenantId, tenantId));
+    let input: object = { ...ask, name: "Pat Roy", phone: "8075550155" };
     const provider = new ToolProvider((request) =>
       toolResults(request).length
         ? { text: toolResults(request)[0]!.content }
-        : { calls: [{ name: "request_follow_up", input: { ...ask, name: "Lee", phone: "8075550177" } }] },
+        : { calls: [{ name: "request_follow_up", input }] },
+    );
+    const first = await chat(provider, "It's Pat Roy, 807-555-0155, call me about catering", {
+      visitorId: "lead-update",
+    });
+    const conversationId = (first.events[0] as { conversationId: string }).conversationId;
+    const mine = async () => (await saved()).filter((l) => l.conversationId === conversationId);
+    expect(first.text).toMatch(/^Saved\./);
+    expect(await queued()).toHaveLength(1);
+
+    // A fuller summary, another kind of the same follow-up, a time, an email: one request, updated.
+    input = {
+      kind: "quote",
+      name: "Pat Roy",
+      email: "pat@example.com",
+      bestTime: "after 5 pm",
+      request:
+        "Wants a quote for catering for 40 on June 3, vegetarian options, delivered to the curling club.",
+    };
+    const second = await chat(provider, "Vegetarian please, to the curling club. pat@example.com, after 5", {
+      visitorId: "lead-update",
+      conversationId,
+    });
+    expect(second.text).toMatch(/^Added to the request already passed on/);
+    expect(await mine()).toHaveLength(1);
+    expect((await mine())[0]).toMatchObject({
+      kind: "quote",
+      phone: "8075550155",
+      email: "pat@example.com",
+      bestTime: "after 5 pm",
+      message:
+        "Wants a quote for catering for 40 on June 3, vegetarian options, delivered to the curling club.",
+    });
+    // The business isn't notified a second time.
+    expect(await queued()).toHaveLength(1);
+
+    // A short addition is put after what the business already has.
+    input = { kind: "quote", name: "Pat Roy", phone: "8075550155", request: "Budget is $900." };
+    await chat(provider, "My budget is $900. Pat, 807-555-0155", {
+      visitorId: "lead-update",
+      conversationId,
+    });
+    expect((await mine())[0]!.message).toBe(
+      "Wants a quote for catering for 40 on June 3, vegetarian options, delivered to the curling club. Budget is $900.",
+    );
+
+    // Another kind of request, or one the business has started on, is a request of its own.
+    input = {
+      kind: "complaint",
+      name: "Pat Roy",
+      phone: "8075550155",
+      request: "The last order arrived cold.",
+    };
+    await chat(provider, "Also my last order arrived cold. Pat, 807-555-0155", {
+      visitorId: "lead-update",
+      conversationId,
+    });
+    expect((await mine()).map((l) => l.kind)).toEqual(["quote", "complaint"]);
+    await owner.db
+      .update(leads)
+      .set({ status: "in_progress" })
+      .where(eq(leads.conversationId, conversationId));
+    input = {
+      kind: "complaint",
+      name: "Pat Roy",
+      phone: "8075550155",
+      request: "And it was missing two trays.",
+    };
+    await chat(provider, "And two trays were missing. Pat, 807-555-0155", {
+      visitorId: "lead-update",
+      conversationId,
+    });
+    expect(await mine()).toHaveLength(3);
+  });
+
+  it("alerts the business when an added detail makes the request urgent", async () => {
+    let input: object = { ...ask, name: "Sol Vega", phone: "8075550133" };
+    const provider = new ToolProvider((request) =>
+      toolResults(request).length
+        ? { text: toolResults(request)[0]!.content }
+        : { calls: [{ name: "request_follow_up", input }] },
+    );
+    const first = await chat(provider, "It's Sol Vega, 807-555-0133, call me", { visitorId: "lead-urgent" });
+    const conversationId = (first.events[0] as { conversationId: string }).conversationId;
+    const alerts = async () =>
+      (
+        await owner.db
+          .select()
+          .from(jobs)
+          .where(and(eq(jobs.tenantId, tenantId), eq(jobs.type, "request.urgent_alert")))
+      ).filter((j) => typeof j.payload.leadId === "string");
+    const before = (await alerts()).length;
+    input = { ...ask, name: "Sol Vega", phone: "8075550133", urgent: true };
+    const second = await chat(provider, "It can't wait, the freezer is failing. Sol, 807-555-0133", {
+      visitorId: "lead-urgent",
+      conversationId,
+    });
+    expect(second.text).toContain("now marked urgent");
+    const mine = (await saved()).filter((l) => l.conversationId === conversationId);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ urgent: true });
+    expect((await alerts()).length).toBe(before + 1);
+  });
+
+  it("takes only a few requests per conversation", async () => {
+    // Different kinds each time: the same kind again would update the request already passed on.
+    const kinds = ["callback", "question", "complaint", "other"];
+    let turn = 0;
+    const provider = new ToolProvider((request) =>
+      toolResults(request).length
+        ? { text: toolResults(request)[0]!.content }
+        : {
+            calls: [
+              {
+                name: "request_follow_up",
+                input: { ...ask, kind: kinds[turn++ % kinds.length], name: "Lee", phone: "8075550177" },
+              },
+            ],
+          },
     );
     let conversationId: string | undefined;
     const replies: string[] = [];

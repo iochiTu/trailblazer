@@ -63,6 +63,11 @@ export interface TelephonyProvider {
   parseIncomingCall(params: WebhookParams): IncomingCall | null;
   parseMessageStatus(params: WebhookParams): MessageStatusUpdate | null;
   sendMessage(input: SendMessageInput): Promise<{ id: string; status: MessageStatus }>;
+  /**
+   * Downloads a picture a customer sent (an inbound message's `media` url). Null when it isn't on
+   * the provider's own servers, is larger than `maxBytes`, or can't be fetched.
+   */
+  fetchMedia(url: string, maxBytes: number): Promise<{ bytes: Buffer; contentType: string } | null>;
   /** Nothing to say back to an inbound text (the reply is sent separately). */
   replyNothing(): WebhookReply;
   /** Answers a call with one spoken sentence, then hangs up. */

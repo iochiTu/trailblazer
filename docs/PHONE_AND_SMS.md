@@ -283,10 +283,41 @@ Built (`packages/telephony`, `packages/core/src/sms`, `apps/api/src/routes/telep
   30 days, the two settings, how to forward missed calls, and for staff the webhook addresses and
   assigning the number. It passes the `pnpm a11y` checks on desktop and phone (owner view).
 - **`TELEPHONY_PROVIDER=fake`** for local development without a provider account.
+- **Daily spend cap** (`phone_numbers.daily_cap_cents`, $5.00 by default, 50 cents to $200): what the
+  number's texts cost in the last 24 hours is summed from the usage records. At the cap the assistant
+  doesn't answer texts or text callers back (STOP, START and HELP still work), the customer's text is
+  kept in Conversations, and the business is told once per 24 hours: an email to owners and admins
+  (job `phone.cap_alert`) and a text to the owner's alert number. Raising the cap takes effect at
+  once.
+- **Alerts to the owner's phone** (`alert_number`, `alert_requests`: all, urgent, off): a text when a
+  customer leaves a request on any channel, with the kind, name, contact and the request in a few
+  words. Sent even at the cap. A text *from* the alert number isn't answered as a customer.
 
 Checked with the real model (DeepSeek V4.1 Flash, voyage-4-lite): an English question, a French one,
 a burst pipe and a callback request were answered correctly in 80–250 characters; simple answers
 took 2.5–4 s, turns that save a request 15–23 s.
+
+- **SMS evals** (`packages/evals/src/cases/sms.ts`, `pnpm evals --case sms`): 20 cases in English
+  and French that go through the whole SMS path with the texts kept, not sent. Every text sent back
+  must be plain and at most 480 characters. They cover facts, a follow-up in the same thread, a
+  callback request carrying the texter's number, the booking link and the phone number written out,
+  STOP and HELP, and by text also an urgent problem, a danger, an advice request, an unanswerable
+  question and an off-topic request (those keep their safety categories). DeepSeek V4.1 Flash passes
+  all 40 runs (2 × 20).
+
+- **Photos by text (MMS):** up to three pictures per text are downloaded from the provider (only from
+  its own hosts, with our credentials), checked by their content, stripped of metadata and limited to
+  2 MB, like images in the chat, under the same hourly allowance. The assistant sees them when the
+  model can, they stay with the conversation, and a request carries them. A text with nothing usable
+  in it (a video, a file too large) gets one line saying what can be read.
+- **"Reply QUOTE":** the service's own button from the chat works by text. The model writes the same
+  marker; the platform replaces it with "Reply QUOTE to ask for a quote for …" or "Reply BOOK to book
+  …" (SOUMISSION, RESERVER in French), or with the booking link when the business has one. A text
+  that is just that word, in a thread where the offer was made, stands for the sentence the button
+  sends, and the request that follows names the service. Same rules as in the chat: the owner's
+  chosen button only, once per conversation, never on an urgent problem or an advice request.
+- **One request, not two:** a detail added after a request was passed on updates that request
+  (README, "One request, not two").
 
 Not built yet, in this order:
 
@@ -294,10 +325,9 @@ Not built yet, in this order:
    sheets; the tab gives general instructions for now.
 2. **A live test with Twilio.** Nothing has been sent through a real number: needs the account and
    the sender registration of phase 0.
-3. **Owner alerts by text**, and the daily spend cap (usage is recorded; nothing stops at a cap).
-4. **Photos in by MMS** (the text says only text can be read), and "reply QUOTE" for a service.
-5. **Buying numbers through the provider** (staff enter a number bought in Twilio's console).
-6. **SMS eval cases.**
+3. **Calls and the cap:** the cap already counts `voice.*` usage, but a call's cost is only known
+   once voice is built.
+4. **Buying numbers through the provider** (staff enter a number bought in Twilio's console).
 
 Known limits: repeated webhooks are recognised in the memory of one API server (two servers could
 both answer a retry); an answer being written when the API restarts is lost; French texts usually

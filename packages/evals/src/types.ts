@@ -18,7 +18,10 @@ export type Pattern = string | { test(text: string): boolean };
  * - scope: off-topic requests and attempts to change the assistant's instructions;
  * - sell: a question about a listed service gets that service's quote or booking button, and the
  *   request that follows names the service (docs/SELL_AND_PROMOTE.md);
- * - restraint: no selling when the visitor needs help (urgent, advice, complaint).
+ * - restraint: no selling when the visitor needs help (urgent, advice, complaint);
+ * - sms: the same assistant by text message (docs/PHONE_AND_SMS.md): short plain text, STOP and
+ *   HELP, the texter's number on a request. Cases in other categories can run by text too
+ *   (`channel: "sms"`), e.g. an urgent problem.
  */
 export const CATEGORIES = [
   "facts",
@@ -32,6 +35,7 @@ export const CATEGORIES = [
   "scope",
   "sell",
   "restraint",
+  "sms",
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
@@ -45,6 +49,9 @@ export const SAFETY_CATEGORIES: ReadonlySet<Category> = new Set([
   "scope",
   "restraint",
 ]);
+
+/** Longest text an SMS case may get back (three message parts in the 7-bit alphabet). */
+export const SMS_EVAL_MAX_CHARS = 480;
 
 export type EvalLanguage = "en" | "fr";
 
@@ -68,9 +75,24 @@ export interface Expectation {
   itemButton?: { kind: "quote" | "book"; item: string } | "none";
   /**
    * A request passed to the business during the conversation, or "none" when there must be none.
-   * `item`: the service the request must name.
+   * `item`: the service the request must name. `fromSender`: by text, the request must carry the
+   * number the customer writes from.
    */
-  request?: { kind?: LeadKind | LeadKind[]; urgent?: boolean; details?: string[]; item?: string } | "none";
+  request?:
+    | {
+        kind?: LeadKind | LeadKind[];
+        urgent?: boolean;
+        details?: string[];
+        item?: string;
+        fromSender?: boolean;
+      }
+    | "none";
+  /** Exactly this many requests were passed on in the conversation (1: details added later don't make a second). */
+  requestCount?: number;
+  /** By text: what the platform did with the last message ("answered", "stopped", "help"…). */
+  smsOutcome?: string;
+  /** By text: how many texts were sent back in the whole conversation. */
+  textsSent?: number;
   /** The reply's language; defaults to the case's language. null = don't check. */
   replyLanguage?: EvalLanguage | null;
 }
@@ -82,6 +104,12 @@ export interface EvalCase {
   business: string;
   language: EvalLanguage;
   category: Category;
+  /**
+   * "sms": the turns are texts to the assistant's number, through the whole SMS path (keywords,
+   * limits, plain-text reply). Every reply must then be plain text of at most SMS_EVAL_MAX_CHARS.
+   * Default: the web chat.
+   */
+  channel?: "sms";
   /** The visitor's messages, in order; reply checks apply to the last reply. */
   turns: string[];
   /**
@@ -137,7 +165,15 @@ export interface Outcome {
   /** Buttons for one service under the last reply. */
   itemButtons: { kind: string; item: string }[];
   tools: string[];
-  requests: { kind: LeadKind; urgent: boolean; details: Record<string, string>; itemName: string | null }[];
+  requests: {
+    kind: LeadKind;
+    urgent: boolean;
+    details: Record<string, string>;
+    itemName: string | null;
+    phone?: string | null;
+  }[];
+  /** By text only: the number the customer wrote from, what happened to each text, and every text sent back. */
+  sms?: { sender: string; outcomes: string[]; texts: string[] };
   /** The engine failed or no model was available. */
   error: string | null;
   /** Milliseconds from sending the last message to the first text of its reply (null: no text). */

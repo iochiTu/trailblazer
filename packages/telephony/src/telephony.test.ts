@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createTelephonyFromEnv } from "./config.js";
 import { formatPhone, toE164 } from "./numbers.js";
-import { smsKeyword, smsSegments, toSmsText } from "./sms.js";
+import { smsKeyword, smsReplyWord, smsSegments, toSmsText } from "./sms.js";
 import { TwilioProvider, twilioSignature } from "./twilio.js";
 import { PermanentSendError } from "./types.js";
 
@@ -23,6 +23,14 @@ describe("text messages", () => {
     expect(smsKeyword("aide")).toBe("help");
     expect(smsKeyword("START")).toBe("start");
     expect(smsKeyword("please stop by tomorrow")).toBeNull();
+  });
+
+  it("recognises QUOTE and BOOK as replies to a service's offer", () => {
+    expect(smsReplyWord("Quote")).toBe("quote");
+    expect(smsReplyWord(" SOUMISSION ")).toBe("quote");
+    expect(smsReplyWord("Réserver!")).toBe("book");
+    expect(smsReplyWord("book")).toBe("book");
+    expect(smsReplyWord("can I get a quote")).toBeNull();
   });
 
   it("counts the parts a text is billed as", () => {
@@ -123,6 +131,27 @@ describe("Twilio", () => {
     await expect(twilio.sendMessage(message)).rejects.toBeInstanceOf(PermanentSendError);
     next = { status: 503, body: {} };
     await expect(twilio.sendMessage(message)).rejects.not.toBeInstanceOf(PermanentSendError);
+  });
+
+  it("downloads a customer's picture from its own servers only, within the size allowed", async () => {
+    const asked: { url: string; auth: string | undefined }[] = [];
+    const fetch = (async (input: URL, init: RequestInit) => {
+      asked.push({ url: String(input), auth: (init.headers as Record<string, string>).authorization });
+      return new Response(Buffer.from("picture-bytes"), { headers: { "content-type": "image/jpeg" } });
+    }) as unknown as typeof globalThis.fetch;
+    const twilio = new TwilioProvider({ accountSid: "AC1", authToken: token, fetch });
+    const media = "https://api.twilio.com/2010-04-01/Accounts/AC1/Messages/MM1/Media/ME1";
+    expect(await twilio.fetchMedia(media, 1000)).toEqual({
+      bytes: Buffer.from("picture-bytes"),
+      contentType: "image/jpeg",
+    });
+    expect(asked[0]!.auth).toMatch(/^Basic /);
+    expect(await twilio.fetchMedia(media, 5)).toBeNull();
+    // An address from somewhere else is never fetched, with or without our credentials.
+    expect(await twilio.fetchMedia("https://evil.example/x.jpg", 1000)).toBeNull();
+    expect(await twilio.fetchMedia("http://api.twilio.com/x", 1000)).toBeNull();
+    expect(await twilio.fetchMedia("https://api.twilio.com.evil.example/x", 1000)).toBeNull();
+    expect(asked).toHaveLength(2);
   });
 
   it("answers webhooks in TwiML", () => {

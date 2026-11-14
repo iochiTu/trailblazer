@@ -362,6 +362,22 @@ export const en = {
   "phone.calls.off": "Don't answer",
   "phone.calls.hint":
     "The caller hears one sentence and gets one text message a day, so they can write what they need. Answering calls by voice isn't available yet.",
+  "phone.cap.title": "Daily limit",
+  "phone.cap.label": "Stop answering texts after spending this much in 24 hours (dollars)",
+  "phone.cap.hint":
+    "Each text message costs a little. When the limit is reached, your assistant stops answering texts and texting callers back until the last 24 hours' use drops below it. Customers' texts are still kept in Conversations, and you're told once.",
+  "phone.cap.spent": "Used in the last 24 hours: {spent} of {cap}",
+  "phone.cap.reached": "The limit is reached: texts aren't being answered right now.",
+  "phone.cap.save": "Save limit",
+  "phone.alerts.title": "Alerts to your phone",
+  "phone.alerts.hint":
+    "Get a text when a customer leaves a request, from any channel (your page, the widget or a text). These texts count toward the daily limit but are sent even when it is reached.",
+  "phone.alerts.number": "Your mobile number",
+  "phone.alerts.which": "Text me about",
+  "phone.alerts.all": "Every request",
+  "phone.alerts.urgent": "Urgent requests only",
+  "phone.alerts.off": "Nothing",
+  "phone.alerts.save": "Save alerts",
   "phone.forward.title": "Send your missed calls here",
   "phone.forward.intro":
     "Keep your own number. Ask your phone company to forward the calls you don't answer (no answer, busy, after hours) to the number above. Each company does it differently:",
