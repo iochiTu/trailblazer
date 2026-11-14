@@ -42,6 +42,7 @@ import {
   withDeadline,
 } from "@traiblazer/llm";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { queueInsights } from "../insights/analyze.js";
 import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
 import { textOwnerAboutRequest } from "../sms/alerts.js";
 import { countItemEvent, itemStatSurface } from "../stats/item-stats.js";
@@ -1028,6 +1029,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       })),
     ];
     if (queued.length) await tx.insert(jobs).values(queued);
+    // Insights (premium): this conversation is tagged once it goes quiet.
+    await queueInsights(tx, { tenantId: input.tenantId, conversationId, channel: input.channel });
     // Statistics: a service's button went out under this answer (docs/SELL_AND_PROMOTE.md §3.3).
     const surface = itemStatSurface(input.channel);
     for (const action of shownActions) {

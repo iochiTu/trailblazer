@@ -75,6 +75,8 @@ export const plans = pgTable("plans", {
   perMinute: integer("per_minute").notNull(),
   /** Photos one assistant can keep in its knowledge base (shown to visitors in answers). */
   knowledgeImages: integer("knowledge_images").notNull().default(50),
+  /** Insights (premium BI): conversation analysis, funnel and conversion rates. */
+  insights: boolean("insights").notNull().default(false),
   /** Monthly price in CAD cents, for display. */
   priceMonthlyCents: integer("price_monthly_cents"),
   /** Archived plans keep working for existing businesses but can't be assigned anymore. */
@@ -890,6 +892,8 @@ export const conversations = pgTable(
     pageUrl: text("page_url"),
     messageCount: integer("message_count").notNull().default(0),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When Insights counted this conversation (its tags went into `conversation_insights`). */
+    analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -1479,6 +1483,59 @@ export const itemStats = pgTable(
   ],
 );
 
+/**
+ * What Insights (premium BI) records about a finished conversation, one dimension at a time.
+ * "outcome" and "language" come from what happened; "intent", "sentiment" and "blocker" are tags
+ * a model gave after reading the conversation. Fixed lists keep them translatable and comparable.
+ */
+export const INSIGHT_DIMENSIONS = {
+  /**
+   * From what happened: a request was left, every question got an answer, one wasn't answered
+   * from the business's information, or the assistant failed (error, busy, declined).
+   */
+  outcome: ["request", "answered", "unanswered", "error"],
+  intent: ["price", "booking", "service_info", "hours_location", "emergency", "complaint", "other"],
+  sentiment: ["positive", "neutral", "negative"],
+  /** Only for conversations that didn't end in a request or a tap. */
+  blocker: ["price", "availability", "no_answer", "out_of_area", "browsing", "other"],
+} as const;
+/**
+ * Besides the lists above: "language" (the thread's language) and "intent_request" (the intent of
+ * a conversation that ended in a request, so each intent's conversion rate can be shown).
+ */
+export type InsightDimension = keyof typeof INSIGHT_DIMENSIONS | "language" | "intent_request";
+
+/**
+ * Daily counts per assistant, channel and tag (Insights). Totals only, like `page_stats`: no
+ * conversation, visitor or text is kept (PLAN.md §18.4).
+ */
+export const conversationInsights = pgTable(
+  "conversation_insights",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    day: date("day", { mode: "string" }).notNull(),
+    channel: text("channel").$type<Channel>().notNull(),
+    dimension: text("dimension").$type<InsightDimension>().notNull(),
+    value: text("value").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({
+      name: "conversation_insights_pk",
+      columns: [t.tenantId, t.botId, t.day, t.channel, t.dimension, t.value],
+    }),
+    index("conversation_insights_bot_day_idx").on(t.tenantId, t.botId, t.day),
+    foreignKey({
+      name: "conversation_insights_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 // ---------------------------------------------------------------------------------------------
 // Phone and SMS (RLS enforced; docs/PHONE_AND_SMS.md)
 // ---------------------------------------------------------------------------------------------
@@ -1625,6 +1682,7 @@ export const rlsTables = [
   "setup_runs",
   "usage_events",
   "item_stats",
+  "conversation_insights",
   "phone_numbers",
   "outbound_messages",
   "sms_opt_outs",

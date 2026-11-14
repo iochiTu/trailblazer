@@ -14,6 +14,8 @@ export interface PlanLimits {
   perMinute: number;
   /** Photos each assistant can keep in its knowledge base. */
   knowledgeImages: number;
+  /** Insights (premium BI): conversation analysis, funnel and conversion rates. */
+  insights: boolean;
 }
 
 export const PLANS = {
@@ -23,6 +25,7 @@ export const PLANS = {
     concurrent: 3,
     perMinute: 20,
     knowledgeImages: 20,
+    insights: false,
   },
   local: {
     name: { en: "Local", fr: "Local" },
@@ -30,6 +33,7 @@ export const PLANS = {
     concurrent: 5,
     perMinute: 40,
     knowledgeImages: 50,
+    insights: false,
   },
   local_plus: {
     name: { en: "Local Plus", fr: "Local Plus" },
@@ -37,6 +41,7 @@ export const PLANS = {
     concurrent: 8,
     perMinute: 60,
     knowledgeImages: 100,
+    insights: false,
   },
   professional: {
     name: { en: "Professional", fr: "Professionnel" },
@@ -44,6 +49,7 @@ export const PLANS = {
     concurrent: 10,
     perMinute: 90,
     knowledgeImages: 200,
+    insights: true,
   },
   business: {
     name: { en: "Business", fr: "Affaires" },
@@ -51,6 +57,7 @@ export const PLANS = {
     concurrent: 25,
     perMinute: 200,
     knowledgeImages: 500,
+    insights: true,
   },
 } as const satisfies Record<string, PlanLimits>;
 
@@ -59,6 +66,13 @@ export type PlanId = keyof typeof PLANS;
 export function planLimits(plan: string): PlanLimits {
   return (PLANS as Record<string, PlanLimits>)[plan] ?? PLANS.trial;
 }
+
+/**
+ * Features a plan switches on or off (operators set them per plan). Every check goes through
+ * `planAllows` in @traiblazer/core, so a new feature is one more key here and one more column.
+ */
+export const PLAN_FEATURES = ["insights"] as const;
+export type PlanFeature = (typeof PLAN_FEATURES)[number];
 
 /** Default questions one visitor may ask per day (all assistants of the business). */
 export const DEFAULT_VISITOR_DAILY_LIMIT = 30;
@@ -135,6 +149,7 @@ const planFields = {
   concurrent: z.number().int().min(1).max(1000),
   perMinute: z.number().int().min(1).max(100_000),
   knowledgeImages: z.number().int().min(0).max(10_000),
+  insights: z.boolean(),
   priceMonthlyCents: z.number().int().min(0).max(100_000_000).nullable(),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(10_000),
@@ -147,6 +162,7 @@ export const createPlanSchema = z.object({
   active: planFields.active.optional(),
   sortOrder: planFields.sortOrder.optional(),
   knowledgeImages: planFields.knowledgeImages.optional(),
+  insights: planFields.insights.optional(),
 });
 export const updatePlanSchema = z.object(planFields).partial();
 

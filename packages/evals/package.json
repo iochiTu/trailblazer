@@ -3,12 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Answer-quality and safety evals for the industry packs (PLAN §15), run against the real chat engine.",
+  "description": "Answer-quality and safety evals for the industry packs (PLAN \u00a715), run against the real chat engine.",
   "scripts": {
     "eval": "tsx --env-file-if-exists=../../.env src/cli.ts",
     "eval:retrieval": "tsx --env-file-if-exists=../../.env src/retrieval-cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:insights": "tsx --env-file-if-exists=../../.env src/insights-cli.ts"
   },
   "dependencies": {
     "@traiblazer/core": "workspace:*",

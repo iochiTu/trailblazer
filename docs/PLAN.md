@@ -516,8 +516,30 @@ landline, mobile or VoIP line, so setup uses a per-carrier sheet and ends with a
 6. **Bot settings:** persona, greeting, languages, hours & seasons, modules, lead fields, handoff contacts,
    custom instructions (scope-checked, §5)
 7. **Inbox** (auto-translated), **Leads**, **Analytics** (page visits, questions, requests, languages used,
-   knowledge gaps)
+   knowledge gaps), **Insights** (premium, §7.4.1)
 8. **Install**, **Team & roles**, **Billing & usage** (CAD)
+
+#### 7.4.1 Insights (premium BI)
+
+The assistant's **Insights** tab: the free page statistics, then, for plans that include Insights
+(operators switch it per plan; Professional and Business at launch):
+
+- **Funnel** from page views → conversations → services offered → button taps → requests, with conversations ÷ page views
+  and requests ÷ conversations, against the previous period of the same length
+- **Conversion** (requests ÷ conversations) by channel (business page, website, texts) and by language
+- **What visitors want** (intent) and each intent's conversion; **why they didn't leave a request**
+  (blocker), linked to open knowledge gaps; **how they felt** (sentiment); **when they write** (day × hour)
+
+How it works: after each visitor message the chat engine queues `insights.analyze` for the conversation
+(one job, only for plans with Insights, never for tests). Once the conversation has been quiet for 30
+minutes the worker counts its **outcome** (request / answered / unanswered / error, from recorded facts)
+and **language**, and asks the "aux" model for **intent**, **sentiment** and **blocker** from fixed lists
+(plain JSON, no tools, so every provider works; anything off the list becomes "other"). Results go into
+`conversation_insights` as **daily totals per assistant and channel, with no conversation, visitor or text**
+(§18.4). The model calls are recorded as `llm.insights` usage and capped at the plan's monthly questions;
+with no model configured only outcome and language are counted. Button taps aren't linked to a
+conversation, so they appear in the funnel, not in a conversation's outcome. Eval cases:
+`pnpm --filter @traiblazer/evals eval:insights`.
 
 ### 7.5 Operator console
 

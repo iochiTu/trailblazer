@@ -4,6 +4,8 @@ import { eq, sql } from "drizzle-orm";
 export type JobRow = typeof jobs.$inferSelect;
 
 export const JOB_TYPES = {
+  /** Insights: tags one finished conversation and adds it to the day totals (payload: { conversationId }). */
+  insightsAnalyze: "insights.analyze",
   sourceSync: "source.sync",
   /** Work an add-on asked for during a chat (payload: { botId, addonId, effect }). */
   addonEffect: "addon.effect",
