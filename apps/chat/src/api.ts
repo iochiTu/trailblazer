@@ -56,6 +56,15 @@ export interface ReplyAction {
   item?: { id: string; name: string };
 }
 
+/** A promotion the business is running, shown as a card under a reply in the owner's own words. */
+export interface ReplyOffer {
+  id: string;
+  title: string;
+  text: string;
+  /** ISO time it ends, or null. */
+  endsAt: string | null;
+}
+
 export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
@@ -63,6 +72,7 @@ export interface StoredMessage {
   attachments?: AttachmentName[];
   images?: ReplyPhoto[];
   actions?: ReplyAction[];
+  offers?: ReplyOffer[];
 }
 
 export type StreamEvent =
@@ -74,6 +84,7 @@ export type StreamEvent =
   /** The message sounds urgent or dangerous: show the phone number now. */
   | { type: "urgent"; level: "urgent" | "danger"; phone: string | null }
   | { type: "action"; action: ReplyAction }
+  | { type: "offer"; offer: ReplyOffer }
   | { type: "done"; messageId: string; citations: Citation[] }
   | { type: "error"; code: string; message: string };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { ApiError, api, type Notice } from "@/lib/api";
+import { ApiError, api, type CatalogItem, type Notice } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 /** A `datetime-local` value (the owner's own time) as an ISO time, or null when empty. */
@@ -13,6 +13,9 @@ export function NoticesSection({ base, onSaved }: { base: string; onSaved: () =>
   const { t, language } = useI18n();
   const [notices, setNotices] = useState<Notice[] | null>(null);
   const [limit, setLimit] = useState(0);
+  /** Services and products an offer can be about. */
+  const [items, setItems] = useState<CatalogItem[]>([]);
+  const [offer, setOffer] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,6 +23,7 @@ export function NoticesSection({ base, onSaved }: { base: string; onSaved: () =>
     const data = await api<{ notices: Notice[]; limit: number }>(`${base}/notices`);
     setNotices(data.notices);
     setLimit(data.limit);
+    setItems((await api<{ items: CatalogItem[] }>(`${base}/catalog`)).items);
   }, [base]);
 
   useEffect(() => {
@@ -62,8 +66,14 @@ export function NoticesSection({ base, onSaved }: { base: string; onSaved: () =>
       text: data.get("text"),
       startsAt: toIso(data.get("startsAt")),
       endsAt: toIso(data.get("endsAt")),
+      ...(offer
+        ? { kind: "offer", title: data.get("title"), itemId: String(data.get("itemId") ?? "") || null }
+        : { kind: "notice" }),
     };
-    if (await run(() => api(`${base}/notices`, { method: "POST", body }))) form.reset();
+    if (await run(() => api(`${base}/notices`, { method: "POST", body }))) {
+      form.reset();
+      setOffer(false);
+    }
   }
 
   return (
@@ -81,6 +91,18 @@ export function NoticesSection({ base, onSaved }: { base: string; onSaved: () =>
           {notices.map((notice) => (
             <li key={notice.id} className="panel flex items-start justify-between gap-3 p-3">
               <div className="min-w-0" dir="auto">
+                {notice.kind === "offer" && (
+                  <p className="text-sm">
+                    <span className="badge badge-accent me-2">{t("notices.offer.badge")}</span>
+                    <span className="font-semibold">{notice.title}</span>
+                    {notice.catalogItemId && items.some((i) => i.id === notice.catalogItemId) && (
+                      <span className="muted">
+                        {" · "}
+                        {items.find((i) => i.id === notice.catalogItemId)?.name}
+                      </span>
+                    )}
+                  </p>
+                )}
                 <p className="font-medium">{notice.text}</p>
                 <p className="muted text-xs">{status(notice)}</p>
               </div>
@@ -103,8 +125,34 @@ export function NoticesSection({ base, onSaved }: { base: string; onSaved: () =>
           className="panel grid gap-3 p-4 sm:p-5 md:grid-cols-[2fr_1fr_1fr_auto] md:items-end"
           onSubmit={add}
         >
+          <div className="flex flex-col gap-1 md:col-span-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={offer} onChange={(e) => setOffer(e.target.checked)} />
+              <span className="font-medium">{t("notices.offer.toggle")}</span>
+            </label>
+            <p className="muted text-sm">{t("notices.offer.hint")}</p>
+          </div>
+          {offer && (
+            <>
+              <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                {t("notices.offer.title")}
+                <input className="input" name="title" required maxLength={80} dir="auto" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                {t("notices.offer.item")}
+                <select className="input" name="itemId" defaultValue="">
+                  <option value="">{t("notices.offer.noItem")}</option>
+                  {items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
           <label className="flex flex-col gap-1 text-sm">
-            {t("notices.text")}
+            {offer ? t("notices.offer.text") : t("notices.text")}
             <input className="input" name="text" required maxLength={300} dir="auto" />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -116,7 +164,7 @@ export function NoticesSection({ base, onSaved }: { base: string; onSaved: () =>
             <input className="input" name="endsAt" type="datetime-local" />
           </label>
           <button className="btn" type="submit" disabled={busy}>
-            {t("notices.add")}
+            {offer ? t("notices.offer.add") : t("notices.add")}
           </button>
         </form>
       )}

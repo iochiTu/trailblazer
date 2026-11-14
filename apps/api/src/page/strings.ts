@@ -30,6 +30,9 @@ const en = {
   address: "Address",
   contact: "Contact",
   notice: "Notice",
+  offer: "Offer",
+  offers: "Offers",
+  offerUntil: "Until {date}",
   demoNotice:
     "Demo page prepared for {business} by Traiblazer. It isn't public: only people with this link can see it.",
   chatHeading: "Ask us anything",
@@ -77,6 +80,9 @@ const fr: PageStrings = {
   address: "Adresse",
   contact: "Coordonnées",
   notice: "Avis",
+  offer: "Offre",
+  offers: "Offres",
+  offerUntil: "Jusqu'au {date}",
   demoNotice:
     "Page de démonstration préparée pour {business} par Traiblazer. Elle n'est pas publique : seules les personnes qui ont ce lien peuvent la voir.",
   chatHeading: "Posez-nous vos questions",

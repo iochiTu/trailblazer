@@ -11,6 +11,7 @@ import {
   memberships,
   messageAttachments,
   messages,
+  notices,
   outboundMessages,
   phoneNumbers,
   runMigrations,
@@ -668,6 +669,34 @@ describe("a service's quote or booking offer by text", () => {
         .update(businessProfiles)
         .set({ bookingUrl: null })
         .where(eq(businessProfiles.botId, number.botId));
+    }
+  });
+
+  it("writes a running offer out in the owner's words", async () => {
+    const [offer] = await owner.db
+      .insert(notices)
+      .values({
+        tenantId: number.tenantId,
+        botId: number.botId,
+        kind: "offer",
+        title: "Heater season special",
+        text: "$100 off a new water heater this month.",
+        catalogItemId: itemIds[0],
+        endsAt: new Date("2030-12-01T04:59:00Z"),
+      })
+      .returning({ id: notices.id });
+    try {
+      model.script = () => ({ text: "Yes, and there's a special on.\n[[offer:o1]]" });
+      await text("Do you install water heaters?");
+      expect((await sentTo()).at(-1)!.body).toBe(
+        [
+          "Yes, and there's a special on.",
+          "Heater season special: $100 off a new water heater this month. (until November 30)",
+          "Reply QUOTE to ask for a quote for Water heater installation.",
+        ].join("\n"),
+      );
+    } finally {
+      await owner.db.delete(notices).where(eq(notices.id, offer!.id));
     }
   });
 

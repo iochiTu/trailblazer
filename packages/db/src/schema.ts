@@ -804,6 +804,9 @@ export const catalogItems = pgTable(
  * shown at the top of the business page and known to the assistant while they run. No start =
  * from now on; no end = until removed.
  */
+export const noticeKinds = ["notice", "offer"] as const;
+export type NoticeKind = (typeof noticeKinds)[number];
+
 export const notices = pgTable(
   "notices",
   {
@@ -813,6 +816,15 @@ export const notices = pgTable(
       .references(() => tenants.id, { onDelete: "cascade" }),
     botId: uuid("bot_id").notNull(),
     text: text("text").notNull(),
+    /**
+     * "offer": a promotion with a title, shown as a banner on the page and as a card under answers
+     * about it (docs/SELL_AND_PROMOTE.md §3.2). "notice": a plain announcement (closures, delays).
+     */
+    kind: text("kind").$type<NoticeKind>().notNull().default("notice"),
+    /** An offer's short name ("Winter tire changeover"). */
+    title: text("title"),
+    /** The service or product an offer is about; its quote or booking button goes with the offer. */
+    catalogItemId: uuid("catalog_item_id").references(() => catalogItems.id, { onDelete: "set null" }),
     startsAt: timestamp("starts_at", { withTimezone: true }),
     endsAt: timestamp("ends_at", { withTimezone: true }),
     ...timestamps,
@@ -917,6 +929,18 @@ export interface ReplyAction {
   item?: { id: string; name: string };
 }
 
+/**
+ * A promotion shown under an assistant reply, in the owner's own words (docs/SELL_AND_PROMOTE.md
+ * §3.2): the model only chooses which running offer fits, never its wording or dates.
+ */
+export interface ReplyOffer {
+  id: string;
+  title: string;
+  text: string;
+  /** ISO time the offer ends, or null when it has no end. */
+  endsAt: string | null;
+}
+
 export interface MessageFlags {
   /**
    * The assistant couldn't answer from the business's information and said so (it marked the reply
@@ -945,6 +969,8 @@ export interface MessageFlags {
   advice?: boolean;
   /** Buttons shown under the reply ("call", "book", or "quote"/"book" for a service). */
   actions?: ReplyAction[];
+  /** Promotions shown as cards under the reply. */
+  offers?: ReplyOffer[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
 }

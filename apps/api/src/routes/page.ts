@@ -360,7 +360,25 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
     text: input.text,
     startsAt: input.startsAt ? new Date(input.startsAt) : null,
     endsAt: input.endsAt ? new Date(input.endsAt) : null,
+    kind: input.kind,
+    // A plain notice has neither a title nor a service.
+    title: input.kind === "offer" ? (input.title ?? null) : null,
+    catalogItemId: input.kind === "offer" ? (input.itemId ?? null) : null,
   });
+  /** An offer's service must be one of this assistant's. */
+  const checkItem = async (
+    tx: Parameters<Parameters<typeof withTenant>[2]>[0],
+    botId: string,
+    itemId?: string | null,
+  ) => {
+    if (!itemId) return;
+    const [item] = await tx
+      .select({ id: catalogItems.id })
+      .from(catalogItems)
+      .where(and(eq(catalogItems.id, itemId), eq(catalogItems.botId, botId)))
+      .limit(1);
+    if (!item) throw badRequest("Unknown service or product");
+  };
 
   app.get<BotParams>(`${base}/notices`, { preHandler: requireTenantRole(db, "viewer") }, async (request) => {
     const { tenantId, botId } = request.params;
@@ -381,6 +399,7 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
         if ((used?.n ?? 0) >= NOTICE_LIMIT) {
           throw new HttpError(409, "notice_limit", `An assistant can have up to ${NOTICE_LIMIT} notices`);
         }
+        if (input.kind === "offer") await checkItem(tx, botId, input.itemId);
         const [row] = await tx
           .insert(notices)
           .values({ tenantId, botId, ...toNoticeValues(input) })
@@ -399,6 +418,7 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
       if (!isUuid(itemId)) throw notFound("Notice");
       const input = noticeSchema.parse(request.body);
       const notice = await forBot(tenantId, botId, async (tx) => {
+        if (input.kind === "offer") await checkItem(tx, botId, input.itemId);
         const [row] = await tx
           .update(notices)
           .set(toNoticeValues(input))

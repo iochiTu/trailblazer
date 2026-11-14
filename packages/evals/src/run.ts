@@ -9,6 +9,7 @@ import {
   leads,
   type MessageFlags,
   messages,
+  notices,
   outboundMessages,
   tenants,
   withTenant,
@@ -62,10 +63,25 @@ export async function setUpBusiness(
     const botId = bot!.id;
     const { address, ...profile } = business.profile;
     await tx.insert(businessProfiles).values({ tenantId, botId, ...profile, address: { full: address } });
-    if (business.catalog.length) {
-      await tx
-        .insert(catalogItems)
-        .values(business.catalog.map((item, position) => ({ tenantId, botId, position, ...item })));
+    const listed = business.catalog.length
+      ? await tx
+          .insert(catalogItems)
+          .values(business.catalog.map((item, position) => ({ tenantId, botId, position, ...item })))
+          .returning({ id: catalogItems.id, name: catalogItems.name })
+      : [];
+    if (business.offers?.length) {
+      await tx.insert(notices).values(
+        business.offers.map((offer) => ({
+          tenantId,
+          botId,
+          kind: "offer" as const,
+          title: offer.title,
+          text: offer.text,
+          catalogItemId: listed.find((item) => item.name === offer.item)?.id ?? null,
+          endsAt:
+            offer.endsInDays === undefined ? null : new Date(Date.now() + offer.endsInDays * 86_400_000),
+        })),
+      );
     }
     const sources = await tx
       .insert(knowledgeSources)
@@ -116,6 +132,7 @@ async function playSmsCase(deps: EvalDeps, business: SetUp, evalCase: EvalCase):
     advice: false,
     unanswered: false,
     actions: [],
+    offers: [],
     itemButtons: [],
     tools: [],
     requests: [],
@@ -199,6 +216,7 @@ async function playSmsCase(deps: EvalDeps, business: SetUp, evalCase: EvalCase):
   outcome.itemButtons = (last?.actions ?? []).flatMap((a) =>
     a.item ? [{ kind: a.kind, item: a.item.name }] : [],
   );
+  outcome.offers = (last?.offers ?? []).map((o) => o.title);
   outcome.tools = last?.tools ?? [];
   return outcome;
 }
@@ -215,6 +233,7 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
     advice: false,
     unanswered: false,
     actions: [],
+    offers: [],
     itemButtons: [],
     tools: [],
     requests: [],
@@ -280,6 +299,7 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
       outcome.advice = Boolean(done?.flags.advice);
       outcome.unanswered = Boolean(done?.flags.unanswered);
       outcome.actions = (done?.flags.actions ?? []).map((a) => a.kind);
+      outcome.offers = (done?.flags.offers ?? []).map((o) => o.title);
       outcome.itemButtons = (done?.flags.actions ?? []).flatMap((a) =>
         a.item ? [{ kind: a.kind, item: a.item.name }] : [],
       );

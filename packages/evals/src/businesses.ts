@@ -148,6 +148,16 @@ const tires: EvalBusiness = {
       action: "book",
     },
   ],
+  offers: [
+    {
+      title: "Winter changeover special",
+      text: "A free wheel alignment check with every tire changeover booked this month.",
+      item: "Tire changeover",
+      endsInDays: 20,
+    },
+    // Ended: never mentioned.
+    { title: "Summer AC check", text: "A free air-conditioning check with any oil change.", endsInDays: -30 },
+  ],
   knowledge: [
     {
       title: "About the shop",

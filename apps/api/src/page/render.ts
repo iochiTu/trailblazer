@@ -10,6 +10,15 @@ import { type PageLanguage, type PageStringKey, pageText } from "./strings.js";
  * in `#app`; the page works without it.
  */
 
+export interface PageOffer {
+  id: string;
+  title: string;
+  text: string;
+  endsAt: Date | null;
+  /** The service or product it is about, when that one is on the page. */
+  itemId: string | null;
+}
+
 export interface PageItem {
   id: string;
   kind: CatalogKind;
@@ -65,6 +74,8 @@ export interface PageData {
   items: PageItem[];
   photos: PagePhoto[];
   notices: string[];
+  /** Promotions running now (docs/SELL_AND_PROMOTE.md §3.2). */
+  offers: PageOffer[];
   links: PageLink[];
   poweredBy: boolean;
   now: Date;
@@ -254,7 +265,18 @@ function actionsHtml(data: PageData): string {
 const askButton = (label: string, message: string, primary = false) =>
   `<button type="button" class="tbp-btn${primary ? " tbp-btn-primary" : ""}" data-ask="${esc(message)}" hidden>${esc(label)}</button>`;
 
-function itemHtml(data: PageData, item: PageItem): string {
+/** "Until November 30", in the page's language and the business's time zone. */
+function untilText(data: PageData, endsAt: Date): string {
+  const date = new Intl.DateTimeFormat(data.lang === "fr" ? "fr-CA" : "en-CA", {
+    month: "long",
+    day: "numeric",
+    timeZone: data.timezone,
+  }).format(endsAt);
+  return pageText(data.lang, "offerUntil", { date });
+}
+
+/** The buttons of a service or product: its own (quote or book), then "Ask about this". */
+function itemButtons(data: PageData, item: PageItem): string[] {
   const t = (key: PageStringKey, vars?: Record<string, string>) => pageText(data.lang, key, vars);
   const name = { item: item.name };
   const buttons: string[] = [];
@@ -268,12 +290,42 @@ function itemHtml(data: PageData, item: PageItem): string {
     );
   }
   buttons.push(askButton(t("askAbout"), t("askMessage", name), item.action === "ask"));
+  return buttons;
+}
+
+/** A running promotion: its title, text and end date, with the buttons of the service it is about. */
+function offerHtml(data: PageData, offer: PageOffer): string {
+  const t = (key: PageStringKey, vars?: Record<string, string>) => pageText(data.lang, key, vars);
+  const item = data.items.find((i) => i.id === offer.itemId);
+  const buttons = item
+    ? itemButtons(data, item)
+    : [askButton(t("askAbout"), t("askMessage", { item: offer.title }), true)];
+  return [
+    // Taps count for the service the offer is about.
+    `<li class="tbp-offer"${item ? ` data-item="${esc(item.id)}"` : ""}>`,
+    `<div class="tbp-offer-body">`,
+    `<p class="tbp-offer-label">${esc(t("offer"))}</p>`,
+    `<h3 dir="auto">${esc(offer.title)}</h3>`,
+    offer.text !== offer.title ? `<p dir="auto">${esc(offer.text)}</p>` : "",
+    offer.endsAt ? `<p class="tbp-offer-until">${esc(untilText(data, offer.endsAt))}</p>` : "",
+    `</div>`,
+    `<div class="tbp-card-actions">${buttons.join("")}</div>`,
+    `</li>`,
+  ].join("");
+}
+
+function itemHtml(data: PageData, item: PageItem): string {
+  const buttons = itemButtons(data, item);
+  const offer = data.offers.find((o) => o.itemId === item.id);
   return [
     // The id lets the page count taps on this card's buttons (statistics; nothing about who).
     `<li class="tbp-card" data-item="${esc(item.id)}">`,
     item.photoUrl ? `<img class="tbp-card-photo" src="${esc(item.photoUrl)}" alt="" loading="lazy">` : "",
     `<div class="tbp-card-body">`,
     `<h3 dir="auto">${esc(item.name)}</h3>`,
+    offer
+      ? `<p class="tbp-badge" dir="auto">${esc(pageText(data.lang, "offer"))}: ${esc(offer.title)}</p>`
+      : "",
     item.priceText ? `<p class="tbp-price" dir="auto">${esc(item.priceText)}</p>` : "",
     item.description ? `<p class="tbp-card-text" dir="auto">${esc(item.description)}</p>` : "",
     `<div class="tbp-card-actions">${buttons.join("")}</div>`,
@@ -375,6 +427,9 @@ export function pageBody(data: PageData): string {
     actionsHtml(data),
     `</header>`,
     notices,
+    data.offers.length
+      ? `<section class="tbp-offers" aria-label="${esc(t("offers"))}"><ul>${data.offers.map((o) => offerHtml(data, o)).join("")}</ul></section>`
+      : "",
     `<main class="tbp-main">`,
     `<section class="tbp-chat" aria-label="${esc(t(data.preset === "personal" ? "chatHeadingPersonal" : "chatHeading"))}">`,
     `<div id="app"><noscript><p class="tbp-noscript">${esc(t("noScript"))}</p></noscript></div>`,

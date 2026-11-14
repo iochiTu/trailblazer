@@ -654,6 +654,15 @@ export const en = {
   "notices.running": "Showing now",
   "notices.scheduled": "Starts {date}",
   "notices.ended": "Ended",
+  "notices.offer.toggle": "This is an offer",
+  "notices.offer.hint":
+    "An offer has a title and can be about one of your services. It shows as a banner on your page, and your assistant shows it under answers about that service, in your own words.",
+  "notices.offer.title": "Offer title",
+  "notices.offer.text": "What the offer is",
+  "notices.offer.item": "About (optional)",
+  "notices.offer.noItem": "No particular service",
+  "notices.offer.badge": "Offer",
+  "notices.offer.add": "Add offer",
   "notices.limit": "You've reached the limit of notices. Delete one to add another.",
   "pageStats.title": "How your page is doing",
   "pageStats.hint":

@@ -682,6 +682,15 @@ export const fr: Record<MessageKey, string> = {
   "notices.running": "Affiché en ce moment",
   "notices.scheduled": "Commence le {date}",
   "notices.ended": "Terminé",
+  "notices.offer.toggle": "Ceci est une offre",
+  "notices.offer.hint":
+    "Une offre a un titre et peut porter sur l'un de vos services. Elle s'affiche en bandeau sur votre page, et votre assistant la montre sous les réponses au sujet de ce service, dans vos propres mots.",
+  "notices.offer.title": "Titre de l'offre",
+  "notices.offer.text": "En quoi consiste l'offre",
+  "notices.offer.item": "Au sujet de (facultatif)",
+  "notices.offer.noItem": "Aucun service en particulier",
+  "notices.offer.badge": "Offre",
+  "notices.offer.add": "Ajouter l'offre",
   "notices.limit": "Vous avez atteint la limite d'avis. Supprimez-en un pour en ajouter un autre.",
   "pageStats.title": "Comment se porte votre page",
   "pageStats.hint":

@@ -82,7 +82,7 @@ describe("add-ons in the prompt", () => {
     expect(text).toContain("<add_ons>\n## Online shop\nOnline shop: https://shop.example.com\n</add_ons>");
     expect(blocks(null)[1]!.text).not.toContain("<add_ons>");
     expect(blocks(null)[0]!.text).toContain(
-      "Answer only from <business_profile>, <services>, <notices>, <add_ons> and <knowledge>.",
+      "Answer only from <business_profile>, <services>, <notices>, <offers>, <add_ons> and <knowledge>.",
     );
   });
 });

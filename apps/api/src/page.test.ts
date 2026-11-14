@@ -215,6 +215,36 @@ describe("notices", () => {
     ).toBe(400);
     expect((await call("GET", `${owner.base}/notices`)).json().notices).toHaveLength(3);
   });
+
+  it("takes an offer with a title and one of the assistant's own services", async () => {
+    const items = (await call("GET", `${owner.base}/catalog`)).json().items as { id: string; name: string }[];
+    const drain = items.find((i) => i.name === "Drain cleaning")!;
+    const offer = { kind: "offer", title: "Spring drain special", text: "$20 off drain cleaning in April." };
+    // An offer needs a title, and its service must be this assistant's.
+    expect((await call("POST", `${owner.base}/notices`, { ...offer, title: "" })).statusCode).toBe(400);
+    expect(
+      (await call("POST", `${owner.base}/notices`, { ...offer, itemId: crypto.randomUUID() })).statusCode,
+    ).toBe(400);
+    const created = await call("POST", `${owner.base}/notices`, {
+      ...offer,
+      itemId: drain.id,
+      endsAt: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().notice).toMatchObject({
+      kind: "offer",
+      title: "Spring drain special",
+      catalogItemId: drain.id,
+    });
+    // A plain notice keeps neither.
+    const plain = await call("POST", `${owner.base}/notices`, {
+      text: "Closed Friday",
+      title: "x",
+      itemId: drain.id,
+    });
+    expect(plain.json().notice).toMatchObject({ kind: "notice", title: null, catalogItemId: null });
+    await call("DELETE", `${owner.base}/notices/${plain.json().notice.id}`);
+  });
 });
 
 describe("business page", () => {
@@ -240,6 +270,14 @@ describe("business page", () => {
     expect(html).toContain("from $120");
     expect(html.indexOf("Water heater install")).toBeLessThan(html.indexOf("Drain cleaning"));
     expect(html).toContain("Booking furnace tune-ups now");
+    // The running offer: a banner with its title, text and last day, and a badge on its service.
+    expect(html).toContain('<section class="tbp-offers" aria-label="Offers">');
+    expect(html).toContain('<h3 dir="auto">Spring drain special</h3>');
+    expect(html).toContain("$20 off drain cleaning in April.");
+    expect(html).toMatch(/<p class="tbp-offer-until">Until [A-Z][a-z]+ \d+<\/p>/);
+    expect(html).toContain('<p class="tbp-badge" dir="auto">Offer: Spring drain special</p>');
+    // An offer isn't repeated among the plain notices.
+    expect(html.match(/Spring drain special/g)).toHaveLength(2);
     expect(html).not.toContain("Closed for the holidays");
     expect(html).not.toContain("Summer AC special");
     expect(html).toContain('"@type":"Plumber"');

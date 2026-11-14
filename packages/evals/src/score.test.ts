@@ -11,6 +11,7 @@ const outcome = (over: Partial<Outcome> = {}): Outcome => ({
   advice: false,
   unanswered: false,
   actions: [],
+  offers: [],
   itemButtons: [],
   tools: [],
   requests: [],

@@ -8,6 +8,7 @@ import {
   messages,
   outboundMessages,
   type ReplyAction,
+  type ReplyOffer,
   smsOptOuts,
   type Tx,
   usageEvents,
@@ -213,7 +214,7 @@ export async function handleInboundText(
       !word && (guessed === "fr" || guessed === "en")
         ? guessed
         : smsLanguage(thread?.language ?? info.language);
-    return { outcome: null, info, t: smsText(spoken), conversationId: thread?.id ?? null, offer };
+    return { outcome: null, info, t: smsText(spoken), spoken, conversationId: thread?.id ?? null, offer };
   });
   if (before.outcome) {
     // The message at the limit is still stored, so the count moves past it and the notice isn't repeated.
@@ -223,7 +224,7 @@ export async function handleInboundText(
     }
     return before.outcome;
   }
-  const { info, t } = before;
+  const { info, t, spoken } = before;
 
   const images = message.images ?? [];
   // Nothing to answer: no words, and no photo that could be opened.
@@ -245,6 +246,7 @@ export async function handleInboundText(
   let reply = "";
   let failed = false;
   let actions: ReplyAction[] = [];
+  let promotions: ReplyOffer[] = [];
   // The reply word stands for the sentence a tap on the service's button sends in the chat.
   const said = before.offer
     ? before.offer.kind === "quote"
@@ -267,6 +269,7 @@ export async function handleInboundText(
       else if (event.type === "done") {
         if (event.flags.error || event.flags.busy) failed = true;
         actions = event.flags.actions ?? [];
+        promotions = event.flags.offers ?? [];
       }
     }
   } catch (error) {
@@ -284,7 +287,20 @@ export async function handleInboundText(
           ? [t.bookLink(a.item.name, a.href)]
           : [t.replyBook(a.item.name)],
   );
-  const body = !failed && reply.trim() ? [toSmsText(reply), ...offers].join("\n") : t.failed(info.phone);
+  // A promotion goes out in the owner's own words, with its last day.
+  const promoted = promotions.map((offer) => {
+    const until = offer.endsAt
+      ? ` (${t.offerUntil(
+          new Intl.DateTimeFormat(spoken === "fr" ? "fr-CA" : "en-CA", {
+            month: "long",
+            day: "numeric",
+          }).format(new Date(new Date(offer.endsAt).getTime() - 1)),
+        )})`
+      : "";
+    return `${offer.text === offer.title ? offer.title : `${offer.title}: ${offer.text}`}${until}`;
+  });
+  const body =
+    !failed && reply.trim() ? [toSmsText(reply), ...promoted, ...offers].join("\n") : t.failed(info.phone);
   await withTenant(deps.db, number.tenantId, (tx) =>
     queueText(tx, {
       ...scope,

@@ -152,6 +152,11 @@ export interface Notice {
   text: string;
   startsAt: string | null;
   endsAt: string | null;
+  /** "offer": a promotion with a title, shown as a banner on the page and a card under answers. */
+  kind: "notice" | "offer";
+  title: string | null;
+  /** The service or product an offer is about. */
+  catalogItemId: string | null;
 }
 
 /** What the setup assistant proposes after reading the business's information. */

@@ -167,6 +167,33 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     });
   }
 
+  /** Titles of the promotions running now (at most two), for the suggested questions. */
+  const runningOfferTitles = (tenantId: string, botId: string, now = new Date()) =>
+    withTenant(db, tenantId, async (tx) =>
+      (
+        await tx
+          .select({ title: notices.title })
+          .from(notices)
+          .where(
+            and(
+              eq(notices.botId, botId),
+              eq(notices.kind, "offer"),
+              or(isNull(notices.startsAt), lte(notices.startsAt, now)),
+              or(isNull(notices.endsAt), gt(notices.endsAt, now)),
+            ),
+          )
+          .orderBy(asc(notices.createdAt))
+          .limit(2)
+      ).flatMap((n) => (n.title ? [n.title] : [])),
+    );
+  // Added to the lists that exist: a language without its own list keeps falling back to them.
+  const withOfferTitles = (replies: Record<string, string[]>, titles: string[]) =>
+    titles.length
+      ? Object.fromEntries(
+          Object.entries(replies).map(([code, questions]) => [code, [...titles, ...questions].slice(0, 6)]),
+        )
+      : replies;
+
   /** What the business page shows besides the profile: cards, running notices, gallery photos. */
   async function loadPageContent(tenantId: string, botId: string, now: Date) {
     return withTenant(db, tenantId, async (tx) => {
@@ -176,7 +203,14 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .where(and(eq(catalogItems.botId, botId), eq(catalogItems.enabled, true)))
         .orderBy(asc(catalogItems.position), asc(catalogItems.createdAt));
       const running = await tx
-        .select({ text: notices.text })
+        .select({
+          id: notices.id,
+          text: notices.text,
+          kind: notices.kind,
+          title: notices.title,
+          endsAt: notices.endsAt,
+          itemId: notices.catalogItemId,
+        })
         .from(notices)
         .where(
           and(
@@ -192,7 +226,21 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .where(and(eq(knowledgeImages.botId, botId), eq(knowledgeImages.enabled, true)))
         .orderBy(asc(knowledgeImages.createdAt))
         .limit(12);
-      return { items, notices: running.map((n) => n.text), photos };
+      return {
+        items,
+        notices: running.filter((n) => n.kind !== "offer").map((n) => n.text),
+        // Promotions running now, each with the service it is about (when that one is listed).
+        offers: running
+          .filter((n) => n.kind === "offer")
+          .map((n) => ({
+            id: n.id,
+            title: n.title ?? n.text,
+            text: n.text,
+            endsAt: n.endsAt,
+            itemId: items.some((i) => i.id === n.itemId) ? n.itemId : null,
+          })),
+        photos,
+      };
     });
   }
 
@@ -313,6 +361,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         title: p.title,
       })),
       notices: content.notices,
+      offers: content.offers,
       links: links.map(({ url, label, icon }) => ({ url, label, icon })),
       poweredBy: true,
       now,
@@ -409,7 +458,11 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           return { code, nativeName: lang?.nativeName ?? code, dir: lang?.dir ?? "ltr" };
         }),
         greeting: settings.greeting ?? {},
-        quickReplies: { ...template.quickReplies, ...(settings.quickReplies ?? {}) },
+        // While a promotion runs, its title is a suggested question.
+        quickReplies: withOfferTitles(
+          { ...template.quickReplies, ...(settings.quickReplies ?? {}) },
+          await runningOfferTitles(found.tenantId, found.botId),
+        ),
         // Buttons from add-ons (e.g. "Shop online").
         links: addonChatLinks(
           addons,
@@ -667,6 +720,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           images: m.images.map(toPublicImage),
           // Buttons shown under the reply (links from the business profile when it was written).
           actions: flags.actions ?? [],
+          offers: flags.offers ?? [],
         })),
       };
     },
