@@ -1,4 +1,5 @@
-import { memberships, tenants, users } from "@traiblazer/db";
+import { planFeatures } from "@traiblazer/core";
+import { memberships, plans, tenants, users } from "@traiblazer/db";
 import { loginSchema, signupSchema } from "@traiblazer/shared";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
@@ -86,11 +87,19 @@ export async function authRoutes(app: FastifyInstance, { db, config, limiter }: 
         slug: tenants.slug,
         plan: tenants.plan,
         role: memberships.role,
+        insights: plans.insights,
       })
       .from(memberships)
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .leftJoin(plans, eq(plans.id, tenants.plan))
       .where(eq(memberships.userId, user.id))
       .orderBy(tenants.name);
-    return { user, tenants: myTenants };
+    return {
+      user,
+      tenants: myTenants.map(({ insights, ...t }) => ({
+        ...t,
+        features: planFeatures({ insights: insights ?? false }),
+      })),
+    };
   });
 }

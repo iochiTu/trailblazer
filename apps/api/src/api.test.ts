@@ -412,6 +412,7 @@ describe("catalog", () => {
       [
         "concurrent",
         "id",
+        "insights",
         "knowledgeImages",
         "monthlyQuestions",
         "nameEn",

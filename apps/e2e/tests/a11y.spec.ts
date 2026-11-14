@@ -143,6 +143,7 @@ test.describe("business owners", () => {
     for (const tab of [
       "knowledge",
       "page",
+      "insights",
       "workflows",
       "addons",
       "general",

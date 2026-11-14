@@ -1,4 +1,5 @@
-import { auditLogs, memberships, tenants, users, withTenant } from "@traiblazer/db";
+import { planFeatures } from "@traiblazer/core";
+import { auditLogs, memberships, plans, tenants, users, withTenant } from "@traiblazer/db";
 import { createTenantSchema } from "@traiblazer/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -19,12 +20,19 @@ export async function tenantRoutes(app: FastifyInstance, { db, platform }: AppCo
         slug: tenants.slug,
         plan: tenants.plan,
         role: memberships.role,
+        insights: plans.insights,
       })
       .from(memberships)
       .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
+      .leftJoin(plans, eq(plans.id, tenants.plan))
       .where(eq(memberships.userId, request.user!.id))
       .orderBy(tenants.name);
-    return { tenants: rows };
+    return {
+      tenants: rows.map(({ insights, ...t }) => ({
+        ...t,
+        features: planFeatures({ insights: insights ?? false }),
+      })),
+    };
   });
 
   app.post("/v1/tenants", { preHandler: requireUser }, async (request, reply) => {

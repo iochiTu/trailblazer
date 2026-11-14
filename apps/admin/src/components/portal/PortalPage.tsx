@@ -275,6 +275,7 @@ function Plans({ state, signedIn }: { state: PlanCatalog | null | "error"; signe
                 <PlanLine>{t("portal.plans.perMinute", { count: plan.perMinute })}</PlanLine>
                 <PlanLine>{t("portal.plans.concurrent", { count: plan.concurrent })}</PlanLine>
                 <PlanLine>{t("portal.plans.photos", { count: plan.knowledgeImages })}</PlanLine>
+                {plan.insights && <PlanLine strong>{t("portal.plans.insights")}</PlanLine>}
                 <PlanLine>{t("portal.plans.everything")}</PlanLine>
               </ul>
               <Link

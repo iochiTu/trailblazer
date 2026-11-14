@@ -30,6 +30,7 @@ function readForm(form: HTMLFormElement): Partial<PlanForm> {
     perMinute: num("perMinute"),
     concurrent: num("concurrent"),
     knowledgeImages: num("knowledgeImages"),
+    insights: data.get("insights") === "on",
     sortOrder: num("sortOrder"),
     priceMonthlyCents: price === "" ? null : Math.round(Number(price) * 100),
   };
@@ -88,6 +89,16 @@ function PlanFields({ plan, isNew }: { plan?: OperatorPlan; isNew?: boolean }) {
           <span className="muted text-xs">{f.help}</span>
         </label>
       ))}
+      <label className="flex items-start gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="insights" className="mt-1" defaultChecked={plan?.insights ?? false} />
+        <span>
+          Insights (premium)
+          <span className="muted block text-xs">
+            Conversation analysis, funnel and conversion rates. Analyzing conversations uses AI and counts
+            toward the business's usage.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }
@@ -229,6 +240,7 @@ export function PlansTab() {
                 {plan.id === defaultPlan && (
                   <span className="badge badge-accent">Default for new businesses</span>
                 )}
+                {plan.insights && <span className="badge">Insights</span>}
                 {!plan.active && <span className="badge">Archived</span>}
               </div>
               <div className="muted mt-1 text-sm">

@@ -34,6 +34,7 @@ export async function catalogRoutes(app: FastifyInstance, { platform }: AppConte
           perMinute: p.perMinute,
           concurrent: p.concurrent,
           knowledgeImages: p.knowledgeImages,
+          insights: p.insights,
           priceMonthlyCents: p.priceMonthlyCents,
         })),
     };

@@ -30,7 +30,15 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
 export interface Me {
   /** platformRole is set only for Traiblazer staff accounts (never for business users). */
   user: { id: string; email: string; name: string; uiLanguage: string; platformRole: "super_admin" | null };
-  tenants: { id: string; name: string; slug: string; plan: string; role: string }[];
+  tenants: {
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+    role: string;
+    /** What the business's plan includes (premium features). */
+    features: { insights: boolean };
+  }[];
 }
 
 /** A playbook the assistant follows when a visitor's request matches `when`. */
@@ -144,6 +152,32 @@ export interface PageStats {
     requests: number;
   }[];
   daily: { date: string; views: number; taps: number; questions: number; requests: number }[];
+}
+
+/** A conversion funnel's counts over one period. */
+export interface InsightsFunnel {
+  views: number;
+  conversations: number;
+  offered: number;
+  taps: number;
+  requests: number;
+}
+
+/** Insights (premium BI) for one assistant: daily totals only, nothing about who. */
+export interface Insights {
+  days: number;
+  funnel: { current: InsightsFunnel; previous: InsightsFunnel };
+  channels: { channel: "page" | "website" | "sms"; conversations: number; requests: number }[];
+  languages: { language: string; conversations: number; requests: number }[];
+  /** Conversations analyzed (tagged once they went quiet). */
+  analyzed: number;
+  outcomes: Partial<Record<"request" | "answered" | "unanswered" | "error", number>>;
+  intents: { intent: string; conversations: number; requests: number }[];
+  blockers: Record<string, number>;
+  sentiment: { date: string; positive: number; neutral: number; negative: number }[];
+  /** Questions by weekday (1 = Monday) and hour, in the reporting time zone. */
+  busyTimes: { weekday: number; hour: number; n: number }[];
+  openGaps: number;
 }
 
 /** A time-limited announcement on the page and in answers. */
@@ -487,5 +521,7 @@ export interface PublicPlan {
   perMinute: number;
   concurrent: number;
   knowledgeImages: number;
+  /** Insights (premium BI) is included. */
+  insights: boolean;
   priceMonthlyCents: number | null;
 }

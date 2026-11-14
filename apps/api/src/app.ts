@@ -17,6 +17,7 @@ import { botRoutes } from "./routes/bots.js";
 import { catalogRoutes } from "./routes/catalog.js";
 import { demoRoutes } from "./routes/demos.js";
 import { gapRoutes } from "./routes/gaps.js";
+import { insightsRoutes } from "./routes/insights.js";
 import { integrationRoutes } from "./routes/integrations.js";
 import { interviewRoutes } from "./routes/interview.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
@@ -123,6 +124,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => catalogRoutes(scope, ctx));
   await app.register(async (scope) => knowledgeRoutes(scope, ctx));
   await app.register(async (scope) => pageRoutes(scope, ctx));
+  await app.register(async (scope) => insightsRoutes(scope, ctx));
   await app.register(async (scope) => leadRoutes(scope, ctx));
   await app.register(async (scope) => gapRoutes(scope, ctx));
   await app.register(async (scope) => setupRoutes(scope, ctx));

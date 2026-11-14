@@ -41,6 +41,18 @@ export {
   type DemoBuildPayload,
 } from "./demo/build.js";
 export {
+  analyzeConversation,
+  buildInsightsRequest,
+  conversationOutcome,
+  INSIGHTS_QUIET_MS,
+  INSIGHTS_USAGE_KIND,
+  type InsightsDeps,
+  type InsightsResult,
+  type InsightTags,
+  queueInsights,
+  readInsightTags,
+} from "./insights/analyze.js";
+export {
   type ConnectionRef,
   type CrmLeadPayload,
   connectIntegration,
@@ -55,6 +67,7 @@ export { FILE_LIMITS, FileReadError, fileSections, readSourceFile } from "./know
 export { clearSource, indexDocuments, searchableText, tsvectorSql } from "./knowledge/index-documents.js";
 export { assertPublicUrl, publicFetch, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";
+export { planAllows, planFeatures } from "./plan-features.js";
 export { runUrgentAlert, type UrgentAlertDeps, type UrgentAlertPayload } from "./requests/urgent-alert.js";
 export { type AppliedSetup, applySetup, CatalogLimitError, suggestionToInput } from "./setup/apply.js";
 export {

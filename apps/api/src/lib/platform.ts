@@ -64,6 +64,7 @@ export class PlatformConfig {
         concurrent: row.concurrent,
         perMinute: row.perMinute,
         knowledgeImages: row.knowledgeImages,
+        insights: row.insights,
       };
     }
     return { id: "trial", ...PLANS.trial };

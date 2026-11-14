@@ -1,11 +1,12 @@
 /**
  * Background worker: polls the Postgres job queue and runs jobs (website crawls, text indexing,
- * reading uploaded price lists and brochures, add-on effects such as notification emails, urgent request alerts, the setup assistant).
+ * reading uploaded price lists and brochures, add-on effects such as notification emails, urgent request alerts, the setup assistant, Insights).
  * Several workers can run side by side; jobs are claimed with FOR UPDATE SKIP LOCKED.
  */
 import { hostname } from "node:os";
 import {
   type AddonEffectPayload,
+  analyzeConversation,
   buildDemo,
   claimNextJob,
   completeJob,
@@ -120,6 +121,15 @@ async function run(job: JobRow): Promise<void> {
           runAt: new Date(Date.now() + DEMO_RETRY_MS),
         });
       } else log("demo build", { id: job.id, demoId: payload.demoId, outcome });
+      return;
+    }
+    case JOB_TYPES.insightsAnalyze: {
+      const conversationId = String(job.payload.conversationId);
+      const outcome = await analyzeConversation(
+        { db, gateway, log },
+        { tenantId: job.tenantId, conversationId },
+      );
+      log("insights", { id: job.id, conversationId, outcome });
       return;
     }
     case JOB_TYPES.botSetup:
