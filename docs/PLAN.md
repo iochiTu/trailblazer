@@ -564,6 +564,12 @@ conversation, so they appear in the funnel, not in a conversation's outcome. Eva
   first contact (§2.2). The console's Demos tab fills the page in with the setup assistant, shows a
   demo notice on it, keeps it out of search engines, counts views, chats and requests, and hands the
   business over to the owner's account when they sign up. Google listing import still waits on §17.4
+- **Customer demo access (built):** operators pick the plan a demo is on and can give the customer an
+  access code (12 characters, only its hash kept, shown once in the Demos tab). The customer enters it
+  at `/demo` and tries the product as owner of the demo business on that plan, with a demo-account
+  banner; a demo account can't add businesses. "New code" ends the old code and its sign-ins; removing
+  access, handing over or deleting the demo removes the demo account. Every step is in the operator
+  audit log. Later: send the code by email instead of showing it, and an expiry date per code
 - **Done-for-you onboarding checklist (built):** the Onboarding tab, one checklist per business: sources
   read, page content, services list, photos, owner review, link on the Google listing, go-live. The first
   five and go-live are checked from the business's data; staff tick the owner's review and the Google

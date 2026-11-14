@@ -604,6 +604,16 @@ export const fr: Record<MessageKey, string> = {
   "tenants.plan": "Votre forfait : {plan}",
   "tenants.planInsights": "Analyses incluses",
   "tenants.planCompare": "Comparer les forfaits",
+  "auth.haveDemoCode": "Vous avez un code d'accès de démo?",
+  "demo.title": "Ouvrir votre démo",
+  "demo.intro":
+    "Entrez le code d'accès que nous vous avons remis pour essayer l'assistant avec votre propre entreprise.",
+  "demo.code": "Code d'accès",
+  "demo.codeHint": "12 lettres et chiffres. Les tirets et les espaces ne comptent pas.",
+  "demo.open": "Ouvrir ma démo",
+  "demo.invalidCode": "Ce code ne fonctionne pas. Vérifiez-le ou demandez-nous-en un nouveau.",
+  "demo.banner":
+    "Vous utilisez un compte de démonstration. Essayez tout avec votre entreprise; quand vous serez prêt, nous la transférerons à votre propre compte.",
   "tenants.limitReached":
     "Vous avez atteint le nombre maximal d'entreprises pour un compte. Contactez-nous si vous en avez besoin de plus.",
   "portal.plans.businesses":

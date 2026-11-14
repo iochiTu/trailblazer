@@ -136,6 +136,11 @@ export const users = pgTable("users", {
    * (enforced by a database trigger), so a business login can never reach the console.
    */
   platformRole: text("platform_role").$type<PlatformRole>(),
+  /**
+   * A prospect's demo account (see demos.accessUserId): signs in with an access code only, owns its
+   * demo business only, and can't add businesses.
+   */
+  demo: boolean("demo").notNull().default(false),
   ...timestamps,
 });
 
@@ -178,6 +183,15 @@ export const demos = pgTable(
     /** Account the business was handed over to. */
     handedOverTo: text("handed_over_to"),
     handedOverAt: timestamp("handed_over_at", { withTimezone: true }),
+    /**
+     * Customer access: the demo account that signs in with an access code and owns this demo
+     * business only. Removed (with its sessions) on hand-over, delete, or when access is removed.
+     */
+    accessUserId: uuid("access_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** SHA-256 of the access code; the code itself is only shown to the operator once. */
+    accessCodeHash: text("access_code_hash").unique(),
+    accessCodeCreatedAt: timestamp("access_code_created_at", { withTimezone: true }),
+    accessLastUsedAt: timestamp("access_last_used_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [index("demos_created_idx").on(t.createdAt)],

@@ -61,6 +61,12 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {me.user.demo && (
+        <p className="panel px-4 py-3 text-sm" role="note">
+          {t("demo.banner")}
+        </p>
+      )}
+
       <section className="card flex flex-col gap-5 p-5 sm:p-7">
         <h2 className="text-lg font-semibold">{t("tenants.title")}</h2>
         {me.tenants.length === 0 ? (
@@ -87,12 +93,15 @@ export default function DashboardPage() {
           </div>
         )}
         {tenant && <PlanSummary planId={tenant.plan} />}
-        <CreateTenantForm
-          onCreated={async (id) => {
-            setTenantId(id);
-            await loadMe();
-          }}
-        />
+        {/* A demo account tries its demo business only. */}
+        {!me.user.demo && (
+          <CreateTenantForm
+            onCreated={async (id) => {
+              setTenantId(id);
+              await loadMe();
+            }}
+          />
+        )}
       </section>
 
       {tenantId && <BotsSection key={tenantId} tenantId={tenantId} />}

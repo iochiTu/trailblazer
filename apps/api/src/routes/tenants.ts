@@ -45,6 +45,14 @@ export async function tenantRoutes(app: FastifyInstance, { db, platform }: AppCo
         "Staff accounts can't own businesses. Use a separate account.",
       );
     }
+    // A demo account tries its demo business only; the customer signs up to add their own.
+    if (user.demo) {
+      throw new HttpError(
+        403,
+        "demo_account",
+        "A demo account can't add businesses. Sign up to get started.",
+      );
+    }
     const input = createTenantSchema.parse(request.body);
     // New businesses start on the operators' default plan (if it is still offered).
     const [policies, allPlans] = await Promise.all([platform!.policies(), platform!.plans()]);

@@ -123,7 +123,7 @@ test.describe("visitors", () => {
 
 test.describe("business owners", () => {
   test("sign-in and sign-up", async ({ page }) => {
-    for (const path of ["/login", "/signup"]) {
+    for (const path of ["/login", "/signup", "/demo"]) {
       await page.goto(`${ADMIN}${path}`);
       await settle(page);
       await audit(page, path);
