@@ -575,6 +575,9 @@ export const en = {
   "portal.footer.cities": "Cities",
   "portal.footer.pricing": "Pricing",
   "portal.footer.forAi": "For AI assistants",
+  "tenants.plan": "Your plan: {plan}",
+  "tenants.planInsights": "Insights included",
+  "tenants.planCompare": "Compare plans",
   "tenants.limitReached":
     "You've reached the maximum number of businesses for one account. Contact us if you need more.",
   "portal.plans.businesses":

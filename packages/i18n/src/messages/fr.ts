@@ -601,6 +601,9 @@ export const fr: Record<MessageKey, string> = {
   "portal.footer.cities": "Villes",
   "portal.footer.pricing": "Tarifs",
   "portal.footer.forAi": "Pour les assistants IA",
+  "tenants.plan": "Votre forfait : {plan}",
+  "tenants.planInsights": "Analyses incluses",
+  "tenants.planCompare": "Comparer les forfaits",
   "tenants.limitReached":
     "Vous avez atteint le nombre maximal d'entreprises pour un compte. Contactez-nous si vous en avez besoin de plus.",
   "portal.plans.businesses":
