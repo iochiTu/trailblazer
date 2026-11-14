@@ -19,6 +19,8 @@ export class FakeTelephony implements TelephonyProvider {
   readonly id = "fake";
   readonly signatureHeader = "x-fake-signature";
   sent: SendMessageInput[] = [];
+  /** Pictures a test "sends": the url in a webhook's `media` field, and what it downloads as. */
+  media = new Map<string, { bytes: Buffer; contentType: string }>();
   /** Set to make the next sends fail: "permanent" (never retried) or "temporary". */
   failing: "permanent" | "temporary" | null = null;
 
@@ -34,7 +36,10 @@ export class FakeTelephony implements TelephonyProvider {
       from,
       to,
       text: (params.text ?? "").trim(),
-      media: [],
+      media: (params.media ?? "")
+        .split(",")
+        .filter(Boolean)
+        .map((url) => ({ url, contentType: this.media.get(url)?.contentType ?? "application/octet-stream" })),
     };
   }
   parseIncomingCall(params: WebhookParams): IncomingCall | null {
@@ -50,6 +55,10 @@ export class FakeTelephony implements TelephonyProvider {
     if (this.failing === "temporary") throw new Error("Provider unavailable");
     this.sent.push(input);
     return { id: `out_${this.sent.length}`, status: "queued" };
+  }
+  async fetchMedia(url: string, maxBytes: number): Promise<{ bytes: Buffer; contentType: string } | null> {
+    const found = this.media.get(url);
+    return found && found.bytes.length <= maxBytes ? found : null;
   }
   replyNothing(): WebhookReply {
     return { contentType: "text/plain", body: "" };

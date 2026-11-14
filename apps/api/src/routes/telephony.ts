@@ -1,10 +1,13 @@
-import { applyMessageStatus, handleInboundText, handleMissedCall } from "@traiblazer/core";
+import { createHash } from "node:crypto";
+import { applyMessageStatus, type ChatImage, handleInboundText, handleMissedCall } from "@traiblazer/core";
 import { resolvePhoneNumber } from "@traiblazer/db";
+import { MAX_CHAT_IMAGE_BYTES, MAX_CHAT_IMAGES } from "@traiblazer/shared";
 import type { WebhookParams, WebhookReply } from "@traiblazer/telephony";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
-import { admitQuestion } from "../lib/chat-guard.js";
+import { admitImages, admitQuestion } from "../lib/chat-guard.js";
 import { isUuid } from "../lib/ids.js";
+import { prepareChatImage } from "../lib/images.js";
 
 /** Answers still being written after their webhook was acknowledged (tests wait for these). */
 const inFlight = new Set<Promise<unknown>>();
@@ -73,6 +76,29 @@ export async function telephonyRoutes(app: FastifyInstance, ctx: AppContext) {
 
     // Answered after the webhook is acknowledged: the provider waits only a few seconds.
     const work = (async () => {
+      // Photos (MMS): downloaded from the provider, checked by their content and stripped of
+      // metadata like images in the chat. Anything else attached is left out.
+      const images: ChatImage[] = [];
+      for (const media of message.media.slice(0, MAX_CHAT_IMAGES)) {
+        const file = await telephony.fetchMedia(media.url, MAX_CHAT_IMAGE_BYTES);
+        const prepared = file && prepareChatImage(file.bytes.toString("base64"), MAX_CHAT_IMAGE_BYTES);
+        if (!prepared?.ok) continue;
+        images.push({
+          name: `photo-${images.length + 1}.${prepared.contentType.split("/")[1]}`,
+          contentType: prepared.contentType,
+          dataBase64: prepared.bytes.toString("base64"),
+          sizeBytes: prepared.bytes.length,
+          sha256: createHash("sha256").update(prepared.bytes).digest("hex"),
+        });
+      }
+      // The same hourly allowance as images in the chat; over it, the text is answered without them.
+      const allowed =
+        !images.length ||
+        (await admitImages(ctx.limiter!, {
+          tenantId: number.tenantId,
+          visitorId: message.from,
+          count: images.length,
+        }));
       const admission = await admitQuestion(
         {
           db,
@@ -98,7 +124,12 @@ export async function telephonyRoutes(app: FastifyInstance, ctx: AppContext) {
             adminUrl: config.ADMIN_ORIGIN.replace(/\/$/, ""),
           },
           { tenantId: number.tenantId, botId: number.botId, e164: message.to },
-          { from: message.from, text: message.text, hasMedia: message.media.length > 0 },
+          {
+            from: message.from,
+            text: message.text,
+            images: allowed ? images : [],
+            hasMedia: message.media.length > 0,
+          },
         );
         request.log.info({ outcome, tenantId: number.tenantId, botId: number.botId }, "sms handled");
       } catch (error) {

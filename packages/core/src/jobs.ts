@@ -17,6 +17,8 @@ export const JOB_TYPES = {
   embedChunks: "embed.chunks",
   /** Sends one queued text message through the telephony provider (payload: { messageId }). */
   messageSend: "message.send",
+  /** Emails the business that its number's daily spend cap was reached (payload: { botId, spentMicros }). */
+  phoneCapAlert: "phone.cap_alert",
 } as const;
 
 /** Job priorities: higher runs first. */

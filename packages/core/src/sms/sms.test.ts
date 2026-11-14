@@ -1,17 +1,22 @@
 import {
   bots,
   businessProfiles,
+  catalogItems,
   conversations,
   createDb,
   type DbHandle,
   jobs,
   leads,
+  memberships,
+  messageAttachments,
   messages,
   outboundMessages,
+  phoneNumbers,
   runMigrations,
   smsOptOuts,
   tenants,
   usageEvents,
+  users,
 } from "@traiblazer/db";
 import {
   type ChatEvent,
@@ -25,6 +30,7 @@ import { FakeTelephony } from "@traiblazer/telephony";
 import { and, asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { JOB_TYPES } from "../jobs.js";
+import { runCapAlert } from "./alerts.js";
 import {
   applyMessageStatus,
   handleInboundText,
@@ -371,5 +377,308 @@ describe("sending a queued text", () => {
     expect(await send(out!.id)).toBe("skipped");
     expect(telephony.sent).toEqual([]);
     expect((await sentTo())[0]).toMatchObject({ status: "failed", error: "opted_out" });
+  });
+});
+
+describe("the daily spend cap and texts to the owner", () => {
+  const OWNER = "+18075559000";
+  const spend = (micros: number) =>
+    owner.db.insert(usageEvents).values({ ...scopeOf(), kind: "sms", quantity: 1, costMicros: micros });
+  const scopeOf = () => ({ tenantId: number.tenantId, botId: number.botId });
+  const capJobs = () =>
+    owner.db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.tenantId, number.tenantId), eq(jobs.type, JOB_TYPES.phoneCapAlert)));
+
+  beforeAll(async () => {
+    await owner.db
+      .insert(phoneNumbers)
+      .values({ ...scopeOf(), e164: OURS, provider: "fake", alertNumber: OWNER });
+  });
+  beforeEach(async () => {
+    await owner.db.delete(usageEvents).where(eq(usageEvents.botId, number.botId));
+    await owner.db.delete(outboundMessages).where(eq(outboundMessages.toNumber, OWNER));
+    await owner.db
+      .update(phoneNumbers)
+      .set({ dailyCapCents: 500, capAlertedAt: null, alertRequests: "all", alertNumber: OWNER })
+      .where(eq(phoneNumbers.botId, number.botId));
+  });
+
+  it("stops answering at the cap, keeps the customer's text, and tells the business once", async () => {
+    await spend(4_990_000);
+    expect(await text("Do you fix leaks?")).toBe("answered");
+    await spend(20_000);
+    expect(await text("Are you open Saturday?")).toBe("capped");
+    expect(await text("Hello?")).toBe("capped");
+    expect(await handleMissedCall(deps(), number, { from: customer })).toMatchObject({ texted: false });
+
+    // One answer went out before the cap; nothing after it.
+    expect((await sentTo()).map((m) => m.kind)).toEqual(["reply"]);
+    const [thread] = await threads();
+    const kept = await owner.db.select().from(messages).where(eq(messages.conversationId, thread!.id));
+    expect(kept.filter((m) => m.role === "user").map((m) => m.content)).toEqual([
+      "Do you fix leaks?",
+      "Are you open Saturday?",
+      "Hello?",
+    ]);
+    // Told once: a text to the owner and one email job.
+    const alerts = await sentTo(OWNER);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ kind: "alert" });
+    expect(alerts[0]!.body).toContain("reached today's limit for text messages ($5.00)");
+    expect(await capJobs()).toHaveLength(1);
+    // STOP still works at the cap.
+    expect(await text("STOP")).toBe("stopped");
+  });
+
+  it("answers again once the last 24 hours' spending is under the cap, or the cap is raised", async () => {
+    await owner.db.insert(usageEvents).values({
+      ...scopeOf(),
+      kind: "sms",
+      costMicros: 6_000_000,
+      createdAt: new Date(now.getTime() - 25 * 3600_000),
+    });
+    expect(await text("Do you fix leaks?")).toBe("answered");
+    await spend(6_000_000);
+    expect(await text("And drains?")).toBe("capped");
+    await owner.db
+      .update(phoneNumbers)
+      .set({ dailyCapCents: 1000 })
+      .where(eq(phoneNumbers.botId, number.botId));
+    expect(await text("And drains?")).toBe("answered");
+  });
+
+  it("emails the owners about the cap", async () => {
+    const email = `cap-${crypto.randomUUID().slice(0, 8)}@smith.example`;
+    const [u] = await owner.db.insert(users).values({ email, name: "Sam", passwordHash: "x" }).returning();
+    await owner.db.insert(memberships).values({ tenantId: number.tenantId, userId: u!.id, role: "owner" });
+    const sent: { to: string[]; subject: string; text: string }[] = [];
+    try {
+      const outcome = await runCapAlert(
+        { db: app.db, mailer: { send: async (m) => void sent.push(m) }, adminUrl: "https://admin.example" },
+        number.tenantId,
+        { botId: number.botId, spentMicros: 5_010_000 },
+      );
+      expect(outcome).toBe("done");
+      expect(sent[0]!.to).toEqual([email]);
+      expect(sent[0]!.subject).toBe("Text message limit reached for today (Smith & Sons Plumbing)");
+      expect(sent[0]!.text).toContain("has used $5.01 on text messages");
+      expect(sent[0]!.text).toContain(
+        `https://admin.example/t/${number.tenantId}/bots/${number.botId}?tab=phone`,
+      );
+    } finally {
+      await owner.db.delete(users).where(eq(users.id, u!.id));
+    }
+  });
+
+  it("texts the owner about a request, by the setting they chose", async () => {
+    // Calls the tool on the customer's message, then answers once its result is back.
+    const request = (urgent: boolean) => {
+      model.script = (chat) => {
+        const last = chat.messages.at(-1)!.content;
+        const answered = typeof last !== "string" && last.some((block) => block.type === "tool_result");
+        return answered
+          ? { text: "Passed on." }
+          : {
+              calls: [
+                {
+                  name: "request_follow_up",
+                  input: {
+                    kind: "quote",
+                    name: "Alex Doe",
+                    request: "Wants a price for a new water heater.",
+                    urgent,
+                  },
+                },
+              ],
+            };
+      };
+    };
+    request(false);
+    await text("I'm Alex Doe. Can I get a price for a new water heater?");
+    const [alert] = await sentTo(OWNER);
+    expect(alert).toMatchObject({ kind: "alert", fromNumber: OURS });
+    expect(alert!.body).toBe(
+      `Smith & Sons Plumbing: new quote request from Alex Doe, ${customer}. Wants a price for a new water heater.`,
+    );
+
+    // Urgent only: an ordinary request is not texted, an urgent one is.
+    await owner.db
+      .update(phoneNumbers)
+      .set({ alertRequests: "urgent" })
+      .where(eq(phoneNumbers.botId, number.botId));
+    customer = `+1807556${String(1000 + serial++)}`;
+    await text("I'm Alex Doe. Can I get a price for a new water heater?");
+    expect(await sentTo(OWNER)).toHaveLength(1);
+    request(true);
+    customer = `+1807556${String(1000 + serial++)}`;
+    await text("I'm Alex Doe. My water heater is leaking badly, I need someone today.");
+    const alerts = await sentTo(OWNER);
+    expect(alerts).toHaveLength(2);
+    expect(alerts[1]!.body).toContain("URGENT quote request from Alex Doe");
+
+    // Off, or no number: nothing.
+    await owner.db
+      .update(phoneNumbers)
+      .set({ alertRequests: "off" })
+      .where(eq(phoneNumbers.botId, number.botId));
+    customer = `+1807556${String(1000 + serial++)}`;
+    await text("I'm Alex Doe. My water heater is leaking badly, I need someone today.");
+    expect(await sentTo(OWNER)).toHaveLength(2);
+  });
+
+  it("doesn't answer the owner's own phone as if it were a customer", async () => {
+    expect(await text("ok thanks", OWNER)).toBe("owner");
+    expect(await sentTo(OWNER)).toEqual([]);
+    expect(model.requests).toEqual([]);
+  });
+});
+
+describe("photos by text", () => {
+  const PIXEL =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+  const photo = (name: string) => ({
+    name,
+    contentType: "image/png" as const,
+    dataBase64: PIXEL,
+    sizeBytes: 70,
+    sha256: "test",
+  });
+
+  it("keeps the photo with the conversation and attaches it to the request", async () => {
+    model.script = (chat) => {
+      const last = chat.messages.at(-1)!.content;
+      const answered = typeof last !== "string" && last.some((block) => block.type === "tool_result");
+      return answered
+        ? { text: "Thanks Alex, passed on with your photo." }
+        : {
+            calls: [
+              {
+                name: "request_follow_up",
+                input: {
+                  kind: "quote",
+                  name: "Alex Doe",
+                  request: "Leak under the kitchen sink, photo sent.",
+                },
+              },
+            ],
+          };
+    };
+    const outcome = await handleInboundText(deps(), number, {
+      from: customer,
+      text: "I'm Alex Doe. Here is the leak under my sink, can I get a price?",
+      images: [photo("photo-1.png")],
+    });
+    expect(outcome).toBe("answered");
+    const [thread] = await threads();
+    const kept = await owner.db
+      .select({ id: messageAttachments.id })
+      .from(messageAttachments)
+      .where(eq(messageAttachments.conversationId, thread!.id));
+    expect(kept).toHaveLength(1);
+    const [lead] = await owner.db.select().from(leads).where(eq(leads.conversationId, thread!.id));
+    expect(lead!.attachmentIds).toEqual([kept[0]!.id]);
+  });
+
+  it("answers a photo sent without words, and says so when nothing could be read", async () => {
+    expect(
+      await handleInboundText(deps(), number, { from: customer, text: "", images: [photo("p.png")] }),
+    ).toBe("answered");
+    // This test model can't look at images, so the assistant says so; a model that can would answer.
+    expect((await sentTo()).at(-1)!.body).toContain("can't look at images");
+    // A video, or a file too large: nothing usable came with the text.
+    expect(await handleInboundText(deps(), number, { from: customer, text: "", hasMedia: true })).toBe(
+      "answered",
+    );
+    expect(model.requests).toEqual([]);
+    expect((await sentTo()).at(-1)!.body).toContain("I can read text and photos");
+  });
+});
+
+describe("a service's quote or booking offer by text", () => {
+  let itemIds: string[] = [];
+  beforeAll(async () => {
+    const rows = await owner.db
+      .insert(catalogItems)
+      .values([
+        {
+          tenantId: number.tenantId,
+          botId: number.botId,
+          position: 0,
+          name: "Water heater installation",
+          action: "quote",
+        },
+        {
+          tenantId: number.tenantId,
+          botId: number.botId,
+          position: 1,
+          name: "Drain cleaning",
+          action: "book",
+        },
+      ])
+      .returning({ id: catalogItems.id });
+    itemIds = rows.map((r) => r.id);
+  });
+  afterAll(async () => {
+    for (const id of itemIds) await owner.db.delete(catalogItems).where(eq(catalogItems.id, id));
+  });
+  const lastUserText = () => {
+    const content = model.requests.at(-1)!.messages.at(-1)!.content;
+    return typeof content === "string" ? content : JSON.stringify(content);
+  };
+
+  it("adds what to reply, and takes QUOTE as asking for that service's quote", async () => {
+    model.script = () => ({ text: "Yes, we install tank and tankless heaters.\n[[action:quote:s1]]" });
+    await text("Do you install water heaters?");
+    expect((await sentTo()).at(-1)!.body).toBe(
+      "Yes, we install tank and tankless heaters.\nReply QUOTE to ask for a quote for Water heater installation.",
+    );
+
+    model.script = () => ({ text: "Happy to. What's your name?\n[[action:quote:s1]]" });
+    expect(await text("Quote")).toBe("answered");
+    expect(lastUserText()).toContain("I'd like a quote for Water heater installation.");
+    // Offered once in a conversation, like the button in the chat.
+    expect((await sentTo()).at(-1)!.body).toBe("Happy to. What's your name?");
+  });
+
+  it("writes the booking link when the business has one, and BOOK to reply when it hasn't", async () => {
+    model.script = () => ({ text: "From $120.\n[[action:book:s2]]" });
+    await text("How much is drain cleaning?");
+    expect((await sentTo()).at(-1)!.body).toBe("From $120.\nReply BOOK to book Drain cleaning.");
+    await text("BOOK");
+    expect(lastUserText()).toContain("I'd like to book Drain cleaning.");
+
+    await owner.db
+      .update(businessProfiles)
+      .set({ bookingUrl: "https://book.example/smith" })
+      .where(eq(businessProfiles.botId, number.botId));
+    try {
+      customer = `+1807557${String(1000 + serial++)}`;
+      await text("How much is drain cleaning?");
+      expect((await sentTo()).at(-1)!.body).toBe(
+        "From $120.\nBook Drain cleaning: https://book.example/smith",
+      );
+    } finally {
+      await owner.db
+        .update(businessProfiles)
+        .set({ bookingUrl: null })
+        .where(eq(businessProfiles.botId, number.botId));
+    }
+  });
+
+  it("speaks French in a French thread, and leaves QUOTE alone when nothing was offered", async () => {
+    model.script = () => ({ text: "Oui, nous installons des chauffe-eau.\n[[action:quote:s1]]" });
+    await text("Est-ce que vous installez des chauffe-eau à la maison ?");
+    expect((await sentTo()).at(-1)!.body).toContain(
+      "Répondez SOUMISSION pour demander une soumission pour : Water heater installation.",
+    );
+    await text("soumission");
+    expect(lastUserText()).toContain("J'aimerais une soumission pour : Water heater installation.");
+
+    customer = `+1807557${String(1000 + serial++)}`;
+    model.script = () => ({ text: "A quote for what?" });
+    await text("QUOTE");
+    expect(lastUserText()).toContain("QUOTE");
   });
 });

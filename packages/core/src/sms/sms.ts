@@ -3,10 +3,10 @@ import {
   businessProfiles,
   conversations,
   type Db,
-  jobs,
+  type MessageFlags,
   messages,
-  type OutboundMessageKind,
   outboundMessages,
+  type ReplyAction,
   smsOptOuts,
   type Tx,
   usageEvents,
@@ -16,14 +16,15 @@ import {
   type MessageStatusUpdate,
   PermanentSendError,
   smsKeyword,
-  smsSegments,
+  smsReplyWord,
   type TelephonyProvider,
   toSmsText,
 } from "@traiblazer/telephony";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
-import { type ChatDeps, runChat } from "../chat/engine.js";
+import { type ChatDeps, type ChatImage, runChat } from "../chat/engine.js";
 import { guessLanguage } from "../chat/language.js";
-import { JOB_TYPES } from "../jobs.js";
+import { noteCapReached, phoneBudget } from "./alerts.js";
+import { optedOut, queueText } from "./queue.js";
 import { smsLanguage, smsText } from "./strings.js";
 
 /** A text after this long without one starts a new conversation: an old topic doesn't colour a new question. */
@@ -40,55 +41,6 @@ export interface SmsNumber {
 }
 
 const hoursAgo = (now: Date, hours: number) => new Date(now.getTime() - hours * 3600_000);
-
-async function optedOut(tx: Tx, botId: string, number: string): Promise<boolean> {
-  const rows = await tx
-    .select({ number: smsOptOuts.number })
-    .from(smsOptOuts)
-    .where(and(eq(smsOptOuts.botId, botId), eq(smsOptOuts.number, number)))
-    .limit(1);
-  return rows.length > 0;
-}
-
-/**
- * Queues a text for the worker to send (job `message.send`), in the caller's transaction. Returns
- * null, queuing nothing, when the number has opted out.
- */
-export async function queueText(
-  tx: Tx,
-  input: {
-    tenantId: string;
-    botId: string;
-    conversationId?: string | null;
-    kind: OutboundMessageKind;
-    from: string;
-    to: string;
-    body: string;
-  },
-): Promise<string | null> {
-  if (await optedOut(tx, input.botId, input.to)) return null;
-  const [row] = await tx
-    .insert(outboundMessages)
-    .values({
-      tenantId: input.tenantId,
-      botId: input.botId,
-      conversationId: input.conversationId ?? null,
-      kind: input.kind,
-      fromNumber: input.from,
-      toNumber: input.to,
-      body: input.body,
-      segments: smsSegments(input.body),
-    })
-    .returning({ id: outboundMessages.id });
-  await tx.insert(jobs).values({
-    tenantId: input.tenantId,
-    type: JOB_TYPES.messageSend,
-    payload: { messageId: row!.id },
-    // A reply the customer is waiting for goes ahead of crawls and embedding.
-    priority: 5,
-  });
-  return row!.id;
-}
 
 async function business(tx: Tx, botId: string) {
   const [row] = await tx
@@ -119,6 +71,8 @@ export type InboundTextOutcome =
   | "help"
   | "opted_out"
   | "limited"
+  | "capped"
+  | "owner"
   | "unavailable"
   | "failed";
 
@@ -127,9 +81,19 @@ export type InboundTextOutcome =
  * assistant answers in the customer's thread (channel "sms") and the reply is queued.
  */
 export async function handleInboundText(
-  deps: ChatDeps,
+  deps: ChatDeps & {
+    /** Keep the texts it writes without sending them (evals). */
+    holdTexts?: boolean;
+  },
   number: SmsNumber,
-  message: { from: string; text: string; hasMedia?: boolean },
+  message: {
+    from: string;
+    text: string;
+    /** Photos sent with it (MMS), already checked and cleaned by the API. */
+    images?: ChatImage[];
+    /** Something was attached that couldn't be used (a video, a file too large). */
+    hasMedia?: boolean;
+  },
 ): Promise<InboundTextOutcome> {
   const now = deps.now?.() ?? new Date();
   const scope = { tenantId: number.tenantId, botId: number.botId };
@@ -139,7 +103,14 @@ export async function handleInboundText(
     const info = await business(tx, number.botId);
     if (!info || info.paused) return { outcome: "unavailable" as const };
     const system = (body: string) =>
-      queueText(tx, { ...scope, kind: "system", from: number.e164, to: message.from, body });
+      queueText(tx, {
+        ...scope,
+        hold: deps.holdTexts,
+        kind: "system",
+        from: number.e164,
+        to: message.from,
+        body,
+      });
     // The words the customer used tell the language, when there are enough of them.
     const guessed = guessLanguage(message.text);
     const language = guessed === "fr" || guessed === "en" ? guessed : info.language;
@@ -166,6 +137,15 @@ export async function handleInboundText(
       return { outcome: "help" as const };
     }
 
+    const budget = await phoneBudget(tx, number.botId, now);
+    // The owner answering one of our alerts isn't a customer: nothing to answer.
+    if (budget?.number.alertNumber === message.from) return { outcome: "owner" as const };
+    // The daily spend cap: no answer (it would cost), and the business is told once.
+    if (budget?.capped) {
+      await noteCapReached(tx, budget, now);
+      return { outcome: "capped" as const };
+    }
+
     // How much this number has written today, across its threads.
     const [used] = await tx
       .select({ n: sql<number>`count(*)::int` })
@@ -187,7 +167,7 @@ export async function handleInboundText(
     }
 
     const [thread] = await tx
-      .select({ id: conversations.id })
+      .select({ id: conversations.id, language: conversations.language })
       .from(conversations)
       .where(
         and(
@@ -199,19 +179,51 @@ export async function handleInboundText(
       )
       .orderBy(desc(conversations.lastMessageAt))
       .limit(1);
-    return { outcome: null, info, t, conversationId: thread?.id ?? null };
+
+    // "QUOTE" or "BOOK" takes up the offer made for a service earlier in the thread.
+    const word = smsReplyWord(message.text);
+    let offer: { kind: "quote" | "book"; name: string } | null = null;
+    if (word && thread) {
+      const recent = await tx
+        .select({ flags: messages.flags })
+        .from(messages)
+        .where(and(eq(messages.conversationId, thread.id), eq(messages.role, "assistant")))
+        .orderBy(desc(messages.createdAt))
+        .limit(6);
+      const item = recent
+        .flatMap((m) => (m.flags as MessageFlags | null)?.actions ?? [])
+        .find((a) => a.item && a.kind === word && !a.href)?.item;
+      if (item) offer = { kind: word, name: item.name };
+    }
+    // A single word doesn't tell the language: the thread's own language does.
+    const spoken =
+      !word && (guessed === "fr" || guessed === "en")
+        ? guessed
+        : smsLanguage(thread?.language ?? info.language);
+    return { outcome: null, info, t: smsText(spoken), conversationId: thread?.id ?? null, offer };
   });
   if (before.outcome) {
     // The message at the limit is still stored, so the count moves past it and the notice isn't repeated.
-    if (before.outcome === "limited") await storeUnanswered(deps.db, number, message.from, message.text, now);
+    // At the cap the customer's text is kept too, so the business can read it in Conversations.
+    if (before.outcome === "limited" || before.outcome === "capped") {
+      await storeUnanswered(deps.db, number, message.from, message.text, now);
+    }
     return before.outcome;
   }
   const { info, t } = before;
 
-  // Photos by text aren't read yet: say so when there are no words to answer.
-  if (!message.text.trim()) {
+  const images = message.images ?? [];
+  // Nothing to answer: no words, and no photo that could be opened.
+  if (!message.text.trim() && !images.length) {
     await withTenant(deps.db, number.tenantId, (tx) =>
-      queueText(tx, { ...scope, kind: "system", from: number.e164, to: message.from, body: t.textOnly }),
+      queueText(tx, {
+        ...scope,
+        hold: deps.holdTexts,
+        kind: "system",
+        from: number.e164,
+        to: message.from,
+        body: t.nothingToRead,
+      }),
     );
     return "answered";
   }
@@ -219,36 +231,65 @@ export async function handleInboundText(
   let conversationId = before.conversationId;
   let reply = "";
   let failed = false;
+  let actions: ReplyAction[] = [];
+  // The reply word stands for the sentence a tap on the service's button sends in the chat.
+  const said = before.offer
+    ? before.offer.kind === "quote"
+      ? t.quoteMessage(before.offer.name)
+      : t.bookMessage(before.offer.name)
+    : message.text.slice(0, 2000);
   try {
     for await (const event of runChat(deps, {
       ...scope,
       conversationId,
       visitorId: message.from,
       channel: "sms",
-      message: message.text.slice(0, 2000),
+      message: said,
+      images,
     })) {
       if (event.type === "start") conversationId = event.conversationId;
       else if (event.type === "text") reply += event.text;
       else if (event.type === "reset") reply = "";
       else if (event.type === "error") failed = true;
-      else if (event.type === "done" && (event.flags.error || event.flags.busy)) failed = true;
+      else if (event.type === "done") {
+        if (event.flags.error || event.flags.busy) failed = true;
+        actions = event.flags.actions ?? [];
+      }
     }
   } catch (error) {
     failed = true;
     deps.log?.("sms answer failed", { error: error instanceof Error ? error.message : String(error) });
   }
 
-  const body = !failed && reply.trim() ? toSmsText(reply) : t.failed(info.phone);
+  // A service's button becomes a line saying what to reply (or the booking link, when there is one).
+  const offers = actions.flatMap((a) =>
+    !a.item
+      ? []
+      : a.kind === "quote"
+        ? [t.replyQuote(a.item.name)]
+        : a.href
+          ? [t.bookLink(a.item.name, a.href)]
+          : [t.replyBook(a.item.name)],
+  );
+  const body = !failed && reply.trim() ? [toSmsText(reply), ...offers].join("\n") : t.failed(info.phone);
   await withTenant(deps.db, number.tenantId, (tx) =>
-    queueText(tx, { ...scope, conversationId, kind: "reply", from: number.e164, to: message.from, body }),
+    queueText(tx, {
+      ...scope,
+      hold: deps.holdTexts,
+      conversationId,
+      kind: "reply",
+      from: number.e164,
+      to: message.from,
+      body,
+    }),
   );
   return failed || !reply.trim() ? "failed" : "answered";
 }
 
-/** Keeps a text that got no answer (over the daily limit) in the customer's latest thread. */
+/** Keeps a text that got no answer (a limit was reached) in the customer's thread. */
 async function storeUnanswered(db: Db, number: SmsNumber, from: string, text: string, now: Date) {
   await withTenant(db, number.tenantId, async (tx) => {
-    const [thread] = await tx
+    let [thread] = await tx
       .select({ id: conversations.id })
       .from(conversations)
       .where(
@@ -256,10 +297,24 @@ async function storeUnanswered(db: Db, number: SmsNumber, from: string, text: st
           eq(conversations.botId, number.botId),
           eq(conversations.channel, "sms"),
           eq(conversations.visitorId, from),
+          gte(conversations.lastMessageAt, hoursAgo(now, SMS_THREAD_HOURS)),
         ),
       )
       .orderBy(desc(conversations.lastMessageAt))
       .limit(1);
+    if (!thread) {
+      [thread] = await tx
+        .insert(conversations)
+        .values({
+          tenantId: number.tenantId,
+          botId: number.botId,
+          channel: "sms",
+          visitorId: from,
+          language: guessLanguage(text),
+          lastMessageAt: now,
+        })
+        .returning({ id: conversations.id });
+    }
     if (!thread) return;
     await tx.insert(messages).values({
       tenantId: number.tenantId,
@@ -298,6 +353,12 @@ export async function handleMissedCall(
     const t = smsText(info.language);
     const noText = { say: t.callAnswerNoText(info.name), language: info.language, texted: false };
     if (!call.from || (await optedOut(tx, number.botId, call.from))) return noText;
+    // At the daily spend cap nothing more is sent; the business is told once.
+    const budget = await phoneBudget(tx, number.botId, now);
+    if (budget?.capped) {
+      await noteCapReached(tx, budget, now);
+      return noText;
+    }
 
     const [recent] = await tx
       .select({ id: outboundMessages.id })
@@ -447,3 +508,5 @@ export async function applyMessageStatus(
     return true;
   });
 }
+
+export { queueText } from "./queue.js";

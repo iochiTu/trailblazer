@@ -1,16 +1,20 @@
-import { type ChatStreamEvent, embedChunks, runChat, syncSource } from "@traiblazer/core";
+import { type ChatStreamEvent, embedChunks, handleInboundText, runChat, syncSource } from "@traiblazer/core";
 import {
   bots,
   businessProfiles,
   catalogItems,
+  conversations,
   type Db,
   knowledgeSources,
   leads,
+  type MessageFlags,
+  messages,
+  outboundMessages,
   tenants,
   withTenant,
 } from "@traiblazer/db";
 import type { EmbeddingProvider, LLMGateway, QueryEmbedder } from "@traiblazer/llm";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { score } from "./score.js";
 import type { CaseResult, EvalBusiness, EvalCase, Outcome } from "./types.js";
 
@@ -96,8 +100,112 @@ export async function removeBusinesses(db: Db, tenantIds: string[]): Promise<voi
   if (tenantIds.length) await db.delete(tenants).where(inArray(tenants.id, tenantIds));
 }
 
+/** The assistant's number in SMS cases; nothing is sent to or from it. */
+const SMS_NUMBER = "+18075550100";
+
+/**
+ * Plays a case by text message: each turn goes through the whole SMS path (STOP and HELP, limits,
+ * the assistant, plain-text conversion). The texts it writes are kept, never sent.
+ */
+async function playSmsCase(deps: EvalDeps, business: SetUp, evalCase: EvalCase): Promise<Outcome> {
+  const sender = `+1807555${String(Math.floor(Math.random() * 9000) + 1000)}`;
+  const number = { ...business, e164: SMS_NUMBER };
+  const outcome: Outcome = {
+    reply: "",
+    urgency: null,
+    advice: false,
+    unanswered: false,
+    actions: [],
+    itemButtons: [],
+    tools: [],
+    requests: [],
+    error: null,
+    firstTextMs: null,
+    totalMs: 0,
+    sms: { sender, outcomes: [], texts: [] },
+  };
+  const read = () =>
+    withTenant(deps.db, business.tenantId, async (tx) => ({
+      texts: await tx
+        .select({ body: outboundMessages.body })
+        .from(outboundMessages)
+        .where(and(eq(outboundMessages.botId, business.botId), eq(outboundMessages.toNumber, sender)))
+        .orderBy(asc(outboundMessages.createdAt)),
+      requests: await tx
+        .select({
+          kind: leads.kind,
+          urgent: leads.urgent,
+          details: leads.details,
+          itemName: leads.itemName,
+          phone: leads.phone,
+          conversationId: leads.conversationId,
+        })
+        .from(leads)
+        .where(and(eq(leads.botId, business.botId), eq(leads.phone, sender))),
+      flags: await tx
+        .select({ flags: messages.flags })
+        .from(messages)
+        .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+        .where(
+          and(
+            eq(conversations.botId, business.botId),
+            eq(conversations.visitorId, sender),
+            eq(messages.role, "assistant"),
+          ),
+        )
+        .orderBy(desc(messages.createdAt)),
+    }));
+
+  const turns = [...evalCase.turns];
+  for (let index = 0; index < turns.length; index++) {
+    const started = performance.now();
+    const before = (await read()).texts.length;
+    try {
+      const result = await handleInboundText(
+        { db: deps.db, gateway: deps.gateway, embeddings: deps.queryEmbeddings ?? null, holdTexts: true },
+        number,
+        { from: sender, text: turns[index]! },
+      );
+      outcome.sms!.outcomes.push(result);
+      if (result === "failed" || result === "unavailable") outcome.error = result;
+    } catch (error) {
+      outcome.error = error instanceof Error ? error.message : String(error);
+    }
+    const now = await read();
+    if (outcome.error) break;
+    // A customer asked for more details than the case gave answers once, like a real one.
+    if (index === turns.length - 1 && index === evalCase.turns.length - 1 && evalCase.moreDetails) {
+      if (!now.requests.length) turns.push(evalCase.moreDetails);
+    }
+    if (index === turns.length - 1) {
+      outcome.reply = now.texts.slice(before).at(-1)?.body ?? "";
+      outcome.totalMs = Math.round(performance.now() - started);
+    }
+  }
+
+  const end = await read();
+  outcome.sms!.texts = end.texts.map((t) => t.body);
+  outcome.requests = end.requests;
+  const all = end.flags.map((f) => f.flags as MessageFlags);
+  const last = all[0];
+  outcome.urgency = all.some((f) => f.urgency === "danger")
+    ? "danger"
+    : all.some((f) => f.urgency === "urgent")
+      ? "urgent"
+      : null;
+  outcome.advice = Boolean(last?.advice);
+  outcome.unanswered = Boolean(last?.unanswered);
+  outcome.actions = (last?.actions ?? []).map((a) => a.kind);
+  outcome.itemButtons = (last?.actions ?? []).flatMap((a) =>
+    a.item ? [{ kind: a.kind, item: a.item.name }] : [],
+  );
+  outcome.tools = last?.tools ?? [];
+  return outcome;
+}
+
 /** Plays a case's conversation through the chat engine and gathers what the visitor saw. */
 export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCase): Promise<Outcome> {
+  if (evalCase.channel === "sms") return playSmsCase(deps, business, evalCase);
   const visitorId = `eval-${crypto.randomUUID()}`;
   let conversationId: string | null = null;
   let urgency: Outcome["urgency"] = null;

@@ -128,6 +128,36 @@ export class TwilioProvider implements TelephonyProvider {
     return { id: data.sid, status: STATUS[data.status ?? "queued"] ?? "queued" };
   }
 
+  /**
+   * Media sits behind the account's credentials on Twilio's API host, which redirects to its file
+   * store. Only Twilio's own hosts are fetched: the address comes from a webhook.
+   */
+  async fetchMedia(url: string, maxBytes: number): Promise<{ bytes: Buffer; contentType: string } | null> {
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      return null;
+    }
+    const base = new URL(this.options.baseUrl ?? "https://api.twilio.com");
+    const ours = target.host === base.host || /(^|\.)(twilio\.com|twiliocdn\.com)$/.test(target.hostname);
+    if (target.protocol !== base.protocol || !ours) return null;
+    const { accountSid, authToken } = this.options;
+    try {
+      const res = await (this.options.fetch ?? fetch)(target, {
+        headers: { authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}` },
+        signal: AbortSignal.timeout(this.options.timeoutMs ?? 10_000),
+      });
+      if (!res.ok) return null;
+      if (Number(res.headers.get("content-length") ?? 0) > maxBytes) return null;
+      const bytes = Buffer.from(await res.arrayBuffer());
+      if (!bytes.length || bytes.length > maxBytes) return null;
+      return { bytes, contentType: res.headers.get("content-type") ?? "application/octet-stream" };
+    } catch {
+      return null;
+    }
+  }
+
   replyNothing(): WebhookReply {
     return twiml("");
   }

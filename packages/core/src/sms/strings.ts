@@ -10,7 +10,13 @@ const TEXT = {
     help: (business: string, phone: string | null) =>
       `${business}: automated assistant.${phone ? ` To talk to someone, call ${phone}.` : ""} Reply STOP to stop these messages.`,
     resumed: (business: string) => `You'll get messages from ${business} again. Reply STOP to opt out.`,
-    textOnly: "I can only read text messages here for now. What can we help you with?",
+    nothingToRead:
+      "I couldn't read that message. I can read text and photos (JPEG or PNG, up to 2 MB). What can we help you with?",
+    replyQuote: (item: string) => `Reply QUOTE to ask for a quote for ${item}.`,
+    replyBook: (item: string) => `Reply BOOK to book ${item}.`,
+    bookLink: (item: string, url: string) => `Book ${item}: ${url}`,
+    quoteMessage: (item: string) => `I'd like a quote for ${item}.`,
+    bookMessage: (item: string) => `I'd like to book ${item}.`,
     limit: (phone: string | null) =>
       `That's a lot of messages for one day, so I'll stop here.${phone ? ` Please call ${phone}.` : ""}`,
     failed: (phone: string | null) =>
@@ -27,8 +33,13 @@ const TEXT = {
       `${business} : assistant automatisé.${phone ? ` Pour parler à quelqu'un, appelez le ${phone}.` : ""} Répondez ARRET pour ne plus recevoir de messages.`,
     resumed: (business: string) =>
       `Vous recevrez de nouveau les messages de ${business}. Répondez ARRET pour ne plus en recevoir.`,
-    textOnly:
-      "Je peux seulement lire les messages texte ici pour le moment. Comment pouvons-nous vous aider ?",
+    nothingToRead:
+      "Je n'ai pas pu lire ce message. Je peux lire le texte et les photos (JPEG ou PNG, jusqu'à 2 Mo). Comment pouvons-nous vous aider ?",
+    replyQuote: (item: string) => `Répondez SOUMISSION pour demander une soumission pour : ${item}.`,
+    replyBook: (item: string) => `Répondez RESERVER pour réserver : ${item}.`,
+    bookLink: (item: string, url: string) => `Réserver ${item} : ${url}`,
+    quoteMessage: (item: string) => `J'aimerais une soumission pour : ${item}.`,
+    bookMessage: (item: string) => `J'aimerais réserver : ${item}.`,
     limit: (phone: string | null) =>
       `Cela fait beaucoup de messages pour une journée, je m'arrête ici.${phone ? ` Veuillez appeler le ${phone}.` : ""}`,
     failed: (phone: string | null) =>

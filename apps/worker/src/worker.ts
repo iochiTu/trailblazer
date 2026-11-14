@@ -18,6 +18,7 @@ import {
   JOB_TYPES,
   type JobRow,
   runAddonEffect,
+  runCapAlert,
   runSetup,
   runUrgentAlert,
   sendQueuedText,
@@ -71,6 +72,15 @@ async function run(job: JobRow): Promise<void> {
         messageId,
       );
       log("text", { id: job.id, messageId, outcome });
+      return;
+    }
+    case JOB_TYPES.phoneCapAlert: {
+      const outcome = await runCapAlert(
+        { db, mailer, adminUrl },
+        job.tenantId,
+        job.payload as { botId: string; spentMicros?: number },
+      );
+      log("cap alert", { id: job.id, outcome });
       return;
     }
     case JOB_TYPES.embedChunks: {

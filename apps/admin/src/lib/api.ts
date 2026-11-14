@@ -389,13 +389,19 @@ export interface PhoneNumber {
   smsEnabled: boolean;
   /** What a call does: "text_back" = one sentence, then a text; "off" = calls are refused. */
   callMode: "text_back" | "off";
+  /** Most the number may cost in 24 hours, in cents; at the cap it stops answering texts. */
+  dailyCapCents: number;
+  /** The owner's mobile number for alerts by text, or null. */
+  alertNumber: string | null;
+  /** Which requests are texted to the owner. */
+  alertRequests: "all" | "urgent" | "off";
 }
 
 export interface PhoneSettings {
   phone: PhoneNumber | null;
   /** Phone and SMS are set up on this platform. */
   available: boolean;
-  stats: { textsSent30Days: number; optOuts: number };
+  stats: { textsSent30Days: number; optOuts: number; spentTodayCents: number };
   /** True for Traiblazer staff in support mode: only they assign or remove a number. */
   canAssign: boolean;
   /** Addresses to enter at the telephony provider (staff only). */

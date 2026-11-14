@@ -383,6 +383,22 @@ export const fr: Record<MessageKey, string> = {
   "phone.calls.off": "Ne pas répondre",
   "phone.calls.hint":
     "L'appelant entend une phrase et reçoit un message texte par jour, pour écrire ce dont il a besoin. La réponse vocale aux appels n'est pas encore offerte.",
+  "phone.cap.title": "Limite quotidienne",
+  "phone.cap.label": "Cesser de répondre aux textos après avoir dépensé ce montant en 24 heures (dollars)",
+  "phone.cap.hint":
+    "Chaque message texte coûte un peu. Quand la limite est atteinte, votre assistant cesse de répondre aux textos et de texter les appelants jusqu'à ce que l'utilisation des 24 dernières heures redescende sous la limite. Les textos des clients restent dans Conversations, et vous êtes averti une fois.",
+  "phone.cap.spent": "Utilisé dans les 24 dernières heures : {spent} sur {cap}",
+  "phone.cap.reached": "La limite est atteinte : les textos ne reçoivent pas de réponse en ce moment.",
+  "phone.cap.save": "Enregistrer la limite",
+  "phone.alerts.title": "Alertes sur votre téléphone",
+  "phone.alerts.hint":
+    "Recevez un texto quand un client laisse une demande, peu importe le canal (votre page, le widget ou un texto). Ces textos comptent dans la limite quotidienne, mais sont envoyés même quand elle est atteinte.",
+  "phone.alerts.number": "Votre numéro de cellulaire",
+  "phone.alerts.which": "M'avertir par texto pour",
+  "phone.alerts.all": "Toutes les demandes",
+  "phone.alerts.urgent": "Les demandes urgentes seulement",
+  "phone.alerts.off": "Rien",
+  "phone.alerts.save": "Enregistrer les alertes",
   "phone.forward.title": "Envoyez vos appels manqués ici",
   "phone.forward.intro":
     "Gardez votre propre numéro. Demandez à votre fournisseur de téléphonie de renvoyer les appels auxquels vous ne répondez pas (sans réponse, occupé, hors des heures d'ouverture) vers le numéro ci-dessus. Chaque fournisseur procède différemment :",

@@ -124,6 +124,46 @@ describe("scoring", () => {
     ).toEqual([]);
   });
 
+  it("checks texts: short, plain, what the platform did, and the texter's number on a request", () => {
+    const sms = (texts: string[], outcomes = ["answered"]) => ({ sender: "+18075551234", outcomes, texts });
+    const c = evalCase({});
+    expect(score(c, outcome({ reply: "Yes.", sms: sms(["Yes."]) }))).toEqual([]);
+    expect(score(c, outcome({ reply: "x", sms: sms(["**Yes**, see [[action:call]]"]) }))).toEqual([
+      'a text with markup in it ("**Yes**, see [[action:call]]…")',
+    ]);
+    expect(score(c, outcome({ reply: "x", sms: sms(["a".repeat(481)]) }))[0]).toMatch(
+      /^a text of 481 characters/,
+    );
+
+    const stopped = evalCase({ smsOutcome: "stopped", textsSent: 0 });
+    expect(score(stopped, outcome({ sms: sms([], ["stopped"]) }))).toEqual([]);
+    expect(score(stopped, outcome({ reply: "Ok.", sms: sms(["Ok."], ["answered"]) }))).toEqual([
+      'the last text was "answered", expected "stopped"',
+      "1 texts sent back, expected 0",
+    ]);
+
+    const request = { kind: "callback", urgent: false, details: {}, itemName: null } as const;
+    expect(
+      score(
+        evalCase({ requestCount: 1 }),
+        outcome({ reply: "Done.", requests: [{ ...request }, { ...request }] }),
+      ),
+    ).toEqual(["2 requests passed on, expected 1"]);
+    const fromSender = evalCase({ request: { fromSender: true } });
+    expect(
+      score(
+        fromSender,
+        outcome({ reply: "Done.", sms: sms(["Done."]), requests: [{ ...request, phone: "+18075559999" }] }),
+      ),
+    ).toEqual(["request without the number the customer texted from"]);
+    expect(
+      score(
+        fromSender,
+        outcome({ reply: "Done.", sms: sms(["Done."]), requests: [{ ...request, phone: "+18075551234" }] }),
+      ),
+    ).toEqual([]);
+  });
+
   it("checks the request passed on, its kind, urgency and details", () => {
     const c = evalCase({ request: { kind: ["booking", "callback"], urgent: false, details: ["vehicle"] } });
     expect(score(c, outcome({ reply: "Done." }))).toEqual(["no request passed on"]);

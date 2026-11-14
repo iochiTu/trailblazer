@@ -309,6 +309,13 @@
       "when": 1794603086402,
       "tag": "0043_integrations_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794628763242,
+      "tag": "0044_phone_cap_alerts",
+      "breakpoints": true
     }
   ]
 }

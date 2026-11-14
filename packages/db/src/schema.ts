@@ -1428,6 +1428,10 @@ export const assets = pgTable(
 export const phoneCallModes = ["text_back", "off"] as const;
 export type PhoneCallMode = (typeof phoneCallModes)[number];
 
+/** Requests the owner is texted about: every one, only urgent ones, or none. */
+export const phoneAlertRequests = ["all", "urgent", "off"] as const;
+export type PhoneAlertRequests = (typeof phoneAlertRequests)[number];
+
 /** A phone number that belongs to an assistant: texts to it are answered, calls follow `callMode`. */
 export const phoneNumbers = pgTable(
   "phone_numbers",
@@ -1443,6 +1447,17 @@ export const phoneNumbers = pgTable(
     provider: text("provider").notNull(),
     smsEnabled: boolean("sms_enabled").notNull().default(true),
     callMode: text("call_mode").$type<PhoneCallMode>().notNull().default("text_back"),
+    /**
+     * Most that texts (and later calls) on this number may cost in 24 hours, in cents. At the cap
+     * the assistant stops answering by text until spending drops below it again.
+     */
+    dailyCapCents: integer("daily_cap_cents").notNull().default(500),
+    /** When the business was last told the cap was reached (told once per 24 hours). */
+    capAlertedAt: timestamp("cap_alerted_at", { withTimezone: true }),
+    /** The owner's mobile number for alerts by text (E.164), or null for none. */
+    alertNumber: text("alert_number"),
+    /** Which requests are texted to `alertNumber`. */
+    alertRequests: text("alert_requests").$type<PhoneAlertRequests>().notNull().default("all"),
     ...timestamps,
   },
   (t) => [
@@ -1456,8 +1471,11 @@ export const phoneNumbers = pgTable(
   ],
 );
 
-/** "reply": an answer to a text; "text_back": the text after a missed call; "system": HELP and the like. */
-export const outboundMessageKinds = ["reply", "text_back", "system"] as const;
+/**
+ * "reply": an answer to a text; "text_back": the text after a missed call; "system": HELP and the
+ * like; "alert": a text to the business's owner (a new request, the daily cap reached).
+ */
+export const outboundMessageKinds = ["reply", "text_back", "system", "alert"] as const;
 export type OutboundMessageKind = (typeof outboundMessageKinds)[number];
 export const outboundMessageStatuses = ["queued", "sent", "delivered", "failed"] as const;
 export type OutboundMessageStatus = (typeof outboundMessageStatuses)[number];

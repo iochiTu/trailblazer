@@ -373,6 +373,12 @@ assistant declines kindly). When a message is urgent or a danger:
   notifications add-on's address when that add-on is on, otherwise to the business's owners and
   admins. The add-on doesn't send its own email for it, so it arrives once.
 
+**One request, not two.** When a visitor adds or corrects something after their request was passed on
+(a time, a detail, another way to reach them), the request the business already has is updated: same
+conversation, still marked new, and the same kind of follow-up (a callback, quote and booking count as
+one; a complaint after a quote is its own request). The business is notified again only if the
+addition makes the request urgent.
+
 **Buttons in answers:** the model writes `[[action:call]]` or `[[action:book]]`; the engine removes the
 marker and sends a button whose link comes from the business profile (phone number, booking link),
 never from the model. Buttons are kept on the message (`flags.actions`) and come back with the
@@ -394,6 +400,11 @@ Design and status: [docs/PHONE_AND_SMS.md](docs/PHONE_AND_SMS.md). With `TWILIO_
 - **A text** to the number is answered by the same assistant as the chat (channel `sms`): plain,
   short replies; the phone number or link written out instead of a button; a request carries the
   number the customer writes from. One thread per customer number, a new one after 24 hours.
+- **Photos** sent by text are read like images in the chat (checked, cleaned, up to 2 MB) and go with
+  the request.
+- **"Reply QUOTE"**: a service whose card has "Request a quote" or "Book" gets a line saying what to
+  reply (or the booking link); the one-word reply starts that request, and the request names the
+  service.
 - **STOP, START and HELP** (and ARRET, AIDE) are handled before the assistant; opt-outs are kept per
   assistant (`sms_opt_outs`) and nothing more is sent to that number.
 - **A call** in "text back" mode hears one sentence, then gets one text a day that opens the
@@ -405,6 +416,11 @@ Design and status: [docs/PHONE_AND_SMS.md](docs/PHONE_AND_SMS.md). With `TWILIO_
 - **The number** is assigned by Traiblazer staff in support mode (`PUT /v1/tenants/:t/bots/:b/phone`);
   the business turns texting on or off and chooses what a call does (`PATCH`). Both are on the
   assistant's **Phone & texts** tab, which also explains how to forward missed calls to the number.
+- **A daily limit** on what texts may cost (default $5.00, set on the tab): at the limit the assistant
+  stops answering texts until the last 24 hours' use drops below it, keeps the customer's text in
+  Conversations, and tells the business once by email and by text.
+- **Alerts to the owner's phone:** a text when a customer leaves a request on any channel (every
+  request, urgent ones only, or none).
 - **Trying it locally** without a Twilio account: `TELEPHONY_PROVIDER=fake` (see `.env.example`).
 
 ## Questions the assistant couldn't answer (knowledge gaps)
@@ -543,6 +559,7 @@ pnpm evals                              # every case once (needs a model; see AI
 pnpm evals --business trades --lang fr  # one pack, one language
 pnpm evals --category danger            # one category
 pnpm evals --case burst --repeat 3      # cases whose id contains "burst", three runs each
+pnpm evals --case sms                   # the cases that run by text message (nothing is sent)
 pnpm evals --list                       # show the cases
 ```
 

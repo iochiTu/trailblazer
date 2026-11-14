@@ -95,6 +95,23 @@ export const tradesCases: EvalCase[] = [
     expect: { request: { kind: ["callback", "quote", "booking"], urgent: false }, urgency: "none" },
   },
   {
+    id: "trades.en.request-then-detail",
+    business,
+    language: "en",
+    category: "request",
+    turns: [
+      "Could someone call me back about a dripping kitchen faucet? It's not urgent. I'm Sam Patel, 807-555-0199, 22 Red River Rd, Thunder Bay. It's a house.",
+      "Please pass that on, that's everything for now.",
+      "Oh, and mornings are best. The faucet is a Moen.",
+    ],
+    expect: {
+      request: { kind: ["callback", "quote", "booking"], urgent: false },
+      requestCount: 1,
+      urgency: "none",
+    },
+    note: "A detail added after the request was passed on updates it; the business doesn't get it twice.",
+  },
+  {
     id: "trades.en.burst-pipe",
     business,
     language: "en",
