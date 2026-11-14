@@ -53,6 +53,7 @@ async function business(tx: Tx, botId: string) {
       defaultLanguage: bots.defaultLanguage,
       businessName: businessProfiles.businessName,
       phone: businessProfiles.phone,
+      timezone: businessProfiles.timezone,
     })
     .from(bots)
     .leftJoin(businessProfiles, eq(businessProfiles.botId, bots.id))
@@ -64,6 +65,7 @@ async function business(tx: Tx, botId: string) {
     name: row.businessName?.trim() || row.name,
     phone: row.phone?.trim() || null,
     language: smsLanguage(row.defaultLanguage),
+    timeZone: row.timezone ?? "America/Toronto",
   };
 }
 
@@ -294,6 +296,7 @@ export async function handleInboundText(
           new Intl.DateTimeFormat(spoken === "fr" ? "fr-CA" : "en-CA", {
             month: "long",
             day: "numeric",
+            timeZone: info.timeZone,
           }).format(new Date(new Date(offer.endsAt).getTime() - 1)),
         )})`
       : "";
