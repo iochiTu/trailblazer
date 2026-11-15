@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { runAddonEffect } from "@traiblazer/core";
 import {
   auditLogs,
+  bookings,
   createDb,
   type DbHandle,
   integrationConnections,
@@ -53,6 +54,18 @@ const crm = (async (input: string | URL | Request, init?: RequestInit) => {
       expires_in: 3600,
     });
   }
+  if (url.includes("oauth2.googleapis.com/token")) {
+    return Response.json({
+      access_token: "google-access",
+      refresh_token: "google-refresh",
+      expires_in: 3599,
+      scope:
+        "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events",
+    });
+  }
+  if (url.includes("openidconnect.googleapis.com/v1/userinfo"))
+    return Response.json({ email: "owner@maple.example" });
+  if (url.includes("/calendar/v3/freeBusy")) return Response.json({ calendars: { primary: { busy: [] } } });
   if (url.includes("/api/graphql"))
     return Response.json({ data: { account: { id: "a1", name: "Maple Plumbing Ltd" } } });
   return new Response("", { status: hookStatus });
@@ -125,6 +138,8 @@ beforeAll(async () => {
     INTEGRATIONS_SECRET_KEY: randomBytes(32).toString("hex"),
     JOBBER_CLIENT_ID: "jobber-client",
     JOBBER_CLIENT_SECRET: "jobber-secret",
+    GOOGLE_CLIENT_ID: "google-client",
+    GOOGLE_CLIENT_SECRET: "google-secret",
   });
   app = await buildApp({
     db: appDb.db,
@@ -326,6 +341,59 @@ describe("CRM integrations", () => {
     expect(row!.credentials).not.toContain("jobber-refresh");
     // Pasting keys isn't how Jobber connects.
     expect((await call("PUT", "/integrations/jobber", { credentials: { x: "y" } })).statusCode).toBe(400);
+  });
+
+  it("connects Google Calendar by signing in, and shows bookings with their requests", async () => {
+    const listed = (await call("GET", "/integrations")).json().integrations as { id: string; kind: string }[];
+    expect(listed.find((i) => i.id === "google-calendar")).toMatchObject({
+      kind: "calendar",
+      available: true,
+    });
+
+    const start = await call("POST", "/integrations/google-calendar/oauth");
+    expect(start.statusCode).toBe(200);
+    const url = new URL(start.json().url);
+    expect(url.host).toBe("accounts.google.com");
+    expect(url.searchParams.get("access_type")).toBe("offline");
+    expect(url.searchParams.get("redirect_uri")).toBe(`${ADMIN}/api/v1/integrations/oauth/callback`);
+    const done = await app.inject({
+      method: "GET",
+      url: `/v1/integrations/oauth/callback?${new URLSearchParams({ code: "g-code", state: url.searchParams.get("state")! })}`,
+      headers: { cookie },
+    });
+    expect(done.headers.location).toBe(
+      `${ADMIN}/t/${tenantId}/bots/${botId}?tab=addons&integration=google-calendar&result=connected`,
+    );
+    // Checked with the calendar before it was saved, sealed.
+    expect(sent.some((s) => s.url.includes("/freeBusy"))).toBe(true);
+    const row = await connection("google-calendar");
+    expect(row).toMatchObject({ status: "connected", accountName: "owner@maple.example" });
+    expect(row!.credentials).not.toContain("google-refresh");
+
+    // A request the assistant booked shows its appointment.
+    const leadId = await addLead();
+    await ownerDb.db.insert(bookings).values({
+      tenantId,
+      botId,
+      leadId,
+      provider: "google-calendar",
+      status: "booked",
+      startsAt: new Date("2026-11-17T14:00:00Z"),
+      endsAt: new Date("2026-11-17T15:00:00Z"),
+      timeZone: "America/Toronto",
+      externalUrl: "https://calendar.google.com/event?eid=1",
+    });
+    const leadsList = (await call("GET", "/leads")).json().leads as { id: string; booking: unknown }[];
+    expect(leadsList.find((l) => l.id === leadId)!.booking).toEqual({
+      provider: "google-calendar",
+      providerName: "Google Calendar",
+      startsAt: "2026-11-17T14:00:00.000Z",
+      endsAt: "2026-11-17T15:00:00.000Z",
+      timeZone: "America/Toronto",
+      externalUrl: "https://calendar.google.com/event?eid=1",
+    });
+    expect(leadsList.filter((l) => l.id !== leadId).every((l) => l.booking === null)).toBe(true);
+    expect((await call("DELETE", "/integrations/google-calendar")).statusCode).toBe(204);
   });
 
   it("keeps other businesses and non-admins out", async () => {

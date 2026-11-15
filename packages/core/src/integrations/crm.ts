@@ -13,17 +13,17 @@ import { getTemplate } from "@traiblazer/industry-packs";
 import {
   ConnectorError,
   type Credentials,
-  type CrmConnector,
   type CrmLead,
   getConnector,
+  getCrmConnector,
   type IntegrationsConfig,
-  open,
   seal,
   sealContext,
 } from "@traiblazer/integrations";
 import { and, eq, sql } from "drizzle-orm";
 import { businessNameOf } from "../business.js";
 import { publicFetch } from "../knowledge/safe-fetch.js";
+import { type ConnectionRef, openCredentials, recordOutcome } from "./connections.js";
 
 export interface IntegrationDeps {
   db: Db;
@@ -34,11 +34,7 @@ export interface IntegrationDeps {
   adminUrl?: string;
 }
 
-export interface ConnectionRef {
-  tenantId: string;
-  botId: string;
-  provider: string;
-}
+export type { ConnectionRef };
 
 const clip = (text: string, max = 500) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
@@ -79,84 +75,6 @@ export async function connectIntegration(
   return { accountName };
 }
 
-type Opened =
-  | { state: "ready"; credentials: Credentials }
-  | { state: "missing" }
-  | { state: "failed"; error: ConnectorError };
-
-/**
- * Opens a connection's credentials, refreshing them first when they are about to expire. The row
- * is locked while that happens: CRMs that rotate refresh tokens (Jobber) cancel the old token on
- * use, so two jobs refreshing at once would lock the business out.
- */
-async function openCredentials(
-  deps: IntegrationDeps,
-  connector: CrmConnector,
-  ref: ConnectionRef,
-): Promise<Opened> {
-  const key = deps.integrations.secretKey!;
-  const context = sealContext(ref.tenantId, ref.botId, ref.provider);
-  return withTenant(deps.db, ref.tenantId, async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(integrationConnections)
-      .where(
-        and(eq(integrationConnections.botId, ref.botId), eq(integrationConnections.provider, ref.provider)),
-      )
-      .limit(1)
-      .for("update");
-    if (!row) return { state: "missing" };
-    let credentials: Credentials;
-    try {
-      credentials = open<Credentials>(key, row.credentials, context);
-    } catch {
-      // Sealed with another key (it was changed) or damaged: only connecting again fixes it.
-      return {
-        state: "failed",
-        error: new ConnectorError("auth", "The saved connection can't be read. Please connect again."),
-      };
-    }
-    if (!connector.refresh) return { state: "ready", credentials };
-    try {
-      const refreshed = await connector.refresh({
-        credentials,
-        platform: deps.integrations.platform,
-        fetch: deps.fetch ?? publicFetch,
-      });
-      if (!refreshed) return { state: "ready", credentials };
-      await tx
-        .update(integrationConnections)
-        .set({ credentials: seal(key, refreshed, context) })
-        .where(eq(integrationConnections.id, row.id));
-      return { state: "ready", credentials: refreshed };
-    } catch (error) {
-      if (error instanceof ConnectorError) return { state: "failed", error };
-      throw error;
-    }
-  });
-}
-
-/** Notes on the connection how the last call went, so the portal can show it. */
-async function recordOutcome(deps: IntegrationDeps, ref: ConnectionRef, error: ConnectorError | null) {
-  await withTenant(deps.db, ref.tenantId, (tx) =>
-    tx
-      .update(integrationConnections)
-      .set(
-        error
-          ? {
-              lastError: clip(error.message),
-              lastErrorAt: new Date(),
-              // Only refused credentials change the status: an outage or one bad request doesn't.
-              ...(error.failure === "auth" ? { status: "error" as const } : {}),
-            }
-          : { status: "connected" as const, lastSuccessAt: new Date(), lastError: null, lastErrorAt: null },
-      )
-      .where(
-        and(eq(integrationConnections.botId, ref.botId), eq(integrationConnections.provider, ref.provider)),
-      ),
-  );
-}
-
 export interface CrmLeadPayload {
   botId: string;
   provider: string;
@@ -174,7 +92,7 @@ export async function pushLeadToCrm(
   tenantId: string,
   payload: CrmLeadPayload,
 ): Promise<"done" | "skipped" | "failed"> {
-  const connector = getConnector(payload.provider);
+  const connector = getCrmConnector(payload.provider);
   if (!connector || !deps.integrations.secretKey) return "skipped";
   const ref = { tenantId, botId: payload.botId, provider: payload.provider };
 

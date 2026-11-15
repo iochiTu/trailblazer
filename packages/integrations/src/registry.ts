@@ -1,20 +1,46 @@
+import { googleCalendar } from "./connectors/google-calendar.js";
 import { housecallPro } from "./connectors/housecall-pro.js";
 import { jobber } from "./connectors/jobber.js";
 import { serviceTitan } from "./connectors/servicetitan.js";
 import { webhook } from "./connectors/webhook.js";
 import { parseSecretKey } from "./crypto.js";
-import type { CredentialField, CrmConnector, PlatformKeys } from "./types.js";
+import type {
+  AnyConnector,
+  CalendarConnector,
+  CredentialField,
+  CrmConnector,
+  PlatformKeys,
+} from "./types.js";
 
 /**
- * Every CRM the platform can connect to. To add one: write a connector in connectors/, add it
- * here, add tests, and add its add-on in @traiblazer/addons (builtin/crm.ts, same id).
+ * Every outside service the platform can connect to. To add one: write a connector in connectors/,
+ * add it here, add tests, and add its add-on in @traiblazer/addons (same id): builtin/crm.ts for a
+ * CRM, builtin/calendar.ts for a calendar.
  */
-export const connectors: readonly CrmConnector[] = [jobber, housecallPro, serviceTitan, webhook];
+export const connectors: readonly AnyConnector[] = [
+  jobber,
+  housecallPro,
+  serviceTitan,
+  webhook,
+  googleCalendar,
+];
 
 const byId = new Map(connectors.map((c) => [c.id, c]));
 if (byId.size !== connectors.length) throw new Error("Duplicate connector id");
 
-export const getConnector = (id: string): CrmConnector | undefined => byId.get(id);
+export const getConnector = (id: string): AnyConnector | undefined => byId.get(id);
+
+/** The CRM with this id (undefined for an unknown id or another kind of connector). */
+export const getCrmConnector = (id: string): CrmConnector | undefined => {
+  const connector = byId.get(id);
+  return connector?.kind === "crm" ? connector : undefined;
+};
+
+/** The calendar with this id (undefined for an unknown id or another kind of connector). */
+export const getCalendarConnector = (id: string): CalendarConnector | undefined => {
+  const connector = byId.get(id);
+  return connector?.kind === "calendar" ? connector : undefined;
+};
 
 /** What the platform needs to run integrations, read once from the environment. */
 export interface IntegrationsConfig {
@@ -23,11 +49,14 @@ export interface IntegrationsConfig {
   platform: PlatformKeys;
 }
 
-/** Reads INTEGRATIONS_SECRET_KEY and each CRM's platform keys. Throws on a malformed secret key. */
+/** Reads INTEGRATIONS_SECRET_KEY and each service's platform keys (our developer apps). Throws on a malformed secret key. */
 export function loadIntegrationsConfig(env: Record<string, string | undefined>): IntegrationsConfig {
   const platform: PlatformKeys = {};
   if (env.JOBBER_CLIENT_ID && env.JOBBER_CLIENT_SECRET) {
     platform.jobber = { clientId: env.JOBBER_CLIENT_ID, clientSecret: env.JOBBER_CLIENT_SECRET };
+  }
+  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
+    platform.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
   }
   if (env.SERVICETITAN_APP_KEY) {
     platform.serviceTitan = {
@@ -42,6 +71,7 @@ export function loadIntegrationsConfig(env: Record<string, string | undefined>):
 export interface ConnectorInfo {
   id: string;
   name: string;
+  kind: "crm" | "calendar";
   auth: "fields" | "oauth2";
   fields: CredentialField[];
   /**
@@ -51,9 +81,10 @@ export interface ConnectorInfo {
   available: boolean;
 }
 
-export const connectorInfo = (connector: CrmConnector, config: IntegrationsConfig): ConnectorInfo => ({
+export const connectorInfo = (connector: AnyConnector, config: IntegrationsConfig): ConnectorInfo => ({
   id: connector.id,
   name: connector.name,
+  kind: connector.kind,
   auth: connector.auth,
   fields: connector.fields,
   available: !!config.secretKey && connector.ready(config.platform),

@@ -5,7 +5,10 @@ import {
   type CrmLead,
   connectorInfo,
   connectors,
+  getCalendarConnector,
   getConnector,
+  getCrmConnector,
+  googleEventId,
   hmacHex,
   leadNotes,
   leadTitle,
@@ -63,7 +66,8 @@ function fakeFetch(rules: [match: string | ((call: Call) => boolean), status: nu
   return { fetch: fetchFn, calls };
 }
 
-const connector = (id: string) => getConnector(id)!;
+const connector = (id: string) => getCrmConnector(id)!;
+const calendar = (id: string) => getCalendarConnector(id)!;
 
 describe("sealing credentials", () => {
   const key = randomBytes(32);
@@ -137,15 +141,22 @@ describe("registry", () => {
     // These need the platform's own keys (developer app, partner app key).
     expect(available("jobber")).toBe(false);
     expect(available("servicetitan")).toBe(false);
+    expect(connectorInfo(getConnector("google-calendar")!, config).available).toBe(false);
 
     const full = loadIntegrationsConfig({
       INTEGRATIONS_SECRET_KEY: randomBytes(32).toString("hex"),
       JOBBER_CLIENT_ID: "id",
       JOBBER_CLIENT_SECRET: "secret",
       SERVICETITAN_APP_KEY: "ak1.x",
+      GOOGLE_CLIENT_ID: "gid",
+      GOOGLE_CLIENT_SECRET: "gsecret",
     });
     expect(connectors.every((c) => connectorInfo(c, full).available)).toBe(true);
     expect(JSON.stringify(connectorInfo(connector("jobber"), full))).not.toContain('secret"');
+    // Each id finds only its own kind.
+    expect(getCrmConnector("google-calendar")).toBeUndefined();
+    expect(getCalendarConnector("jobber")).toBeUndefined();
+    expect(connectorInfo(calendar("google-calendar"), full).kind).toBe("calendar");
   });
 });
 
@@ -406,6 +417,161 @@ describe("ServiceTitan", () => {
         { type: "Phone", value: "8075550142" },
         { type: "Email", value: lead.email },
       ],
+    });
+  });
+});
+
+describe("Google Calendar", () => {
+  const platform = { google: { clientId: "gid", clientSecret: "gsecret" } };
+  const now = () => new Date("2026-11-13T16:00:00Z");
+  const fresh = { accessToken: "at", refreshToken: "rt", expiresAt: String(now().getTime() + 3_600_000) };
+  const allScopes =
+    "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events";
+  const google = () => calendar("google-calendar");
+
+  it("asks for offline access to free/busy and events only", () => {
+    const url = new URL(
+      google().oauth!.authorizeUrl({ platform, redirectUri: "https://admin.example/cb", state: "st" }),
+    );
+    expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+    const params = Object.fromEntries(url.searchParams);
+    expect(params).toMatchObject({
+      client_id: "gid",
+      redirect_uri: "https://admin.example/cb",
+      state: "st",
+      access_type: "offline",
+      prompt: "consent",
+    });
+    expect(params.scope!.split(" ")).toEqual([
+      "openid",
+      "email",
+      "https://www.googleapis.com/auth/calendar.freebusy",
+      "https://www.googleapis.com/auth/calendar.events",
+    ]);
+    expect(params.scope).not.toMatch(/auth\/calendar( |$)/);
+  });
+
+  it("exchanges the code, and refuses a sign-in without both calendar permissions", async () => {
+    const exchange = (token: unknown) =>
+      google().oauth!.exchangeCode({
+        platform,
+        fetch: fakeFetch([["oauth2.googleapis.com/token", 200, token]]).fetch,
+        code: "c0de",
+        redirectUri: "https://admin.example/cb",
+        now,
+      });
+    expect(
+      await exchange({ access_token: "at1", refresh_token: "rt1", expires_in: 3599, scope: allScopes }),
+    ).toEqual({ accessToken: "at1", refreshToken: "rt1", expiresAt: String(now().getTime() + 3_599_000) });
+    await expect(
+      exchange({
+        access_token: "at1",
+        refresh_token: "rt1",
+        scope: "openid https://www.googleapis.com/auth/calendar.freebusy",
+      }),
+    ).rejects.toMatchObject({ failure: "rejected" });
+    await expect(exchange({ access_token: "at1", scope: allScopes })).rejects.toMatchObject({
+      failure: "auth",
+    });
+  });
+
+  it("refreshes before the token runs out and keeps the refresh token", async () => {
+    const { fetch, calls } = fakeFetch([
+      ["oauth2.googleapis.com/token", 200, { access_token: "at2", expires_in: 3600 }],
+    ]);
+    expect(await google().refresh!({ credentials: fresh, platform, fetch, now })).toBeNull();
+    const stale = { ...fresh, expiresAt: String(now().getTime() + 60_000) };
+    expect(await google().refresh!({ credentials: stale, platform, fetch, now })).toMatchObject({
+      accessToken: "at2",
+      refreshToken: "rt",
+    });
+    expect(new URLSearchParams(calls[0]!.body).get("grant_type")).toBe("refresh_token");
+
+    const refused = fakeFetch([["oauth2.googleapis.com/token", 400, { error: "invalid_grant" }]]);
+    await expect(
+      google().refresh!({ credentials: stale, platform, fetch: refused.fetch, now }),
+    ).rejects.toMatchObject({ failure: "auth" });
+  });
+
+  it("reads busy times and checks the calendar when verifying", async () => {
+    const { fetch, calls } = fakeFetch([
+      ["/userinfo", 200, { email: "owner@maple.example" }],
+      [
+        "/freeBusy",
+        200,
+        {
+          calendars: {
+            primary: {
+              busy: [
+                { start: "2026-11-17T14:00:00Z", end: "2026-11-17T15:00:00Z" },
+                { start: "bad", end: "2026-11-17T15:00:00Z" },
+              ],
+            },
+          },
+        },
+      ],
+    ]);
+    const ctx = { credentials: fresh, platform, fetch, now };
+    expect(await google().verify(ctx)).toEqual({ accountName: "owner@maple.example" });
+    const busy = await google().busyTimes(ctx, {
+      from: new Date("2026-11-17T00:00:00Z"),
+      to: new Date("2026-11-18T00:00:00Z"),
+    });
+    expect(busy).toEqual([
+      { start: new Date("2026-11-17T14:00:00Z"), end: new Date("2026-11-17T15:00:00Z") },
+    ]);
+    const query = JSON.parse(calls.at(-1)!.body);
+    expect(query).toEqual({
+      timeMin: "2026-11-17T00:00:00.000Z",
+      timeMax: "2026-11-18T00:00:00.000Z",
+      items: [{ id: "primary" }],
+    });
+    expect(calls.at(-1)!.headers.authorization).toBe("Bearer at");
+
+    const notFound = fakeFetch([
+      ["/freeBusy", 200, { calendars: { primary: { errors: [{ reason: "notFound" }] } } }],
+    ]);
+    await expect(
+      google().busyTimes({ ...ctx, fetch: notFound.fetch }, { from: now(), to: now() }),
+    ).rejects.toMatchObject({ failure: "rejected" });
+  });
+
+  it("books with our id, invites nobody, and treats a repeat as done", async () => {
+    const bookingId = "0f1e2d3c-4b5a-4968-8776-655443322110";
+    const event = {
+      id: bookingId,
+      start: new Date("2026-11-17T15:00:00Z"),
+      end: new Date("2026-11-17T16:00:00Z"),
+      timeZone: "America/Toronto",
+      title: "Furnace check: Jean-Luc Tremblay",
+      description: "Phone: (807) 555-0142",
+    };
+    const { fetch, calls } = fakeFetch([
+      [
+        "/calendars/primary/events",
+        200,
+        { id: googleEventId(bookingId), htmlLink: "https://calendar.google.com/e/1" },
+      ],
+    ]);
+    const ctx = { credentials: fresh, platform, fetch, now };
+    expect(await google().createEvent(ctx, event)).toEqual({
+      externalId: "tb0f1e2d3c4b5a4968877665544332211" + "0",
+      externalUrl: "https://calendar.google.com/e/1",
+    });
+    expect(googleEventId(bookingId)).toMatch(/^[a-v0-9]{5,1024}$/);
+    expect(calls[0]!.url).toContain("sendUpdates=none");
+    const body = JSON.parse(calls[0]!.body);
+    expect(body).toMatchObject({
+      id: googleEventId(bookingId),
+      summary: event.title,
+      start: { dateTime: "2026-11-17T15:00:00.000Z", timeZone: "America/Toronto" },
+      end: { dateTime: "2026-11-17T16:00:00.000Z", timeZone: "America/Toronto" },
+    });
+    expect(body.attendees).toBeUndefined();
+
+    const repeat = fakeFetch([["/calendars/primary/events", 409, { error: { message: "duplicate" } }]]);
+    expect(await google().createEvent({ ...ctx, fetch: repeat.fetch }, event)).toMatchObject({
+      externalId: googleEventId(bookingId),
     });
   });
 });

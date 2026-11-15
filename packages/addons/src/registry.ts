@@ -1,3 +1,4 @@
+import { googleCalendarAddon } from "./builtin/calendar.js";
 import { comingSoonAddons } from "./builtin/coming-soon.js";
 import { crmAddons } from "./builtin/crm.js";
 import { emailNotifications } from "./builtin/email-notifications.js";
@@ -12,6 +13,7 @@ export const addons: readonly AnyAddon[] = [
   emailNotifications,
   onlineShop,
   ...crmAddons,
+  googleCalendarAddon,
   ...comingSoonAddons,
 ];
 

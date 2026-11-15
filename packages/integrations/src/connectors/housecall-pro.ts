@@ -56,6 +56,7 @@ async function findCustomer(ctx: ConnectorContext, email: string | null, phone: 
 export const housecallPro: CrmConnector = {
   id: "housecall-pro",
   name: "Housecall Pro",
+  kind: "crm",
   auth: "fields",
   fields: [
     {

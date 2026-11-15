@@ -135,6 +135,7 @@ async function findClient(ctx: ConnectorContext, email: string | null, phone: st
 export const jobber: CrmConnector = {
   id: "jobber",
   name: "Jobber",
+  kind: "crm",
   auth: "oauth2",
   fields: [],
   ready: (platform) => !!platform.jobber,

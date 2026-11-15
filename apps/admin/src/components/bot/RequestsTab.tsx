@@ -77,6 +77,16 @@ export function RequestsTab({
     });
 
   const fmt = new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" });
+  /** The booked time in the business's time zone (where the appointment happens), e.g. "Tue, Nov 17, 9:00 – 10:00 a.m.". */
+  const bookedTime = (booking: { startsAt: string; endsAt: string; timeZone: string }) =>
+    new Intl.DateTimeFormat(`${language}-CA`, {
+      timeZone: booking.timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).formatRange(new Date(booking.startsAt), new Date(booking.endsAt));
   const shown = (list ?? [])
     .filter((lead) =>
       filter === "all" ? true : filter === "done" ? lead.status === "done" : lead.status !== "done",
@@ -159,6 +169,28 @@ export function RequestsTab({
                   <span className="muted ms-auto text-xs">{fmt.format(new Date(lead.createdAt))}</span>
                 </div>
 
+                {lead.booking && (
+                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="font-medium">
+                      📅{" "}
+                      {t("requests.booked", {
+                        name: lead.booking.providerName,
+                        time: bookedTime(lead.booking),
+                      })}
+                    </span>
+                    {lead.booking.externalUrl && (
+                      <a
+                        className="underline"
+                        href={lead.booking.externalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("requests.sync.open", { name: lead.booking.providerName })}
+                      </a>
+                    )}
+                  </p>
+                )}
+
                 <p className="text-sm whitespace-pre-wrap" dir="auto">
                   {lead.message}
                 </p>
@@ -205,7 +237,7 @@ export function RequestsTab({
                       {lead.phone}
                     </a>
                   )}
-                  {lead.bestTime && (
+                  {lead.bestTime && !lead.booking && (
                     <span className="muted" dir="auto">
                       {t("requests.bestTime", { time: lead.bestTime })}
                     </span>

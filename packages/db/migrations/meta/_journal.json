@@ -351,6 +351,13 @@
       "when": 1794717301843,
       "tag": "0049_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794736239729,
+      "tag": "0050_calendar_bookings",
+      "breakpoints": true
     }
   ]
 }

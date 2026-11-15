@@ -67,6 +67,7 @@ const bookingsPath = (credentials: Credentials) =>
 export const serviceTitan: CrmConnector = {
   id: "servicetitan",
   name: "ServiceTitan",
+  kind: "crm",
   auth: "fields",
   fields: [
     {

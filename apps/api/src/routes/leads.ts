@@ -1,4 +1,4 @@
-import { bots, leadSyncs, leads, withTenant } from "@traiblazer/db";
+import { bookings, bots, leadSyncs, leads, withTenant } from "@traiblazer/db";
 import { getConnector } from "@traiblazer/integrations";
 import { LEAD_STATUSES, updateLeadSchema } from "@traiblazer/shared";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -14,8 +14,9 @@ type LeadParams = { Params: { tenantId: string; botId: string; leadId: string } 
 
 /**
  * Requests visitors left with the assistant (contact details + what they want):
- *   GET    /v1/tenants/:t/bots/:b/leads[?status=new]     newest first, with how many are new and
- *                                                        where each stands with connected CRMs
+ *   GET    /v1/tenants/:t/bots/:b/leads[?status=new]     newest first, with how many are new,
+ *                                                        where each stands with connected CRMs, and
+ *                                                        the appointment booked with it, if any
  *   PATCH  /v1/tenants/:t/bots/:b/leads/:leadId          move to new / in_progress / done
  *   DELETE /v1/tenants/:t/bots/:b/leads/:leadId          remove (e.g. on the visitor's request)
  *
@@ -69,9 +70,38 @@ export async function leadRoutes(app: FastifyInstance, { db }: AppContext) {
               ),
             )
         : [];
+      // Appointments the assistant booked in the business's calendar with these requests.
+      const booked = list.length
+        ? await tx
+            .select({
+              leadId: bookings.leadId,
+              provider: bookings.provider,
+              startsAt: bookings.startsAt,
+              endsAt: bookings.endsAt,
+              timeZone: bookings.timeZone,
+              externalUrl: bookings.externalUrl,
+            })
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.status, "booked"),
+                inArray(
+                  bookings.leadId,
+                  list.map((l) => l.id),
+                ),
+              ),
+            )
+        : [];
       return {
         leads: list.map((lead) => ({
           ...lead,
+          booking:
+            booked
+              .filter((b) => b.leadId === lead.id)
+              .map(({ leadId: _, ...b }) => ({
+                ...b,
+                providerName: getConnector(b.provider)?.name ?? b.provider,
+              }))[0] ?? null,
           syncs: syncs
             .filter((s) => s.leadId === lead.id)
             .map(({ leadId: _, ...sync }) => ({

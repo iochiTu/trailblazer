@@ -78,6 +78,7 @@ export const en = {
   "addons.adminOnly": "Only business owners and admins can change add-ons.",
   "addons.filter.crm": "CRM & job software",
   "addons.category.crm": "CRM & job software",
+  "addons.capability.booking": "Books appointments",
   "addons.capability.crm": "Sends requests to your software",
   "addons.connectNeeded": "Not connected",
   "integrations.title": "Connection",
@@ -95,6 +96,13 @@ export const en = {
   "integrations.secretHint": "Stored encrypted. It is never shown again.",
   "integrations.lastSent": "Last request sent {date}",
   "integrations.lastError": "Last problem: {error}",
+  "integrations.calendar.notConnected":
+    "Not connected yet. Connect your calendar so your assistant can book appointments.",
+  "integrations.calendar.unavailable":
+    "{name} can't be connected on this platform yet. Contact us to set it up.",
+  "integrations.calendar.disconnectConfirm":
+    "Disconnect {name}? Your assistant will stop booking appointments.",
+  "integrations.calendar.lastSent": "Last appointment booked {date}",
   "integrations.oauthFailed": "The connection to {name} wasn't completed. Please try again.",
   "requests.sync.sent": "Sent to {name}",
   "requests.sync.failed": "Not sent to {name}",
@@ -419,6 +427,7 @@ export const en = {
   "requests.status.in_progress": "In progress",
   "requests.status.done": "Done",
   "requests.test": "Test",
+  "requests.booked": "Booked in {name}: {time}",
   "requests.bestTime": "Best time: {time}",
   "requests.item": "About: {item}",
   "requests.start": "Mark in progress",
