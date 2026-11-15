@@ -27,7 +27,7 @@ packages/
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
   db/               Drizzle schema, migrations (incl. row-level security), withTenant()
   addons/           Add-on market: add-on contract, registry, built-in add-ons (email notifications, online shop, CRMs)
-  integrations/     CRM connectors (Jobber, Housecall Pro, ServiceTitan, webhook) and credential sealing
+  integrations/     CRM connectors (Jobber, Housecall Pro, ServiceTitan, webhook), Google Calendar, credential sealing
   i18n/             Language registry (tiers, RTL), UI messages (ICU), language negotiation
   industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)
   evals/            Answer-quality and safety evals for the pilot packs, EN/FR (`pnpm evals`)
@@ -150,6 +150,34 @@ booking-provider-tags list, could not be confirmed without developer/partner acc
 top of each connector). Jobber apps work for up to 5 accounts as drafts, then need Jobber's review
 (which also expects an `APP_DISCONNECT` webhook handler, not built yet); ServiceTitan requires its
 partner program.
+
+## Calendar booking (Google Calendar)
+
+With the **Google Calendar booking** add-on (market category **Booking**), the assistant offers real
+open times and books the one the visitor picks:
+
+1. The owner turns the add-on on, picks the length of an appointment, the earliest booking (1 hour to
+   2 days from now) and how far ahead (1 week to 2 months), and signs in with Google. The assistant
+   asks only for free/busy and for adding events, so it never sees what is in the calendar.
+2. `find_open_times` works out times from the business's **opening hours** (Business page tab) and
+   time zone, minus what Google says is busy, after the notice and within the range. It offers a few
+   per day, up to 8. Without opening hours it offers nothing and the assistant takes a request instead.
+3. `book_appointment` needs the visitor's name and a phone number or email they typed (checked like
+   any request). It checks the time again against the hours and the calendar, holds it in `bookings`
+   (one row per assistant and start time, so two visitors can't take it at once), adds the event to
+   the owner's main calendar (no guests are invited, so Google emails nobody), and saves a **booking
+   request**. The Requests tab shows "Booked in Google Calendar" with the time and a link, and the email
+   and CRM add-ons send it on like any request.
+4. One booking per conversation; changes and cancellations go to staff as a request. The owner's test
+   chat checks the time but books nothing. If Google can't be reached, or refuses the connection
+   (which then shows "connect again"), the assistant offers to pass the request on instead.
+
+The connector is `packages/integrations/src/connectors/google-calendar.ts` (`CalendarConnector`:
+`busyTimes`, `createEvent`); the open-time arithmetic is `packages/core/src/booking/slots.ts` and the
+tools are `packages/core/src/chat/tools/booking.ts`. The platform needs `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` (see `.env.example`); Google must verify the app (the events scope is
+sensitive) before businesses outside its test-user list can connect. Not built yet: picking a calendar
+other than the main one, a buffer between appointments, and a confirmation email to the visitor.
 
 ## Marketing site, llms.txt and MCP server
 

@@ -3,6 +3,8 @@ import {
   type AddonEvent,
   addonEffects,
   addonPrompt,
+  bookingSettings,
+  type CalendarAddonConfig,
   hasEventHandlers,
 } from "@traiblazer/addons";
 import {
@@ -13,6 +15,7 @@ import {
   type Citation,
   conversations,
   type Db,
+  integrationConnections,
   jobs,
   type MessageFlags,
   messageAttachments,
@@ -26,6 +29,7 @@ import {
 } from "@traiblazer/db";
 import { enOrFr } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
+import { getCalendarConnector, type IntegrationsConfig } from "@traiblazer/integrations";
 import {
   type ChatMessage,
   type ContentBlock,
@@ -43,6 +47,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { businessNameOf, installedAddons, listedCatalogItems, runningNotices } from "../business.js";
 import { errorMessage } from "../errors.js";
 import { queueInsights } from "../insights/analyze.js";
+import { calendarAccess } from "../integrations/calendar.js";
 import { JOB_PRIORITY, JOB_TYPES, newJob } from "../jobs.js";
 import { textOwnerAboutRequest } from "../sms/alerts.js";
 import { countItemEvent, itemStatSurface } from "../stats/item-stats.js";
@@ -69,6 +74,10 @@ export interface ChatDeps {
   log?: (msg: string, data?: Record<string, unknown>) => void;
   /** Admin portal origin, for links in add-on notifications. */
   adminUrl?: string;
+  /** Connected services (the calendar the assistant books in); without it, nothing is booked. */
+  integrations?: IntegrationsConfig;
+  /** Outbound HTTP for connected services; defaults to one that refuses private addresses. */
+  integrationsFetch?: typeof fetch;
 }
 
 /** An image the visitor sent, already validated and stripped of metadata by the API. */
@@ -390,6 +399,22 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
 
     // Add-ons installed on this assistant; the owner's language only matters for notifications.
     const addons = await installedAddons(tx, bot.id);
+    // A calendar add-on books only while its calendar is connected and accepted (not flagged).
+    const calendarAddon = deps.integrations?.secretKey
+      ? addons.find((a) => a.addon.integration && getCalendarConnector(a.addon.integration))
+      : undefined;
+    const [calendarConnection] = calendarAddon
+      ? await tx
+          .select({ status: integrationConnections.status })
+          .from(integrationConnections)
+          .where(
+            and(
+              eq(integrationConnections.botId, bot.id),
+              eq(integrationConnections.provider, calendarAddon.addon.integration!),
+            ),
+          )
+          .limit(1)
+      : [];
     const [tenant] = hasEventHandlers(addons)
       ? await tx
           .select({ ownerLanguage: tenants.ownerLanguage })
@@ -417,6 +442,13 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       historyImages,
       addons,
       addonCtx,
+      calendar:
+        calendarAddon && calendarConnection?.status === "connected"
+          ? {
+              provider: calendarAddon.addon.integration!,
+              config: calendarAddon.config as CalendarAddonConfig,
+            }
+          : null,
     };
   });
 
@@ -681,7 +713,20 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           }
         }
       };
+      const calendar =
+        setup.calendar && deps.integrations
+          ? calendarAccess(
+              { db: deps.db, integrations: deps.integrations, fetch: deps.integrationsFetch },
+              { tenantId: input.tenantId, botId: bot.id, provider: setup.calendar.provider },
+              {
+                timeZone: profile?.timezone ?? DEFAULT_TIME_ZONE,
+                hours: profile?.hours ?? null,
+                ...bookingSettings(setup.calendar.config),
+              },
+            )
+          : null;
       const tools = chatTools(bot, {
+        calendar,
         leadFields: template.leadFields,
         serviceArea: Boolean(profile?.serviceTowns.length || profile?.servicePostalPrefixes.length),
         catalog: catalog.length > 0,
@@ -806,6 +851,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             visitorPhone: input.channel === "sms" ? input.visitorId : undefined,
             embeddings: deps.embeddings,
             onEmbedding: countEmbedding,
+            now: deps.now,
             signal: input.signal,
           },
           { lastRound: round === MAX_TOOL_ROUNDS - 1, log: deps.log },

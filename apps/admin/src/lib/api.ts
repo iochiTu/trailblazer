@@ -316,7 +316,9 @@ export interface AddonCatalogEntry {
 export interface Integration {
   id: string;
   name: string;
-  /** "fields": the owner pastes keys. "oauth2": the owner signs in at the CRM. */
+  /** "crm": requests are sent to it. "calendar": the assistant books appointments in it. */
+  kind: "crm" | "calendar";
+  /** "fields": the owner pastes keys. "oauth2": the owner signs in at the service. */
   auth: "fields" | "oauth2";
   fields: {
     key: string;
@@ -425,6 +427,17 @@ export interface Lead {
   itemName: string | null;
   /** Photos the visitor sent in the conversation. */
   attachmentIds: string[];
+  /** The appointment the assistant booked in the business's calendar with this request. */
+  booking: {
+    provider: string;
+    providerName: string;
+    startsAt: string;
+    endsAt: string;
+    /** The business's time zone when it was booked. */
+    timeZone: string;
+    /** Where to open the appointment in the calendar. */
+    externalUrl: string | null;
+  } | null;
   /** Where the request stands with each connected CRM. */
   syncs: {
     provider: string;

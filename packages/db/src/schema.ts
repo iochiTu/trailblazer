@@ -1102,7 +1102,7 @@ export const leads = pgTable(
 );
 
 // ---------------------------------------------------------------------------------------------
-// CRM integrations (RLS enforced)
+// Integrations: CRMs and calendars (RLS enforced)
 // ---------------------------------------------------------------------------------------------
 
 export const connectionStatuses = ["connected", "error"] as const;
@@ -1179,6 +1179,51 @@ export const leadSyncs = pgTable(
     index("lead_syncs_tenant_bot_idx").on(t.tenantId, t.botId),
     foreignKey({
       name: "lead_syncs_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const bookingStatuses = ["pending", "booked", "failed"] as const;
+export type BookingStatus = (typeof bookingStatuses)[number];
+
+/**
+ * An appointment the assistant booked in the business's calendar (a calendar connector, e.g. Google
+ * Calendar). The row is written as "pending" before the calendar is asked, so two visitors can't take
+ * the same start time at once (unique while not failed); it becomes "booked" with the calendar's id,
+ * or "failed" when the calendar refused. The visitor's details are on the request (`leadId`) made with
+ * it, so staff see the booking with the other requests and the CRM add-ons send it on.
+ */
+export const bookings = pgTable(
+  "bookings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    /** Conversation it was booked in (not a foreign key, like `leads`). */
+    conversationId: uuid("conversation_id"),
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    /** Calendar connector id, e.g. "google-calendar". */
+    provider: text("provider").notNull(),
+    status: text("status").$type<BookingStatus>().notNull().default("pending"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** The business's time zone when it was booked (IANA). */
+    timeZone: text("time_zone").notNull(),
+    externalId: text("external_id"),
+    externalUrl: text("external_url"),
+    error: text("error"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("bookings_bot_start_uq").on(t.botId, t.startsAt).where(sql`${t.status} <> 'failed'`),
+    index("bookings_conversation_idx").on(t.tenantId, t.conversationId),
+    index("bookings_lead_idx").on(t.leadId),
+    foreignKey({
+      name: "bookings_bot_tenant_fk",
       columns: [t.botId, t.tenantId],
       foreignColumns: [bots.id, bots.tenantId],
     }).onDelete("cascade"),
@@ -1731,6 +1776,7 @@ export const rlsTables = [
   "leads",
   "integration_connections",
   "lead_syncs",
+  "bookings",
   "knowledge_gaps",
   "setup_runs",
   "usage_events",

@@ -83,6 +83,7 @@ async function post(ctx: ConnectorContext, payload: unknown): Promise<void> {
 export const webhook: CrmConnector = {
   id: "webhook",
   name: "Webhook",
+  kind: "crm",
   auth: "fields",
   fields: [
     {

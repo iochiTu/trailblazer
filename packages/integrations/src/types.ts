@@ -1,7 +1,9 @@
 /**
- * CRM connector contract. A connector knows how to talk to one outside system (Jobber, ServiceTitan,
- * Housecall Pro, a webhook…): how the business connects its account, how to check the connection,
- * and how to hand over a request a visitor left with the assistant.
+ * Connector contract. A connector knows how to talk to one outside system: how the business connects
+ * its account and how to check the connection. Two kinds:
+ *   - a CRM (Jobber, ServiceTitan, Housecall Pro, a webhook…) is handed the requests visitors leave;
+ *   - a calendar (Google Calendar) gives the business's busy times and takes the appointments the
+ *     assistant books.
  *
  * Connectors hold no state and never touch the database. The platform stores each business's
  * credentials encrypted (`integration_connections`), opens them only to call a connector, and saves
@@ -33,6 +35,7 @@ export interface CredentialField {
 /** Keys the platform itself holds for a CRM (our developer app), from the environment. */
 export interface PlatformKeys {
   jobber?: { clientId: string; clientSecret: string };
+  google?: { clientId: string; clientSecret: string };
   serviceTitan?: { appKey: string; environment: "production" | "integration" };
 }
 
@@ -83,7 +86,7 @@ export interface PushResult {
   externalUrl: string | null;
 }
 
-/** OAuth 2.0 authorization-code flow, for CRMs where the owner signs in instead of pasting keys. */
+/** OAuth 2.0 authorization-code flow, for services where the owner signs in instead of pasting keys. */
 export interface OAuthFlow {
   authorizeUrl(input: { platform: PlatformKeys; redirectUri: string; state: string }): string;
   exchangeCode(input: {
@@ -95,16 +98,19 @@ export interface OAuthFlow {
   }): Promise<Credentials>;
 }
 
-export interface CrmConnector {
+/** What every connector has, whatever it is for. */
+export interface Connector {
   /** Stable id, stored with each connection. Never change it once released. */
   id: string;
   /** Product name (not translated). */
   name: string;
-  /** "fields": the owner pastes keys. "oauth2": the owner signs in at the CRM. */
+  /** "crm": requests are handed to it. "calendar": the assistant reads free times and books in it. */
+  kind: "crm" | "calendar";
+  /** "fields": the owner pastes keys. "oauth2": the owner signs in at the service. */
   auth: "fields" | "oauth2";
   fields: CredentialField[];
   oauth?: OAuthFlow;
-  /** False while the platform's own keys for this CRM are missing (e.g. no Jobber developer app yet). */
+  /** False while the platform's own keys for this service are missing (e.g. no Jobber developer app yet). */
   ready(platform: PlatformKeys): boolean;
   /**
    * New credentials when the saved ones have expired or are about to (access tokens), else null.
@@ -113,14 +119,47 @@ export interface CrmConnector {
   refresh?(ctx: ConnectorContext): Promise<Credentials | null>;
   /** Checks the credentials with a cheap call. Throws ConnectorError when they don't work. */
   verify(ctx: ConnectorContext): Promise<VerifyResult>;
+}
+
+export interface CrmConnector extends Connector {
+  kind: "crm";
   /** Hands a request to the CRM. Throws ConnectorError on failure. */
   pushLead(ctx: ConnectorContext, lead: CrmLead): Promise<PushResult>;
 }
 
+/** A time the calendar is taken (start inclusive, end exclusive). */
+export interface BusyTime {
+  start: Date;
+  end: Date;
+}
+
+/** An appointment the assistant books. */
+export interface CalendarEvent {
+  /** Our id for the booking: the calendar uses it so a retried call never books twice. */
+  id: string;
+  start: Date;
+  end: Date;
+  /** IANA time zone the business works in, shown with the event. */
+  timeZone: string;
+  title: string;
+  /** The visitor's details and request, for the business. */
+  description: string;
+}
+
+export interface CalendarConnector extends Connector {
+  kind: "calendar";
+  /** When the business's calendar is taken between two moments. Throws ConnectorError on failure. */
+  busyTimes(ctx: ConnectorContext, range: { from: Date; to: Date }): Promise<BusyTime[]>;
+  /** Puts an appointment in the calendar. Safe to call twice with the same event id. */
+  createEvent(ctx: ConnectorContext, event: CalendarEvent): Promise<PushResult>;
+}
+
+export type AnyConnector = CrmConnector | CalendarConnector;
+
 /**
- * Why a call to a CRM failed, which decides what happens next:
+ * Why a call to a connected service failed, which decides what happens next:
  *   - "auth": the credentials no longer work. The connection is flagged for the owner; no retry.
- *   - "rejected": the CRM refused this request (bad data, missing setting). No retry.
+ *   - "rejected": the service refused this request (bad data, missing setting). No retry.
  *   - "temporary": outage, timeout or rate limit. The job is retried with backoff.
  */
 export type ConnectorFailure = "auth" | "rejected" | "temporary";

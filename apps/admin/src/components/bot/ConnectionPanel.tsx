@@ -5,8 +5,9 @@ import { ApiError, api, type Integration, type Localized } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 /**
- * The "Connect" step of a CRM add-on: shows whether the assistant is connected to the CRM, and
- * lets an admin connect (by pasting keys, or by signing in at the CRM), reconnect or disconnect.
+ * The "Connect" step of an add-on that needs an outside account (a CRM, a calendar): shows whether
+ * the assistant is connected, and lets an admin connect (by pasting keys, or by signing in at the
+ * service), reconnect or disconnect.
  * Keys are sent once and never shown again.
  */
 export function ConnectionPanel(props: {
@@ -29,6 +30,8 @@ export function ConnectionPanel(props: {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const url = `${base}/integrations/${integration.id}`;
   const fmt = new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" });
+  /** Wording for a calendar (bookings) rather than a CRM (requests sent). */
+  const calendar = integration.kind === "calendar";
 
   const fail = (err: unknown) => {
     if (err instanceof ApiError) {
@@ -66,7 +69,12 @@ export function ConnectionPanel(props: {
   }
 
   async function disconnect() {
-    if (!window.confirm(t("integrations.disconnectConfirm", { name }))) return;
+    if (
+      !window.confirm(
+        t(calendar ? "integrations.calendar.disconnectConfirm" : "integrations.disconnectConfirm", { name }),
+      )
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -91,7 +99,9 @@ export function ConnectionPanel(props: {
       </div>
 
       {!integration.available ? (
-        <p className="muted">{t("integrations.unavailable", { name })}</p>
+        <p className="muted">
+          {t(calendar ? "integrations.calendar.unavailable" : "integrations.unavailable", { name })}
+        </p>
       ) : (
         <>
           {connection?.status === "error" && (
@@ -99,13 +109,19 @@ export function ConnectionPanel(props: {
               {t("integrations.needsReconnect", { name })}
             </p>
           )}
-          {!connection && <p className="muted">{t("integrations.notConnected")}</p>}
+          {!connection && (
+            <p className="muted">
+              {t(calendar ? "integrations.calendar.notConnected" : "integrations.notConnected")}
+            </p>
+          )}
           {working && connection.lastError && (
             <p className="muted">{t("integrations.lastError", { error: connection.lastError })}</p>
           )}
           {working && connection.lastSuccessAt && (
             <p className="muted">
-              {t("integrations.lastSent", { date: fmt.format(new Date(connection.lastSuccessAt)) })}
+              {t(calendar ? "integrations.calendar.lastSent" : "integrations.lastSent", {
+                date: fmt.format(new Date(connection.lastSuccessAt)),
+              })}
             </p>
           )}
 

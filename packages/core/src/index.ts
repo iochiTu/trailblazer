@@ -9,11 +9,15 @@ export { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } fro
 export {
   type AnyChatTool,
   type AreaCheck,
+  bookAppointmentTool,
+  bookedLabel,
+  bookingTools,
   type ChatTool,
   chatTools,
   checkServiceArea,
   checkServiceAreaTool,
   defineTool,
+  findOpenTimesTool,
   MAX_REQUEST_PHOTOS,
   MAX_REQUESTS_PER_CONVERSATION,
   MAX_TOOL_ROUNDS,
@@ -54,6 +58,7 @@ export {
   queueInsights,
   readInsightTags,
 } from "./insights/analyze.js";
+export { type CalendarAccess, calendarAccess } from "./integrations/calendar.js";
 export {
   type ConnectionRef,
   type CrmLeadPayload,

@@ -81,6 +81,7 @@ export const fr: Record<MessageKey, string> = {
     "Seuls les propriétaires et administrateurs de l'entreprise peuvent modifier les modules.",
   "addons.filter.crm": "CRM et logiciels de terrain",
   "addons.category.crm": "CRM et logiciels de terrain",
+  "addons.capability.booking": "Réserve des rendez-vous",
   "addons.capability.crm": "Envoie les demandes à votre logiciel",
   "addons.connectNeeded": "Non connecté",
   "integrations.title": "Connexion",
@@ -99,6 +100,13 @@ export const fr: Record<MessageKey, string> = {
   "integrations.secretHint": "Conservé chiffré. Il n'est plus jamais affiché.",
   "integrations.lastSent": "Dernière demande envoyée {date}",
   "integrations.lastError": "Dernier problème : {error}",
+  "integrations.calendar.notConnected":
+    "Pas encore connecté. Connectez votre agenda pour que votre assistant puisse réserver des rendez-vous.",
+  "integrations.calendar.unavailable":
+    "{name} ne peut pas encore être connecté sur cette plateforme. Contactez-nous pour le configurer.",
+  "integrations.calendar.disconnectConfirm":
+    "Déconnecter {name}? Votre assistant ne réservera plus de rendez-vous.",
+  "integrations.calendar.lastSent": "Dernier rendez-vous réservé {date}",
   "integrations.oauthFailed": "La connexion à {name} n'a pas été terminée. Veuillez réessayer.",
   "requests.sync.sent": "Envoyée à {name}",
   "requests.sync.failed": "Non envoyée à {name}",
@@ -440,6 +448,7 @@ export const fr: Record<MessageKey, string> = {
   "requests.status.in_progress": "En cours",
   "requests.status.done": "Terminée",
   "requests.test": "Test",
+  "requests.booked": "Réservé dans {name} : {time}",
   "requests.bestTime": "Meilleur moment : {time}",
   "requests.item": "Au sujet de : {item}",
   "requests.start": "Marquer en cours",

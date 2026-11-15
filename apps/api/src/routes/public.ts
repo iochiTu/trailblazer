@@ -554,6 +554,8 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             embeddingWaitMs: ctx.config.EMBEDDINGS_QUERY_WAIT_MS,
             log: (msg, data) => request.log.error(data, msg),
             adminUrl: adminOrigin,
+            integrations: ctx.integrations,
+            integrationsFetch: ctx.integrationsFetch,
           },
           {
             tenantId: found.tenantId,

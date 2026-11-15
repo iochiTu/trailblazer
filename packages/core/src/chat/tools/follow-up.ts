@@ -12,69 +12,13 @@ import type { LeadField } from "@traiblazer/industry-packs";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { countItemEvent, itemStatSurface } from "../../stats/item-stats.js";
+import { clean, digits, emailSchema, typedByVisitor } from "./contact.js";
 import { defineTool, type ToolContext } from "./contract.js";
 
 /** Most requests one conversation can leave (a visitor correcting a detail, not a flood). */
 export const MAX_REQUESTS_PER_CONVERSATION = 3;
 /** Most of the visitor's photos attached to one request (the newest). */
 export const MAX_REQUEST_PHOTOS = 6;
-
-const emailSchema = z.email().max(254);
-const digits = (text: string) => text.replace(/\D/g, "");
-/**
- * What models write in a field they have nothing for ("null", "N/A", "none", "aucun"…), instead
- * of leaving it out. Compared lower case, without accents or a final full stop.
- */
-const PLACEHOLDERS = new Set([
-  "null",
-  "undefined",
-  "none",
-  "n/a",
-  "na",
-  "nil",
-  "unknown",
-  "not provided",
-  "not given",
-  "not specified",
-  "-",
-  "--",
-  "?",
-  "aucun",
-  "aucune",
-  "non fourni",
-  "non precise",
-  "inconnu",
-  "s.o",
-  "sans objet",
-]);
-
-/** The value with spaces tidied; null when empty or a placeholder for "nothing". */
-const clean = (value: string | null | undefined) => {
-  const text = value?.replace(/\s+/g, " ").trim();
-  if (!text) return null;
-  const key = text
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\.$/, "");
-  return PLACEHOLDERS.has(key) ? null : text;
-};
-
-/**
- * True when the visitor typed this contact detail themselves in the conversation. Contact details
- * are personal data a business will act on, so the assistant can pass on only what the visitor
- * wrote: never a guess, and never an address or number picked up from the business's own pages.
- */
-function typedByVisitor(detail: { email?: string | null; phone?: string | null }, visitorText: string[]) {
-  if (detail.email) {
-    const email = detail.email.toLowerCase();
-    return visitorText.some((text) => text.toLowerCase().includes(email));
-  }
-  const number = digits(detail.phone ?? "");
-  // A country code the visitor left out ("+1") is fine: the last ten digits must be theirs.
-  const local = number.length > 10 ? number.slice(-10) : number;
-  return visitorText.some((text) => digits(text).includes(local));
-}
 
 /**
  * Passes a visitor's request to the business: saves it with the contact details the visitor typed,
@@ -341,7 +285,7 @@ After it succeeds, tell the visitor their request was passed on and the business
   });
 
 /** Statistics: a request about this service was passed on (not for the owner's own tests). */
-async function countRequested(tx: Tx, ctx: ToolContext, itemId: string) {
+export async function countRequested(tx: Tx, ctx: ToolContext, itemId: string) {
   const surface = itemStatSurface(ctx.channel);
   if (surface) {
     await countItemEvent(tx, {
@@ -369,7 +313,7 @@ function mergedRequest(before: string, now: string): string {
 }
 
 /** What add-ons and alerts are told about a request. */
-function requestEvent(
+export function requestEvent(
   lead: typeof leads.$inferSelect,
   fields: LeadField[],
   conversationId: string,

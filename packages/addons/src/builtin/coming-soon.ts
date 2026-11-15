@@ -33,17 +33,6 @@ export const comingSoonAddons = [
     capabilities: ["prompt"],
   }),
   comingSoon({
-    id: "booking-calendar",
-    category: "booking",
-    icon: "📅",
-    name: { en: "Booking calendar", fr: "Calendrier de réservation" },
-    summary: {
-      en: "Show real open times from Calendly, Square Appointments or Google Calendar.",
-      fr: "Affichez les vraies disponibilités de Calendly, Square Rendez-vous ou Google Agenda.",
-    },
-    capabilities: ["prompt", "chat_links"],
-  }),
-  comingSoon({
     id: "sms-alerts",
     category: "notifications",
     icon: "💬",

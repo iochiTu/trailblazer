@@ -122,6 +122,8 @@ export async function telephonyRoutes(app: FastifyInstance, ctx: AppContext) {
             embeddingWaitMs: config.EMBEDDINGS_QUERY_WAIT_MS,
             log: (msg, data) => request.log.error(data, msg),
             adminUrl: config.ADMIN_ORIGIN.replace(/\/$/, ""),
+            integrations: ctx.integrations,
+            integrationsFetch: ctx.integrationsFetch,
           },
           { tenantId: number.tenantId, botId: number.botId, e164: message.to },
           {

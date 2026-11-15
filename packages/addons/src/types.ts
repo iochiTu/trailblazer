@@ -42,7 +42,9 @@ export type AddonCapability =
   /** Sends notifications to the business (email today; SMS later). */
   | "notifications"
   /** Sends visitors' requests to the business's CRM or field-service software. */
-  | "crm";
+  | "crm"
+  /** Books appointments in the business's calendar. */
+  | "booking";
 
 /** A setting the owner fills in; the admin portal renders the form from these. */
 export type AddonField =

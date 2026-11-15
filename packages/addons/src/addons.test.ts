@@ -8,6 +8,7 @@ import {
   addonEffects,
   addonPrompt,
   addons,
+  bookingSettings,
   defineAddon,
   getAddon,
   parseAddonConfig,
@@ -122,6 +123,31 @@ describe("online shop", () => {
     ]);
     const hidden = activeAddons([install("online-shop", { url: "https://s.co", showButton: false })]);
     expect(addonChatLinks(hidden, ctx)).toEqual([]);
+  });
+});
+
+describe("Google Calendar booking", () => {
+  it("connects to the calendar connector and tells the assistant how to book", () => {
+    const addon = getAddon("google-calendar")!;
+    expect(addon.status).toBe("available");
+    expect(addon.integration).toBe("google-calendar");
+    const active = activeAddons([install("google-calendar", { duration: "90" })]);
+    const text = addonPrompt(active, ctx)!;
+    expect(text).toContain("90-minute appointments");
+    expect(text).toContain("find_open_times");
+    expect(text).toContain("book_appointment");
+    expect(addonEffects(active, started, ctx)).toEqual([]);
+  });
+
+  it("turns its settings into numbers and refuses values it doesn't offer", () => {
+    const parsed = parseAddonConfig(getAddon("google-calendar")!, { notice: "4" });
+    expect(parsed).toEqual({ ok: true, config: { duration: "60", notice: "4", daysAhead: "14" } });
+    expect(bookingSettings({ duration: "45", notice: "48", daysAhead: "30" })).toEqual({
+      durationMinutes: 45,
+      noticeMinutes: 2880,
+      daysAhead: 30,
+    });
+    expect(parseAddonConfig(getAddon("google-calendar")!, { duration: "10" }).ok).toBe(false);
   });
 });
 

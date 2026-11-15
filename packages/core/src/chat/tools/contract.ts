@@ -36,6 +36,8 @@ export interface ToolContext {
   /** The business's services and products, with the short ids the model was shown ("s1"). */
   catalog?: { ref: string; id: string; name: string; action: string }[];
   embeddings?: QueryEmbedder | null;
+  /** The current time (tests set it). */
+  now?: () => Date;
   /** Told about each question vector a tool used (for usage records). */
   onEmbedding?: (vector: QueryVector | null) => void;
   signal?: AbortSignal;
