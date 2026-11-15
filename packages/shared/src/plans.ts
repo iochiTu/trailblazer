@@ -151,6 +151,7 @@ const planFields = {
   knowledgeImages: z.number().int().min(0).max(10_000),
   insights: z.boolean(),
   priceMonthlyCents: z.number().int().min(0).max(100_000_000).nullable(),
+  setupFeeCents: z.number().int().min(0).max(100_000_000).nullable(),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(10_000),
 };
@@ -159,6 +160,7 @@ export const createPlanSchema = z.object({
   id: z.string().regex(/^[a-z0-9_]{2,40}$/, "Use lowercase letters, digits and _"),
   ...planFields,
   priceMonthlyCents: planFields.priceMonthlyCents.optional(),
+  setupFeeCents: planFields.setupFeeCents.optional(),
   active: planFields.active.optional(),
   sortOrder: planFields.sortOrder.optional(),
   knowledgeImages: planFields.knowledgeImages.optional(),
@@ -179,3 +181,10 @@ export const updateLimitsSchema = z
   })
   .partial();
 export type UpdateLimitsInput = z.infer<typeof updateLimitsSchema>;
+
+// ---- Billing (Stripe) ------------------------------------------------------------------------
+
+/** Subscription statuses that keep the plan the business pays for (past_due: payment being retried). */
+export const PAYING_STATUSES = ["active", "trialing", "past_due"] as const;
+
+export const billingPlanSchema = z.object({ plan: z.string().regex(/^[a-z0-9_]{2,40}$/) });

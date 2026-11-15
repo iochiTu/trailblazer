@@ -21,6 +21,7 @@ const FIELD_LABELS: Record<string, string> = {
   perMinute: "Questions / minute",
   concurrent: "Answers at once",
   priceMonthlyCents: "Price (cents)",
+  setupFeeCents: "Setup fee (cents)",
   active: "Assignable",
   sortOrder: "Sort order",
   defaultPlan: "Default plan",

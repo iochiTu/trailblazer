@@ -297,7 +297,9 @@ describe("row-level security", () => {
                     where col.table_name = c.relname and col.column_name = 'tenant_id')
     `);
     // Platform tables: read and written by the platform or by staff only, never a business's own data.
-    const platformTables = new Set(["memberships", "jobs", "demos", "onboardings"]);
+    // billing_accounts: the payment webhook finds the business from the provider's customer id, before
+    // any tenant is known; it holds provider ids and status only, no customer content.
+    const platformTables = new Set(["memberships", "jobs", "demos", "onboardings", "billing_accounts"]);
     for (const row of rows) {
       if (platformTables.has(row.relname)) continue;
       expect(row.rls, row.relname).toBe(true);

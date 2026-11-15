@@ -518,6 +518,34 @@ owner edits the proposal and applies it; nothing is used before that.
 - The **General** tab has the same business details as a form (plus booking and ordering links and the
   time zone), so they can be changed at any time.
 
+## Billing (Stripe)
+
+Owners buy and change plans on the portal's **Billing** page (`/t/<business>/billing`, linked from the
+dashboard). Prices come from the operator console like everywhere else: a plan can be bought when it
+is active and has a monthly price; its optional **setup fee** is charged once, with the business's first
+payment. Amounts are in CAD, before taxes (Stripe Tax adds them when `STRIPE_AUTOMATIC_TAX=true`).
+
+- **Behind our interface** (`apps/api/src/billing/provider.ts`, PLAN §18.4); Stripe is the one built
+  (`stripe.ts`). Off without `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (see `.env.example`).
+- **Buying:** `POST /v1/tenants/:t/billing/checkout` creates the Stripe customer (once per business)
+  and the plan's Stripe product (once per plan, `plans.stripe_product_id`), then sends the owner to
+  Stripe Checkout. The price is sent with each checkout, so no Stripe prices need to be set up; a
+  business that already pays keeps its price until it changes plan, even if operators change it.
+- **Webhook** (`POST /v1/billing/stripe/webhook`): the signature is checked over the raw body, each
+  event is handled once (`billing_events`), and the subscription is read back from Stripe so late or
+  out-of-order events change nothing. Active, trialing and past-due subscriptions keep the plan they
+  pay for; cancelled, unpaid or expired ones put the business back on the default plan. Changes go to
+  the business's audit log (`billing.subscription`).
+- **Changing plans:** `POST /v1/tenants/:t/billing/plan` switches at once, prorated on the next
+  invoice. Card, invoices and cancelling are on Stripe's customer portal (`/billing/portal`); in
+  Stripe's portal settings allow payment-method updates, invoice history and cancelling at the end of
+  the period, and leave plan switching off (done on our page).
+- **Who:** only the owner pays. Admins and staff on support access see the page but can't buy;
+  demo businesses and demo accounts can't buy at all. Operators can't change a paying business's
+  plan by hand (it would be undone by the next payment); the console shows its subscription.
+- **Data:** `billing_accounts` (one row per business that started paying) holds Stripe ids, status,
+  price and dates only; card details never reach us. Stripe goes on the subprocessor list (§18.2).
+
 ## Requirements
 
 - Node.js 24+ (26 LTS used locally; the PDF reader needs 24) and pnpm 10 (`npm install -g pnpm@10`)
@@ -549,7 +577,7 @@ CI (`.github/workflows/ci.yml`) runs the same steps against the docker-compose s
 hook (`.githooks/pre-commit`, turned on by `pnpm install`) runs the Biome check on the staged files.
 
 **Accessibility** (`apps/e2e`): every page visitors and owners use (business page, chat in an iframe,
-sign-in, dashboard, usage, every assistant tab, operator console) is checked with axe against WCAG 2.2
+sign-in, dashboard, usage, billing, every assistant tab, operator console) is checked with axe against WCAG 2.2
 AA on a desktop and a phone-sized screen, with reduced motion, plus keyboard focus on the chat and no
 sideways scrolling. It runs against the dev servers with the demo data:
 

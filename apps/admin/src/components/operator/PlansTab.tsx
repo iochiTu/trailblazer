@@ -22,6 +22,7 @@ function readForm(form: HTMLFormElement): Partial<PlanForm> {
   const data = new FormData(form);
   const num = (k: string) => Number(data.get(k));
   const price = String(data.get("price") ?? "").trim();
+  const setupFee = String(data.get("setupFee") ?? "").trim();
   return {
     ...(data.has("id") ? { id: String(data.get("id")).trim() } : {}),
     nameEn: String(data.get("nameEn")).trim(),
@@ -33,6 +34,7 @@ function readForm(form: HTMLFormElement): Partial<PlanForm> {
     insights: data.get("insights") === "on",
     sortOrder: num("sortOrder"),
     priceMonthlyCents: price === "" ? null : Math.round(Number(price) * 100),
+    setupFeeCents: setupFee === "" ? null : Math.round(Number(setupFee) * 100),
   };
 }
 
@@ -72,6 +74,23 @@ function PlanFields({ plan, isNew }: { plan?: OperatorPlan; isNew?: boolean }) {
           placeholder="Not shown"
           defaultValue={plan?.priceMonthlyCents == null ? "" : plan.priceMonthlyCents / 100}
         />
+        <span className="muted text-xs">
+          Charged to new subscriptions; paying businesses keep their price until they change plan. Empty:
+          can't be bought online.
+        </span>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Setup fee (CAD)
+        <input
+          className="input"
+          name="setupFee"
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="None"
+          defaultValue={plan?.setupFeeCents == null ? "" : plan.setupFeeCents / 100}
+        />
+        <span className="muted text-xs">Once, with a business's first payment.</span>
       </label>
       {NUMBER_FIELDS.map((f) => (
         <label key={f.key} className="flex flex-col gap-1 text-sm">
@@ -244,9 +263,11 @@ export function PlansTab() {
                 {!plan.active && <span className="badge">Archived</span>}
               </div>
               <div className="muted mt-1 text-sm">
-                {fmtCad(plan.priceMonthlyCents)}/mo · {fmtNumber(plan.monthlyQuestions)} questions/mo ·{" "}
-                {fmtNumber(plan.perMinute)}/min · {fmtNumber(plan.concurrent)} at once ·{" "}
-                {fmtNumber(plan.knowledgeImages)} photos · {fmtNumber(plan.businesses)} business
+                {fmtCad(plan.priceMonthlyCents)}/mo
+                {plan.setupFeeCents ? ` + ${fmtCad(plan.setupFeeCents)} setup` : ""} ·{" "}
+                {fmtNumber(plan.monthlyQuestions)} questions/mo · {fmtNumber(plan.perMinute)}/min ·{" "}
+                {fmtNumber(plan.concurrent)} at once · {fmtNumber(plan.knowledgeImages)} photos ·{" "}
+                {fmtNumber(plan.businesses)} business
                 {plan.businesses === 1 ? "" : "es"}
               </div>
             </div>

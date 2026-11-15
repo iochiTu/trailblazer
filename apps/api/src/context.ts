@@ -3,6 +3,7 @@ import type { IntegrationsConfig } from "@traiblazer/integrations";
 import type { LLMGateway, QueryEmbedder } from "@traiblazer/llm";
 import type { TelephonyProvider } from "@traiblazer/telephony";
 import type { Redis } from "ioredis";
+import type { BillingProvider } from "./billing/provider.js";
 import type { AppConfig } from "./config.js";
 import type { Limiter } from "./lib/limiter.js";
 import type { PlatformConfig } from "./lib/platform.js";
@@ -25,6 +26,8 @@ export interface AppContext {
   platform?: PlatformConfig;
   /** CRM connections: the key that seals credentials and the platform's own CRM keys. Off when absent. */
   integrations?: IntegrationsConfig;
+  /** Subscriptions and payments (Stripe); null or absent: plans can't be bought online. */
+  billing?: BillingProvider | null;
   /** Outbound HTTP for CRM calls; defaults to one that refuses private addresses. Tests pass a fake. */
   integrationsFetch?: typeof fetch;
 }

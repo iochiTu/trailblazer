@@ -3,10 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { fmtNumber } from "@/lib/operator";
+import { fmtCad, fmtNumber } from "@/lib/operator";
 
 interface Detail {
   tenant: { id: string; name: string; plan: string; status: string; createdAt: string };
+  billing: {
+    status: string;
+    plan: string | null;
+    priceMonthlyCents: number | null;
+    currentPeriodEnd: string | null;
+    cancelAt: string | null;
+    setupFeePaidAt: string | null;
+  } | null;
   members: { userId: string; name: string; email: string; role: string }[];
   assistants: {
     id: string;
@@ -47,6 +55,17 @@ export function BusinessDetail({ id, onClose }: { id: string; onClose: () => voi
             <p className="muted text-sm">
               Plan {detail.tenant.plan} · {detail.tenant.status === "suspended" ? "Suspended" : "Active"} ·
               joined {new Date(detail.tenant.createdAt).toLocaleDateString("en-CA", { dateStyle: "medium" })}
+            </p>
+          )}
+          {detail && (
+            <p className="muted text-sm">
+              {detail.billing
+                ? `Subscription ${detail.billing.status} · ${detail.billing.plan ?? "?"} at ${fmtCad(detail.billing.priceMonthlyCents)}/mo` +
+                  (detail.billing.cancelAt
+                    ? ` · ends ${new Date(detail.billing.cancelAt).toLocaleDateString("en-CA", { dateStyle: "medium" })}`
+                    : "") +
+                  (detail.billing.setupFeePaidAt ? " · setup fee paid" : "")
+                : "No subscription"}
             </p>
           )}
         </div>

@@ -131,10 +131,10 @@ test.describe("business owners", () => {
     }
   });
 
-  test("dashboard, usage and every tab of the assistant", async ({ page }) => {
+  test("dashboard, usage, billing and every tab of the assistant", async ({ page }) => {
     await page.context().addCookies(await signIn(page.request, OWNER));
     const { tenantId, botId } = await demoBusiness(page.request);
-    for (const path of ["/dashboard", `/t/${tenantId}/usage`]) {
+    for (const path of ["/dashboard", `/t/${tenantId}/usage`, `/t/${tenantId}/billing`]) {
       await page.goto(`${ADMIN}${path}`);
       await settle(page);
       await audit(page, path);
