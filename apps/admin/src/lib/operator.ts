@@ -68,6 +68,7 @@ export interface OperatorPlan {
   knowledgeImages: number;
   insights: boolean;
   priceMonthlyCents: number | null;
+  setupFeeCents: number | null;
   active: boolean;
   sortOrder: number;
   businesses: number;

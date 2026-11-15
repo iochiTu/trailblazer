@@ -10,6 +10,7 @@ import {
 import { createTelephonyFromEnv } from "@traiblazer/telephony";
 import { Redis } from "ioredis";
 import { buildApp } from "./app.js";
+import { createBillingFromEnv } from "./billing/stripe.js";
 import { loadConfig } from "./config.js";
 import { MemoryLimiter, RedisLimiter } from "./lib/limiter.js";
 import { RedisVectorCache } from "./lib/vector-cache.js";
@@ -60,6 +61,9 @@ const telephony = createTelephonyFromEnv();
 // CRM connections (Jobber, ServiceTitan…): off without INTEGRATIONS_SECRET_KEY.
 const integrations = loadIntegrationsConfig(process.env);
 
+// Plans bought online (Stripe): off without STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.
+const billing = createBillingFromEnv();
+
 const app = await buildApp({
   db,
   config,
@@ -70,6 +74,7 @@ const app = await buildApp({
   redis,
   limiter,
   integrations,
+  billing,
 });
 if (offline) {
   app.log.warn(
@@ -84,6 +89,8 @@ if (offline) {
 if (!integrations.secretKey) {
   app.log.warn("INTEGRATIONS_SECRET_KEY not set: CRM add-ons (Jobber, ServiceTitan…) can't be connected.");
 }
+if (!billing)
+  app.log.warn("STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET not set: plans can't be bought online.");
 if (!redis) app.log.warn("REDIS_URL not set: rate limits are kept per server (fine for one server).");
 
 const shutdown = async (signal: string) => {

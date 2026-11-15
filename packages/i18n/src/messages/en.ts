@@ -804,6 +804,42 @@ export const en = {
   "insights.analyzed": "{count, plural, one {# conversation} other {# conversations}} analyzed.",
   "insights.privacy":
     "An AI model reads each conversation once it has ended and only daily totals are kept: no text, nothing about who. Your own tests aren't included.",
+  "nav.billing": "Billing",
+  "billing.title": "Billing",
+  "billing.current": "Your plan: {plan}",
+  "billing.price": "{price}/month",
+  "billing.setupFee": "+ {price} setup fee with the first payment",
+  "billing.taxes":
+    "Prices in Canadian dollars, before taxes. Payments are handled by Stripe: we never see your card number.",
+  "billing.questions": "{count, number} questions per month",
+  "billing.photos": "{count, number} photos per assistant",
+  "billing.insights": "Insights included",
+  "billing.choose": "Choose {plan}",
+  "billing.switch": "Switch to {plan}",
+  "billing.currentBadge": "Current plan",
+  "billing.switchConfirm":
+    "Switch to {plan} for {price}/month? The difference for the rest of this month is added to or taken off your next invoice.",
+  "billing.switched": "Your plan is now {plan}.",
+  "billing.manage": "Card, invoices and cancelling",
+  "billing.renews": "Renews on {date, date, long}",
+  "billing.ends": "Cancelled: your plan stays until {date, date, long}, then goes back to the free plan.",
+  "billing.pastDue":
+    "Your last payment didn't go through. Stripe will try again; update your card to keep your plan.",
+  "billing.ended": "Your subscription has ended. Choose a plan to start again.",
+  "billing.checkoutDone": "Thank you! Your payment is being confirmed; your plan changes in a few seconds.",
+  "billing.checkoutCancelled": "Payment cancelled. Nothing was charged.",
+  "billing.ownerOnly": "Only the business's owner can choose or pay for a plan.",
+  "billing.supportOnly":
+    "Support access: you can see this page, but only the owner can pay or change the plan.",
+  "billing.demo":
+    "This is a demo business: plans can't be bought for it. Create your own account to get started.",
+  "billing.unavailable": "Online payment isn't available yet. Contact us to change your plan.",
+  "billing.noPlans": "No plans can be bought online right now. Contact us to change your plan.",
+  "billing.plans": "Plans",
+  "billing.status.active": "Active",
+  "billing.status.trialing": "Trial",
+  "billing.status.past_due": "Payment due",
+  "billing.status.other": "Not active",
 } as const;
 
 export type MessageKey = keyof typeof en;

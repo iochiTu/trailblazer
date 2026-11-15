@@ -61,7 +61,7 @@ const timestamps = {
 
 /**
  * Plans, managed by platform operators in the operator console. Allowances are enforced by the chat
- * guard; prices are for display (billing comes later).
+ * guard; prices are what businesses pay online (Billing page, Stripe).
  */
 export const plans = pgTable("plans", {
   id: text("id").primaryKey(),
@@ -77,8 +77,15 @@ export const plans = pgTable("plans", {
   knowledgeImages: integer("knowledge_images").notNull().default(50),
   /** Insights (premium BI): conversation analysis, funnel and conversion rates. */
   insights: boolean("insights").notNull().default(false),
-  /** Monthly price in CAD cents, for display. */
+  /**
+   * Monthly price in CAD cents. Charged to new subscriptions (null or 0: the plan can't be bought);
+   * a business that already pays keeps its price until it changes plan.
+   */
   priceMonthlyCents: integer("price_monthly_cents"),
+  /** One-time setup fee in CAD cents, charged with the first payment of a business's first plan. */
+  setupFeeCents: integer("setup_fee_cents"),
+  /** The plan's product at the payment provider, created on first purchase. */
+  stripeProductId: text("stripe_product_id"),
   /** Archived plans keep working for existing businesses but can't be assigned anymore. */
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -196,6 +203,38 @@ export const demos = pgTable(
   },
   (t) => [index("demos_created_idx").on(t.createdAt)],
 );
+
+/**
+ * A business's subscription at the payment provider (Stripe), one row per business that started
+ * paying. Platform table, read and written by the billing routes and the provider's webhook only.
+ * Holds provider ids, status and dates: no card details, which stay at the provider. Deleted with
+ * the business.
+ */
+export const billingAccounts = pgTable("billing_accounts", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  stripeCustomerId: text("stripe_customer_id").notNull().unique(),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  /** The provider's subscription status (active, past_due, canceled…); null before the first checkout. */
+  status: text("status"),
+  /** Plan the subscription pays for. */
+  plan: text("plan"),
+  /** Monthly price the subscription pays, in CAD cents. */
+  priceMonthlyCents: integer("price_monthly_cents"),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  /** When the owner cancelled: the date the subscription stops (it runs until then). */
+  cancelAt: timestamp("cancel_at", { withTimezone: true }),
+  setupFeePaidAt: timestamp("setup_fee_paid_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+/** Provider webhook events already handled (a repeated delivery is acknowledged and skipped). */
+export const billingEvents = pgTable("billing_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** Who changed what in the operator console (plans, policies, business plan/status). */
 export const operatorAuditLogs = pgTable(

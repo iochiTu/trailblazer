@@ -1,4 +1,5 @@
 import {
+  billingAccounts,
   bots,
   conversations,
   knowledgeSources,
@@ -22,6 +23,7 @@ import {
 } from "@traiblazer/shared";
 import { desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { isPaying } from "../billing/sync.js";
 import type { AppContext } from "../context.js";
 import { periodKey } from "../lib/chat-guard.js";
 import { badRequest, conflict, notFound } from "../lib/errors.js";
@@ -185,6 +187,11 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
         conversations30d: conversationsBy.get(b.id) ?? 0,
       }));
     });
+    const [account] = await db
+      .select()
+      .from(billingAccounts)
+      .where(eq(billingAccounts.tenantId, id))
+      .limit(1);
     return {
       tenant: {
         id: tenant.id,
@@ -194,6 +201,16 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
         status: tenant.status,
         createdAt: tenant.createdAt,
       },
+      billing: account?.status
+        ? {
+            status: account.status,
+            plan: account.plan,
+            priceMonthlyCents: account.priceMonthlyCents,
+            currentPeriodEnd: account.currentPeriodEnd,
+            cancelAt: account.cancelAt,
+            setupFeePaidAt: account.setupFeePaidAt,
+          }
+        : null,
       members,
       assistants,
     };
@@ -209,6 +226,16 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
     }
     const [before] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
     if (!before) throw notFound("Business");
+    if (input.plan && input.plan !== before.plan) {
+      // A paying business's plan follows its subscription; a change here would be undone by the next payment.
+      const [account] = await db
+        .select({ status: billingAccounts.status })
+        .from(billingAccounts)
+        .where(eq(billingAccounts.tenantId, id))
+        .limit(1);
+      if (isPaying(account?.status))
+        throw conflict("This business pays by subscription. The owner changes the plan from Billing.");
+    }
     const [updated] = await db.update(tenants).set(input).where(eq(tenants.id, id)).returning();
     await log(request, "tenant.updated", "tenant", id, {
       from: { plan: before.plan, status: before.status },

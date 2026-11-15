@@ -90,6 +90,11 @@ export default function DashboardPage() {
                 {t("nav.usage")}
               </Link>
             )}
+            {tenant && (tenant.role === "owner" || tenant.role === "admin") && (
+              <Link href={`/t/${tenant.id}/billing`} className="btn btn-ghost">
+                {t("nav.billing")}
+              </Link>
+            )}
           </div>
         )}
         {tenant && <PlanSummary planId={tenant.plan} />}

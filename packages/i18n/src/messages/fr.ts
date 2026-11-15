@@ -839,4 +839,44 @@ export const fr: Record<MessageKey, string> = {
   "insights.analyzed": "{count, plural, one {# conversation analysée} other {# conversations analysées}}.",
   "insights.privacy":
     "Un modèle d'IA lit chaque conversation une fois terminée et seuls des totaux par jour sont conservés : aucun texte, rien sur l'identité des visiteurs. Vos propres tests ne sont pas inclus.",
+  "nav.billing": "Facturation",
+  "billing.title": "Facturation",
+  "billing.current": "Votre forfait : {plan}",
+  "billing.price": "{price}/mois",
+  "billing.setupFee": "+ {price} de frais de mise en place au premier paiement",
+  "billing.taxes":
+    "Prix en dollars canadiens, taxes en sus. Les paiements sont traités par Stripe : nous ne voyons jamais votre numéro de carte.",
+  "billing.questions": "{count, number} questions par mois",
+  "billing.photos": "{count, number} photos par assistant",
+  "billing.insights": "Analyses incluses",
+  "billing.choose": "Choisir {plan}",
+  "billing.switch": "Passer à {plan}",
+  "billing.currentBadge": "Forfait actuel",
+  "billing.switchConfirm":
+    "Passer à {plan} pour {price}/mois? La différence pour le reste du mois est ajoutée à votre prochaine facture ou déduite de celle-ci.",
+  "billing.switched": "Votre forfait est maintenant {plan}.",
+  "billing.manage": "Carte, factures et résiliation",
+  "billing.renews": "Renouvellement le {date, date, long}",
+  "billing.ends":
+    "Résilié : votre forfait reste actif jusqu'au {date, date, long}, puis revient au forfait gratuit.",
+  "billing.pastDue":
+    "Votre dernier paiement n'a pas été accepté. Stripe réessaiera; mettez votre carte à jour pour garder votre forfait.",
+  "billing.ended": "Votre abonnement a pris fin. Choisissez un forfait pour recommencer.",
+  "billing.checkoutDone":
+    "Merci! Votre paiement est en cours de confirmation; votre forfait change dans quelques secondes.",
+  "billing.checkoutCancelled": "Paiement annulé. Rien n'a été facturé.",
+  "billing.ownerOnly": "Seul le propriétaire de l'entreprise peut choisir ou payer un forfait.",
+  "billing.supportOnly":
+    "Accès soutien : vous pouvez voir cette page, mais seul le propriétaire peut payer ou changer de forfait.",
+  "billing.demo":
+    "Ceci est une entreprise de démonstration : aucun forfait ne peut être acheté pour elle. Créez votre propre compte pour commencer.",
+  "billing.unavailable":
+    "Le paiement en ligne n'est pas encore offert. Communiquez avec nous pour changer de forfait.",
+  "billing.noPlans":
+    "Aucun forfait ne peut être acheté en ligne pour le moment. Communiquez avec nous pour changer de forfait.",
+  "billing.plans": "Forfaits",
+  "billing.status.active": "Actif",
+  "billing.status.trialing": "Essai",
+  "billing.status.past_due": "Paiement en retard",
+  "billing.status.other": "Inactif",
 };
