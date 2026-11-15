@@ -19,6 +19,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { newTenant, newUser } from "./test-helpers.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
@@ -57,29 +58,9 @@ const crm = (async (input: string | URL | Request, init?: RequestInit) => {
   return new Response("", { status: hookStatus });
 }) as typeof fetch;
 
-async function signup(name: string) {
-  const email = `${name}-${crypto.randomUUID().slice(0, 8)}@test.local`;
-  emails.push(email);
-  const res = await app.inject({
-    method: "POST",
-    url: "/v1/auth/signup",
-    payload: { email, password: "correct-horse-battery", name },
-  });
-  return `tb_session=${res.cookies.find((c) => c.name === "tb_session")!.value}`;
-}
+const signup = (name: string) => newUser(app, emails, name);
 
-async function createTenant(sessionCookie: string, name: string) {
-  const id = (
-    await app.inject({
-      method: "POST",
-      url: "/v1/tenants",
-      headers: { cookie: sessionCookie },
-      payload: { name },
-    })
-  ).json().tenant.id as string;
-  tenantIds.push(id);
-  return id;
-}
+const createTenant = (sessionCookie: string, name: string) => newTenant(app, tenantIds, sessionCookie, name);
 
 const botUrl = (path: string) => `/v1/tenants/${tenantId}/bots/${botId}${path}`;
 const call = (

@@ -1,7 +1,7 @@
 import { jobs, type OutboundMessageKind, outboundMessages, smsOptOuts, type Tx } from "@traiblazer/db";
 import { smsSegments } from "@traiblazer/telephony";
 import { and, eq } from "drizzle-orm";
-import { JOB_TYPES } from "../jobs.js";
+import { JOB_TYPES, newJob } from "../jobs.js";
 
 export async function optedOut(tx: Tx, botId: string, number: string): Promise<boolean> {
   const rows = await tx
@@ -45,12 +45,14 @@ export async function queueText(
     })
     .returning({ id: outboundMessages.id });
   if (input.hold) return row!.id;
-  await tx.insert(jobs).values({
-    tenantId: input.tenantId,
-    type: JOB_TYPES.messageSend,
-    payload: { messageId: row!.id },
-    // A reply the customer is waiting for goes ahead of crawls and embedding.
-    priority: 5,
-  });
+  await tx.insert(jobs).values(
+    newJob({
+      tenantId: input.tenantId,
+      type: JOB_TYPES.messageSend,
+      payload: { messageId: row!.id },
+      // A reply the customer is waiting for goes ahead of crawls and embedding.
+      priority: 5,
+    }),
+  );
   return row!.id;
 }

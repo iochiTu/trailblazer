@@ -8,6 +8,7 @@ import {
   tenants,
   withTenant,
 } from "@traiblazer/db";
+import { enOrFr } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
 import {
   ConnectorError,
@@ -21,6 +22,7 @@ import {
   sealContext,
 } from "@traiblazer/integrations";
 import { and, eq, sql } from "drizzle-orm";
+import { businessNameOf } from "../business.js";
 import { publicFetch } from "../knowledge/safe-fetch.js";
 
 export interface IntegrationDeps {
@@ -246,7 +248,7 @@ export async function pushLeadToCrm(
   if (opened.state === "missing") return "skipped";
   if (opened.state === "failed") return fail(opened.error);
 
-  const ownerLanguage = tenant?.ownerLanguage === "fr" ? "fr" : "en";
+  const ownerLanguage = enOrFr(tenant?.ownerLanguage);
   const crmLead: CrmLead = {
     id: lead.id,
     kind: lead.kind,
@@ -262,7 +264,7 @@ export async function pushLeadToCrm(
       .map((f) => ({ key: f.key, label: f.label[ownerLanguage], value: lead.details[f.key]! })),
     photoCount: lead.attachmentIds.length,
     createdAt: lead.createdAt,
-    businessName: profile?.businessName ?? bot.name,
+    businessName: businessNameOf(bot, profile),
     ownerLanguage,
     requestUrl: deps.adminUrl ? `${deps.adminUrl}/t/${tenantId}/bots/${payload.botId}?tab=requests` : null,
   };

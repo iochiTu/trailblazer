@@ -2,6 +2,8 @@ import type { bots, businessProfiles, Channel, WeeklyHours } from "@traiblazer/d
 import { getLanguage } from "@traiblazer/i18n";
 import { resolveBehavior, type Workflow } from "@traiblazer/industry-packs";
 import type { SystemBlock } from "@traiblazer/llm";
+import { DEFAULT_TIME_ZONE } from "@traiblazer/shared";
+import { businessNameOf } from "../business.js";
 import type { Passage, PhotoPassage } from "./retrieval.js";
 
 type Bot = typeof bots.$inferSelect;
@@ -91,7 +93,7 @@ function profileBlock(bot: Bot, profile: Profile | null): string {
   const push = (label: string, value: string | null | undefined) => {
     if (value) lines.push(`${label}: ${value}`);
   };
-  push("Business name", profile?.businessName ?? bot.name);
+  push("Business name", businessNameOf(bot, profile));
   push("Phone", profile?.phone);
   push("Email", profile?.email);
   push("Website", profile?.websiteUrl);
@@ -108,7 +110,7 @@ function profileBlock(bot: Bot, profile: Profile | null): string {
     );
   }
   const hours = formatHours(profile?.hours);
-  if (hours) lines.push(`Opening hours (${profile?.timezone ?? "America/Toronto"}):\n${hours}`);
+  if (hours) lines.push(`Opening hours (${profile?.timezone ?? DEFAULT_TIME_ZONE}):\n${hours}`);
   return lines.join("\n");
 }
 
@@ -270,7 +272,7 @@ export function buildSystemBlocks(input: {
   const workflows = workflowsBlock(behavior.workflows);
   const services = servicesBlock(input.catalog ?? []);
   const running = (input.notices ?? []).map(oneLine).filter(Boolean);
-  const timezone = profile?.timezone ?? "America/Toronto";
+  const timezone = profile?.timezone ?? DEFAULT_TIME_ZONE;
 
   const botBlock = [
     `<business_profile>\n${profileBlock(bot, profile)}\n</business_profile>`,

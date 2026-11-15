@@ -1,4 +1,5 @@
 import type { WeeklyHours } from "@traiblazer/db";
+import { DEFAULT_TIME_ZONE } from "@traiblazer/shared";
 
 export const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 export type Day = (typeof DAYS)[number];
@@ -21,7 +22,7 @@ export function localClock(now: Date, timeZone: string): { day: Day; minute: num
     }).formatToParts(now);
   } catch {
     // An unknown zone (shouldn't happen: the admin offers the platform's list) falls back to Toronto.
-    return localClock(now, "America/Toronto");
+    return localClock(now, DEFAULT_TIME_ZONE);
   }
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const day = get("weekday").slice(0, 3).toLowerCase() as Day;

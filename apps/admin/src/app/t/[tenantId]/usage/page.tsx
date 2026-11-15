@@ -1,5 +1,6 @@
 "use client";
 
+import { enOrFr } from "@traiblazer/i18n";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
@@ -108,7 +109,7 @@ function LimitsForm({
   onSaved: () => Promise<void>;
 }) {
   const { t, language } = useI18n();
-  const lang2 = language === "fr" ? "fr" : "en";
+  const lang2 = enOrFr(language);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 

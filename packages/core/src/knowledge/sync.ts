@@ -1,6 +1,7 @@
 import { type Db, knowledgeSources, sourceFiles, usageEvents, withTenant } from "@traiblazer/db";
 import type { EmbeddingProvider, GatewayResultMeta, LLMGateway } from "@traiblazer/llm";
 import { eq } from "drizzle-orm";
+import { errorMessage } from "../errors.js";
 import { type CrawlOptions, crawlSite } from "./crawl.js";
 import { enqueueEmbedding } from "./embed.js";
 import { FileReadError, fileSections, readSourceFile } from "./files.js";
@@ -118,7 +119,7 @@ export async function syncSource(deps: SyncDeps, tenantId: string, sourceId: str
     });
     if (unembedded && deps.embeddings) await enqueueEmbedding(deps.db, tenantId, source.botId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     await withTenant(deps.db, tenantId, (tx) =>
       tx
         .update(knowledgeSources)

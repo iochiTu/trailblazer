@@ -2,7 +2,13 @@
  * Insights evals: labelled conversations (English and French) and the tags a model should give
  * them (intent, sentiment, blocker). Run with `pnpm --filter @traiblazer/evals eval:insights`.
  */
-import { buildInsightsRequest, extractJson, type InsightTags, readInsightTags } from "@traiblazer/core";
+import {
+  buildInsightsRequest,
+  errorMessage,
+  extractJson,
+  type InsightTags,
+  readInsightTags,
+} from "@traiblazer/core";
 import type { LLMGateway } from "@traiblazer/llm";
 
 export interface InsightCase {
@@ -283,7 +289,7 @@ export async function runInsightEvals(gateway: LLMGateway, cases: InsightCase[])
         language: c.language,
         got: null,
         right: { intent: false, sentiment: false, blocker: false },
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
     }
   }

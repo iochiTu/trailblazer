@@ -1,6 +1,7 @@
 "use client";
 
 import { BRAND_COLOR_PRESETS, findColorPreset, isHexColor, textOn } from "@traiblazer/appearance";
+import { enOrFr } from "@traiblazer/i18n";
 import { type FormEvent, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 
@@ -10,7 +11,7 @@ import { useI18n } from "@/lib/i18n";
  */
 export function BrandColorPicker({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   const { t, language } = useI18n();
-  const lang2 = language === "fr" ? "fr" : "en";
+  const lang2 = enOrFr(language);
   const preset = findColorPreset(value);
   const [customOpen, setCustomOpen] = useState(!preset);
   const [draft, setDraft] = useState(value);

@@ -11,7 +11,13 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "env": ["DATABASE_URL", "DATABASE_APP_URL", "SESSION_SECRET"]
+      "env": [
+        "DATABASE_URL",
+        "DATABASE_APP_URL",
+        "SESSION_SECRET",
+        "TEST_DATABASE_URL",
+        "TEST_DATABASE_APP_URL"
+      ]
     },
     "dev": {
       "cache": false,

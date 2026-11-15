@@ -29,6 +29,7 @@ import { getLanguage } from "@traiblazer/i18n";
 import { getPack } from "@traiblazer/industry-packs";
 import type { ChatRequest, GatewayResultMeta, LLMGateway } from "@traiblazer/llm";
 import { and, eq } from "drizzle-orm";
+import { errorMessage } from "../errors.js";
 
 export const SETUP_LIMITS = {
   /** Text of the business's pages given to the model, in characters (about four per token). */
@@ -471,7 +472,7 @@ export async function runSetup(deps: SetupDeps, tenantId: string, runId: string)
         } catch (error) {
           deps.log?.("setup: model call failed", {
             runId,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           });
           throw new SetupFailure(SETUP_ERRORS.unavailable);
         }
@@ -508,7 +509,7 @@ export async function runSetup(deps: SetupDeps, tenantId: string, runId: string)
   } catch (error) {
     const code = error instanceof SetupFailure ? error.code : SETUP_ERRORS.unavailable;
     if (!(error instanceof SetupFailure)) {
-      deps.log?.("setup failed", { runId, error: error instanceof Error ? error.message : String(error) });
+      deps.log?.("setup failed", { runId, error: errorMessage(error) });
     }
     await withTenant(deps.db, tenantId, (tx) =>
       tx

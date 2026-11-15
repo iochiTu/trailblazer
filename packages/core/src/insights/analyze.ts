@@ -18,7 +18,8 @@ import {
 import type { ChatRequest, GatewayResultMeta, LLMGateway } from "@traiblazer/llm";
 import { REPORTING_TIME_ZONE } from "@traiblazer/shared";
 import { and, asc, eq, gte, sql } from "drizzle-orm";
-import { JOB_TYPES } from "../jobs.js";
+import { errorMessage } from "../errors.js";
+import { JOB_TYPES, newJob } from "../jobs.js";
 import { planAllows } from "../plan-features.js";
 import { extractJson } from "../setup/setup.js";
 
@@ -66,12 +67,14 @@ export async function queueInsights(
     )
     .limit(1);
   if (queued) return;
-  await tx.insert(jobs).values({
-    tenantId: input.tenantId,
-    type: JOB_TYPES.insightsAnalyze,
-    payload: { conversationId: input.conversationId },
-    runAt: new Date(Date.now() + INSIGHTS_QUIET_MS),
-  });
+  await tx.insert(jobs).values(
+    newJob({
+      tenantId: input.tenantId,
+      type: JOB_TYPES.insightsAnalyze,
+      payload: { conversationId: input.conversationId },
+      runAt: new Date(Date.now() + INSIGHTS_QUIET_MS),
+    }),
+  );
 }
 
 /** The conversation's outcome, from what happened (no model). */
@@ -199,12 +202,14 @@ export async function analyzeConversation(
     // Still going: look again once it has been quiet long enough.
     const quietAt = conversation.lastMessageAt.getTime() + INSIGHTS_QUIET_MS;
     if (quietAt > now.getTime()) {
-      await tx.insert(jobs).values({
-        tenantId,
-        type: JOB_TYPES.insightsAnalyze,
-        payload: { conversationId },
-        runAt: new Date(quietAt),
-      });
+      await tx.insert(jobs).values(
+        newJob({
+          tenantId,
+          type: JOB_TYPES.insightsAnalyze,
+          payload: { conversationId },
+          runAt: new Date(quietAt),
+        }),
+      );
       return { rescheduled: true as const };
     }
     const rows = await tx
@@ -264,7 +269,7 @@ export async function analyzeConversation(
       // Counted without tags: the outcome and language still say something.
       deps.log?.("insights: model call failed", {
         conversationId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
     }
   }

@@ -161,3 +161,9 @@ export function negotiateLanguage(
   }
   return fallback;
 }
+
+/** The two languages the platform's own text is written in. */
+export type EnOrFr = "en" | "fr";
+
+/** French for "fr", English for anything else (other languages, or none set). */
+export const enOrFr = (code: string | null | undefined): EnOrFr => (code === "fr" ? "fr" : "en");

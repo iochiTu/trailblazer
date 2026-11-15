@@ -1,4 +1,5 @@
 import { billingAccounts, billingEvents, plans, tenants } from "@traiblazer/db";
+import { enOrFr } from "@traiblazer/i18n";
 import { billingPlanSchema } from "@traiblazer/shared";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -160,7 +161,7 @@ export async function billingRoutes(app: FastifyInstance, ctx: AppContext) {
         productId: await productFor(provider, plan),
         plan: toBillingPlan(plan),
         setupFeeCents,
-        language: request.user!.uiLanguage === "fr" ? "fr" : "en",
+        language: enOrFr(request.user!.uiLanguage),
         successUrl: `${portalUrl(tenant.id)}?checkout=done`,
         cancelUrl: `${portalUrl(tenant.id)}?checkout=cancelled`,
       });
@@ -178,7 +179,7 @@ export async function billingRoutes(app: FastifyInstance, ctx: AppContext) {
       const url = await provider.createPortal({
         customerId: account.stripeCustomerId,
         returnUrl: portalUrl(tenant.id),
-        language: request.user!.uiLanguage === "fr" ? "fr" : "en",
+        language: enOrFr(request.user!.uiLanguage),
       });
       return { url };
     },

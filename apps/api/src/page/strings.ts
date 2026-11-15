@@ -1,3 +1,5 @@
+import { enOrFr } from "@traiblazer/i18n";
+
 /**
  * Business page text, in English and French (Tier 1). The page is rendered in the assistant's
  * default language when it is one of these, otherwise in English; the chat on it still answers
@@ -103,7 +105,7 @@ const fr: PageStrings = {
 const tables: Record<PageLanguage, PageStrings> = { en, fr };
 export type PageLanguage = "en" | "fr";
 
-export const pageLanguage = (code: string): PageLanguage => (code === "fr" ? "fr" : "en");
+export const pageLanguage = (code: string): PageLanguage => enOrFr(code);
 
 export function pageText(lang: PageLanguage, key: PageStringKey, vars: Record<string, string> = {}): string {
   return tables[lang][key].replace(/\{(\w+)\}/g, (_, name: string) => vars[name] ?? "");
