@@ -1,5 +1,6 @@
 import { enqueueJob, JOB_TYPES } from "@traiblazer/core";
 import { bots, knowledgeSources, withTenant } from "@traiblazer/db";
+import { enOrFr } from "@traiblazer/i18n";
 import { getInterview, type InterviewQuestion } from "@traiblazer/industry-packs";
 import { interviewAnswersSchema } from "@traiblazer/shared";
 import { and, eq, sql } from "drizzle-orm";
@@ -14,7 +15,7 @@ type BotParams = { Params: { tenantId: string; botId: string } };
 
 const TITLE = { en: "Interview answers", fr: "Réponses à l'entrevue" } as const;
 /** Questions and source titles exist in English and French; other languages read the English. */
-const tier1 = (language: string): "en" | "fr" => (language.split("-")[0] === "fr" ? "fr" : "en");
+const tier1 = (language: string): "en" | "fr" => enOrFr(language.split("-")[0]);
 
 /** An answer as stored: lines trimmed, no blank lines (a blank line would split it from its question). */
 const tidy = (answer: string) =>

@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { errorMessage } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
 import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import {
@@ -49,7 +50,7 @@ if (embeddingProvider instanceof LocalEmbeddings) {
       console.warn(
         JSON.stringify({
           msg: "embedding model failed to load",
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         }),
       ),
   );

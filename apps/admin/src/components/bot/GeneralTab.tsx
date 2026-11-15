@@ -1,6 +1,6 @@
 "use client";
 
-import { getLanguage } from "@traiblazer/i18n";
+import { enOrFr, getLanguage } from "@traiblazer/i18n";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { ApiError, api, type BotDetail, type Language } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -78,7 +78,7 @@ export function GeneralTab({
   }
 
   const defaultQuickReplies = (code: string) =>
-    detail.defaults.quickReplies[code] ?? detail.defaults.quickReplies[code === "fr" ? "fr" : "en"] ?? [];
+    detail.defaults.quickReplies[code] ?? detail.defaults.quickReplies[enOrFr(code)] ?? [];
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

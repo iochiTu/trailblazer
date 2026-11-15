@@ -5,26 +5,26 @@
  */
 import { hostname } from "node:os";
 import {
-  type AddonEffectPayload,
   analyzeConversation,
   buildDemo,
   claimNextJob,
   completeJob,
   DEMO_RETRY_MS,
-  type DemoBuildPayload,
   embedChunks,
   enqueueEmbedding,
   enqueueJob,
+  errorMessage,
   failJob,
   JOB_TYPES,
+  type JobPayloads,
   type JobRow,
+  type JobType,
   runAddonEffect,
   runCapAlert,
   runSetup,
   runUrgentAlert,
   sendQueuedText,
   syncSource,
-  type UrgentAlertPayload,
 } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
 import { loadIntegrationsConfig } from "@traiblazer/integrations";
@@ -59,89 +59,73 @@ const adminUrl = process.env.ADMIN_ORIGIN ? new URL(process.env.ADMIN_ORIGIN).or
 /** CRM connections (Jobber, ServiceTitan…): off without INTEGRATIONS_SECRET_KEY. */
 const integrations = loadIntegrationsConfig(process.env);
 
+/** What the worker does for each job type; a new type doesn't compile until it has a handler here. */
+const handlers: { [T in JobType]: (job: JobRow, payload: JobPayloads[T]) => Promise<void> } = {
+  [JOB_TYPES.sourceSync]: async (job, { sourceId }) => {
+    await syncSource({ db, embeddings, gateway }, job.tenantId, sourceId);
+  },
+  [JOB_TYPES.messageSend]: async (job, { messageId }) => {
+    if (!telephony) throw new Error("A text is queued but no telephony provider is configured");
+    const outcome = await sendQueuedText(
+      { db, telephony, statusCallbackUrl, segmentCostMicros },
+      job.tenantId,
+      messageId,
+    );
+    log("text", { id: job.id, messageId, outcome });
+  },
+  [JOB_TYPES.phoneCapAlert]: async (job, payload) => {
+    const outcome = await runCapAlert({ db, mailer, adminUrl }, job.tenantId, payload);
+    log("cap alert", { id: job.id, outcome });
+  },
+  [JOB_TYPES.embedChunks]: async (job, { botId }) => {
+    // Queued only when embeddings are configured; a worker without them leaves keyword search alone.
+    if (!embeddings) return;
+    const { embedded, more } = await embedChunks({ db, embeddings }, job.tenantId, botId);
+    if (more) await enqueueEmbedding(db, job.tenantId, botId);
+    log("embedded", { id: job.id, botId, embedded, more, model: embeddings.model });
+  },
+  [JOB_TYPES.addonEffect]: async (job, payload) => {
+    const outcome = await runAddonEffect({ db, mailer, integrations, adminUrl }, job.tenantId, payload);
+    log("add-on effect", { id: job.id, addonId: payload.addonId, kind: payload.effect.kind, outcome });
+  },
+  [JOB_TYPES.urgentAlert]: async (job, payload) => {
+    const outcome = await runUrgentAlert({ db, mailer, adminUrl }, job.tenantId, payload);
+    log("urgent alert", { id: job.id, leadId: payload.leadId, outcome });
+  },
+  [JOB_TYPES.demoBuild]: async (job, payload) => {
+    const outcome = await buildDemo(
+      { db, gateway, log, inputChars: setupInputChars, embed: Boolean(embeddings) },
+      job.tenantId,
+      payload,
+    );
+    // Its sources are still being read: look again shortly.
+    if (outcome === "waiting") {
+      await enqueueJob(db, {
+        tenantId: job.tenantId,
+        type: JOB_TYPES.demoBuild,
+        payload: { ...payload },
+        runAt: new Date(Date.now() + DEMO_RETRY_MS),
+      });
+    } else log("demo build", { id: job.id, demoId: payload.demoId, outcome });
+  },
+  [JOB_TYPES.insightsAnalyze]: async (job, { conversationId }) => {
+    const outcome = await analyzeConversation(
+      { db, gateway, log },
+      { tenantId: job.tenantId, conversationId },
+    );
+    log("insights", { id: job.id, conversationId, outcome });
+  },
+  [JOB_TYPES.botSetup]: async (job, { runId }) => {
+    await runSetup({ db, gateway, log, inputChars: setupInputChars }, job.tenantId, runId);
+  },
+};
+
 async function run(job: JobRow): Promise<void> {
-  switch (job.type) {
-    case JOB_TYPES.sourceSync:
-      await syncSource({ db, embeddings, gateway }, job.tenantId, String(job.payload.sourceId));
-      return;
-    case JOB_TYPES.messageSend: {
-      if (!telephony) throw new Error("A text is queued but no telephony provider is configured");
-      const messageId = String(job.payload.messageId);
-      const outcome = await sendQueuedText(
-        { db, telephony, statusCallbackUrl, segmentCostMicros },
-        job.tenantId,
-        messageId,
-      );
-      log("text", { id: job.id, messageId, outcome });
-      return;
-    }
-    case JOB_TYPES.phoneCapAlert: {
-      const outcome = await runCapAlert(
-        { db, mailer, adminUrl },
-        job.tenantId,
-        job.payload as { botId: string; spentMicros?: number },
-      );
-      log("cap alert", { id: job.id, outcome });
-      return;
-    }
-    case JOB_TYPES.embedChunks: {
-      // Queued only when embeddings are configured; a worker without them leaves keyword search alone.
-      if (!embeddings) return;
-      const botId = String(job.payload.botId);
-      const { embedded, more } = await embedChunks({ db, embeddings }, job.tenantId, botId);
-      if (more) await enqueueEmbedding(db, job.tenantId, botId);
-      log("embedded", { id: job.id, botId, embedded, more, model: embeddings.model });
-      return;
-    }
-    case JOB_TYPES.addonEffect: {
-      const payload = job.payload as unknown as AddonEffectPayload;
-      const outcome = await runAddonEffect({ db, mailer, integrations, adminUrl }, job.tenantId, payload);
-      log("add-on effect", { id: job.id, addonId: payload.addonId, kind: payload.effect.kind, outcome });
-      return;
-    }
-    case JOB_TYPES.urgentAlert: {
-      const payload = job.payload as unknown as UrgentAlertPayload;
-      const outcome = await runUrgentAlert({ db, mailer, adminUrl }, job.tenantId, payload);
-      log("urgent alert", { id: job.id, leadId: payload.leadId, outcome });
-      return;
-    }
-    case JOB_TYPES.demoBuild: {
-      const payload = job.payload as unknown as DemoBuildPayload;
-      const outcome = await buildDemo(
-        { db, gateway, log, inputChars: setupInputChars, embed: Boolean(embeddings) },
-        job.tenantId,
-        payload,
-      );
-      // Its sources are still being read: look again shortly.
-      if (outcome === "waiting") {
-        await enqueueJob(db, {
-          tenantId: job.tenantId,
-          type: JOB_TYPES.demoBuild,
-          payload: { ...payload },
-          runAt: new Date(Date.now() + DEMO_RETRY_MS),
-        });
-      } else log("demo build", { id: job.id, demoId: payload.demoId, outcome });
-      return;
-    }
-    case JOB_TYPES.insightsAnalyze: {
-      const conversationId = String(job.payload.conversationId);
-      const outcome = await analyzeConversation(
-        { db, gateway, log },
-        { tenantId: job.tenantId, conversationId },
-      );
-      log("insights", { id: job.id, conversationId, outcome });
-      return;
-    }
-    case JOB_TYPES.botSetup:
-      await runSetup(
-        { db, gateway, log, inputChars: setupInputChars },
-        job.tenantId,
-        String(job.payload.runId),
-      );
-      return;
-    default:
-      throw new Error(`Unknown job type: ${job.type}`);
-  }
+  // The queue stores the type as text: a row written by a newer release may be unknown here.
+  const handler = Object.hasOwn(handlers, job.type) ? handlers[job.type as JobType] : undefined;
+  if (!handler) throw new Error(`Unknown job type: ${job.type}`);
+  // The payload was checked against its type where the job was queued (`newJob`).
+  await handler(job, job.payload as never);
 }
 
 let stopping = false;
@@ -176,12 +160,7 @@ while (!stopping) {
     log("job done", { id: job.id, type: job.type, ms: Date.now() - started });
   } catch (error) {
     const outcome = await failJob(db, job, error);
-    log("job failed", {
-      id: job.id,
-      type: job.type,
-      outcome,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    log("job failed", { id: job.id, type: job.type, outcome, error: errorMessage(error) });
   }
 }
 await close();

@@ -1,45 +1,71 @@
 import { type Db, jobs } from "@traiblazer/db";
 import { eq, sql } from "drizzle-orm";
+import type { AddonEffectPayload } from "./addons/effects.js";
+import type { DemoBuildPayload } from "./demo/build.js";
+import { errorMessage } from "./errors.js";
+import type { UrgentAlertPayload } from "./requests/urgent-alert.js";
 
 export type JobRow = typeof jobs.$inferSelect;
 
 export const JOB_TYPES = {
-  /** Insights: tags one finished conversation and adds it to the day totals (payload: { conversationId }). */
+  /** Insights: tags one finished conversation and adds it to the day totals. */
   insightsAnalyze: "insights.analyze",
   sourceSync: "source.sync",
-  /** Work an add-on asked for during a chat (payload: { botId, addonId, effect }). */
+  /** Work an add-on asked for during a chat. */
   addonEffect: "addon.effect",
-  /** The setup assistant reads a business's information (payload: { runId }). */
+  /** The setup assistant reads a business's information. */
   botSetup: "bot.setup",
-  /** Emails the business about an urgent request right away (payload: { botId, leadId }). */
+  /** Emails the business about an urgent request right away. */
   urgentAlert: "request.urgent_alert",
-  /** Fills a prospect demo page in once its sources are read (payload: { demoId }). */
+  /** Fills a prospect demo page in once its sources are read. */
   demoBuild: "demo.build",
-  /** Gives an assistant's chunks vectors for search by meaning (payload: { botId }). */
+  /** Gives an assistant's chunks vectors for search by meaning. */
   embedChunks: "embed.chunks",
-  /** Sends one queued text message through the telephony provider (payload: { messageId }). */
+  /** Sends one queued text message through the telephony provider. */
   messageSend: "message.send",
-  /** Emails the business that its number's daily spend cap was reached (payload: { botId, spentMicros }). */
+  /** Emails the business that its number's daily spend cap was reached. */
   phoneCapAlert: "phone.cap_alert",
 } as const;
 
 /** Job priorities: higher runs first. */
 export const JOB_PRIORITY = { normal: 0, urgent: 10 } as const;
 
-export async function enqueueJob(
-  db: Db,
-  job: { tenantId: string; type: string; payload: Record<string, unknown>; runAt?: Date; priority?: number },
-): Promise<string> {
-  const [row] = await db
-    .insert(jobs)
-    .values({
-      tenantId: job.tenantId,
-      type: job.type,
-      payload: job.payload,
-      runAt: job.runAt ?? new Date(),
-      priority: job.priority ?? JOB_PRIORITY.normal,
-    })
-    .returning({ id: jobs.id });
+export type JobType = (typeof JOB_TYPES)[keyof typeof JOB_TYPES];
+
+/** What each job carries: checked where it is queued and where the worker runs it. */
+export interface JobPayloads {
+  [JOB_TYPES.insightsAnalyze]: { conversationId: string };
+  [JOB_TYPES.sourceSync]: { sourceId: string };
+  [JOB_TYPES.addonEffect]: AddonEffectPayload;
+  [JOB_TYPES.botSetup]: { runId: string };
+  [JOB_TYPES.urgentAlert]: UrgentAlertPayload;
+  [JOB_TYPES.demoBuild]: DemoBuildPayload;
+  [JOB_TYPES.embedChunks]: { botId: string };
+  [JOB_TYPES.messageSend]: { messageId: string };
+  [JOB_TYPES.phoneCapAlert]: { botId: string; spentMicros?: number };
+}
+
+export interface NewJob<T extends JobType> {
+  tenantId: string;
+  type: T;
+  payload: JobPayloads[T];
+  runAt?: Date;
+  priority?: number;
+}
+
+/** A row for the job queue, for `insert(jobs)` inside a transaction (`enqueueJob` outside one). */
+export function newJob<T extends JobType>(job: NewJob<T>): typeof jobs.$inferInsert {
+  return {
+    tenantId: job.tenantId,
+    type: job.type,
+    payload: job.payload as Record<string, unknown>,
+    runAt: job.runAt ?? new Date(),
+    priority: job.priority ?? JOB_PRIORITY.normal,
+  };
+}
+
+export async function enqueueJob<T extends JobType>(db: Db, job: NewJob<T>): Promise<string> {
+  const [row] = await db.insert(jobs).values(newJob(job)).returning({ id: jobs.id });
   return row!.id;
 }
 
@@ -71,7 +97,7 @@ export async function completeJob(db: Db, id: string): Promise<void> {
 
 /** Retries with exponential backoff (30 s, 60 s, 120 s …) until max attempts, then marks failed. */
 export async function failJob(db: Db, job: JobRow, error: unknown): Promise<"retry" | "failed"> {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   if (job.attempts < job.maxAttempts) {
     await db
       .update(jobs)

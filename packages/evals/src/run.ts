@@ -1,4 +1,11 @@
-import { type ChatStreamEvent, embedChunks, handleInboundText, runChat, syncSource } from "@traiblazer/core";
+import {
+  type ChatStreamEvent,
+  embedChunks,
+  errorMessage,
+  handleInboundText,
+  runChat,
+  syncSource,
+} from "@traiblazer/core";
 import {
   bots,
   businessProfiles,
@@ -186,7 +193,7 @@ async function playSmsCase(deps: EvalDeps, business: SetUp, evalCase: EvalCase):
       outcome.sms!.outcomes.push(result);
       if (result === "failed" || result === "unavailable") outcome.error = result;
     } catch (error) {
-      outcome.error = error instanceof Error ? error.message : String(error);
+      outcome.error = errorMessage(error);
     }
     const now = await read();
     if (outcome.error) break;
@@ -283,7 +290,7 @@ export async function playCase(deps: EvalDeps, business: SetUp, evalCase: EvalCa
         else if (event.type === "done") done = event;
       }
     } catch (error) {
-      outcome.error = error instanceof Error ? error.message : String(error);
+      outcome.error = errorMessage(error);
     }
     if (done?.flags.urgency) urgency = higher(urgency, done.flags.urgency);
     if (done?.flags.error || done?.flags.busy) outcome.error ??= done.flags.busy ? "busy" : "failed";

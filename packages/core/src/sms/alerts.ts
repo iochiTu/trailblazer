@@ -11,10 +11,11 @@ import {
   users,
   withTenant,
 } from "@traiblazer/db";
+import { enOrFr } from "@traiblazer/i18n";
 import { formatPhone } from "@traiblazer/telephony";
 import { and, eq, gte, inArray, like, or, sql } from "drizzle-orm";
 import type { Mailer } from "../addons/effects.js";
-import { JOB_TYPES } from "../jobs.js";
+import { JOB_TYPES, type JobPayloads, newJob } from "../jobs.js";
 import { queueText } from "./queue.js";
 
 /**
@@ -128,7 +129,7 @@ async function ownerSide(tx: Tx, tenantId: string, botId: string) {
     .limit(1);
   return {
     business: row?.businessName?.trim() || row?.name || "",
-    lang: (tenant?.ownerLanguage === "fr" ? "fr" : "en") as Lang,
+    lang: enOrFr(tenant?.ownerLanguage),
   };
 }
 
@@ -201,11 +202,13 @@ export async function noteCapReached(tx: Tx, budget: PhoneBudget, now: Date): Pr
       body: TEXT[lang].capText(business, dollars(number.dailyCapCents, lang)),
     });
   }
-  await tx.insert(jobs).values({
-    tenantId: number.tenantId,
-    type: JOB_TYPES.phoneCapAlert,
-    payload: { botId: number.botId, spentMicros: budget.spentMicros },
-  });
+  await tx.insert(jobs).values(
+    newJob({
+      tenantId: number.tenantId,
+      type: JOB_TYPES.phoneCapAlert,
+      payload: { botId: number.botId, spentMicros: budget.spentMicros },
+    }),
+  );
   return true;
 }
 
@@ -213,7 +216,7 @@ export async function noteCapReached(tx: Tx, budget: PhoneBudget, now: Date): Pr
 export async function runCapAlert(
   deps: { db: Db; mailer: Mailer; adminUrl?: string },
   tenantId: string,
-  payload: { botId: string; spentMicros?: number },
+  payload: JobPayloads[typeof JOB_TYPES.phoneCapAlert],
 ): Promise<"done" | "skipped"> {
   const found = await withTenant(deps.db, tenantId, async (tx) => {
     const [number] = await tx

@@ -1,4 +1,4 @@
-import { DEMO_RETRY_MS, JOB_TYPES } from "@traiblazer/core";
+import { DEMO_RETRY_MS, JOB_TYPES, newJob } from "@traiblazer/core";
 import {
   botKeys,
   bots,
@@ -255,17 +255,15 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
 
       // Read the sources, then fill the page in (queued together with the demo).
       await tx.insert(jobs).values([
-        ...sources.map((source) => ({
-          tenantId,
-          type: JOB_TYPES.sourceSync,
-          payload: { sourceId: source.id } as Record<string, unknown>,
-        })),
-        {
+        ...sources.map((source) =>
+          newJob({ tenantId, type: JOB_TYPES.sourceSync, payload: { sourceId: source.id } }),
+        ),
+        newJob({
           tenantId,
           type: JOB_TYPES.demoBuild,
-          payload: { demoId: demo!.id } as Record<string, unknown>,
+          payload: { demoId: demo!.id },
           runAt: new Date(Date.now() + DEMO_RETRY_MS),
-        },
+        }),
       ]);
       const accessCode = input.customerAccess
         ? await grantDemoAccess(
@@ -337,11 +335,9 @@ export async function demoRoutes(app: FastifyInstance, { db, config, platform }:
     }
     await db.transaction(async (tx) => {
       await tx.update(demos).set({ status: "building", error: null }).where(eq(demos.id, demo.id));
-      await tx.insert(jobs).values({
-        tenantId: demo.tenantId,
-        type: JOB_TYPES.demoBuild,
-        payload: { demoId: demo.id },
-      });
+      await tx
+        .insert(jobs)
+        .values(newJob({ tenantId: demo.tenantId, type: JOB_TYPES.demoBuild, payload: { demoId: demo.id } }));
     });
     await log(request, "demo.rebuilt", demo.id, { business: tenant.name });
     return { demo: { id: demo.id, status: "building" as const } };

@@ -1,5 +1,6 @@
 "use client";
 
+import { enOrFr } from "@traiblazer/i18n";
 import { paths } from "@traiblazer/marketing";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -139,10 +140,7 @@ function PlanSummary({ planId }: { planId: string }) {
           {plan.insights && ` · ${t("tenants.planInsights")}`}
         </span>
       )}
-      <Link
-        href={paths.pricing(language === "fr" ? "fr" : "en")}
-        className="ms-auto underline underline-offset-4"
-      >
+      <Link href={paths.pricing(enOrFr(language))} className="ms-auto underline underline-offset-4">
         {t("tenants.planCompare")}
       </Link>
     </div>

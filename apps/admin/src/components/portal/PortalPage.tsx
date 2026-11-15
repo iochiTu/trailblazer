@@ -1,6 +1,7 @@
 "use client";
 
 import type { MessageKey } from "@traiblazer/i18n";
+import { enOrFr } from "@traiblazer/i18n";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
@@ -18,7 +19,7 @@ type PlanCatalog = { plans: PublicPlan[]; defaultPlan: string; maxBusinessesPerA
 export function PortalPage({ signedIn }: { signedIn: boolean }) {
   const { t, language } = useI18n();
   // The marketing pages exist in English and French.
-  const siteLang = language === "fr" ? "fr" : "en";
+  const siteLang = enOrFr(language);
   const [plans, setPlans] = useState<PlanCatalog | null | "error">(null);
   const [languageCount, setLanguageCount] = useState<number | null>(null);
 

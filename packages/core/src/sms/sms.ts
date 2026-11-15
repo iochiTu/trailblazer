@@ -14,6 +14,7 @@ import {
   usageEvents,
   withTenant,
 } from "@traiblazer/db";
+import { DEFAULT_TIME_ZONE } from "@traiblazer/shared";
 import {
   type MessageStatusUpdate,
   PermanentSendError,
@@ -25,6 +26,7 @@ import {
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { type ChatDeps, type ChatImage, runChat } from "../chat/engine.js";
 import { guessLanguage } from "../chat/language.js";
+import { errorMessage } from "../errors.js";
 import { countItemEvent } from "../stats/item-stats.js";
 import { noteCapReached, phoneBudget } from "./alerts.js";
 import { optedOut, queueText } from "./queue.js";
@@ -44,6 +46,24 @@ export interface SmsNumber {
 }
 
 const hoursAgo = (now: Date, hours: number) => new Date(now.getTime() - hours * 3600_000);
+
+/** The customer's thread with this number, while it is recent enough to continue. */
+async function currentThread(tx: Tx, botId: string, from: string, now: Date) {
+  const [thread] = await tx
+    .select({ id: conversations.id, language: conversations.language })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.botId, botId),
+        eq(conversations.channel, "sms"),
+        eq(conversations.visitorId, from),
+        gte(conversations.lastMessageAt, hoursAgo(now, SMS_THREAD_HOURS)),
+      ),
+    )
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(1);
+  return thread;
+}
 
 async function business(tx: Tx, botId: string) {
   const [row] = await tx
@@ -65,7 +85,7 @@ async function business(tx: Tx, botId: string) {
     name: row.businessName?.trim() || row.name,
     phone: row.phone?.trim() || null,
     language: smsLanguage(row.defaultLanguage),
-    timeZone: row.timezone ?? "America/Toronto",
+    timeZone: row.timezone ?? DEFAULT_TIME_ZONE,
   };
 }
 
@@ -171,19 +191,7 @@ export async function handleInboundText(
       return { outcome: "limited" as const, count: used!.n };
     }
 
-    const [thread] = await tx
-      .select({ id: conversations.id, language: conversations.language })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.botId, number.botId),
-          eq(conversations.channel, "sms"),
-          eq(conversations.visitorId, message.from),
-          gte(conversations.lastMessageAt, hoursAgo(now, SMS_THREAD_HOURS)),
-        ),
-      )
-      .orderBy(desc(conversations.lastMessageAt))
-      .limit(1);
+    const thread = await currentThread(tx, number.botId, message.from, now);
 
     // "QUOTE" or "BOOK" takes up the offer made for a service earlier in the thread.
     const word = smsReplyWord(message.text);
@@ -276,7 +284,7 @@ export async function handleInboundText(
     }
   } catch (error) {
     failed = true;
-    deps.log?.("sms answer failed", { error: error instanceof Error ? error.message : String(error) });
+    deps.log?.("sms answer failed", { error: errorMessage(error) });
   }
 
   // A service's button becomes a line saying what to reply (or the booking link, when there is one).
@@ -321,19 +329,7 @@ export async function handleInboundText(
 /** Keeps a text that got no answer (a limit was reached) in the customer's thread. */
 async function storeUnanswered(db: Db, number: SmsNumber, from: string, text: string, now: Date) {
   await withTenant(db, number.tenantId, async (tx) => {
-    let [thread] = await tx
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.botId, number.botId),
-          eq(conversations.channel, "sms"),
-          eq(conversations.visitorId, from),
-          gte(conversations.lastMessageAt, hoursAgo(now, SMS_THREAD_HOURS)),
-        ),
-      )
-      .orderBy(desc(conversations.lastMessageAt))
-      .limit(1);
+    let thread: { id: string } | undefined = await currentThread(tx, number.botId, from, now);
     if (!thread) {
       [thread] = await tx
         .insert(conversations)

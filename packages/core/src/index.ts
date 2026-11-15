@@ -1,4 +1,5 @@
 export { type AddonEffectPayload, type EffectDeps, type Mailer, runAddonEffect } from "./addons/effects.js";
+export * from "./business.js";
 export * from "./chat/engine.js";
 export { recordGap } from "./chat/gaps.js";
 export { guessLanguage } from "./chat/language.js";
@@ -40,6 +41,7 @@ export {
   type DemoBuildOutcome,
   type DemoBuildPayload,
 } from "./demo/build.js";
+export { errorMessage } from "./errors.js";
 export {
   analyzeConversation,
   buildInsightsRequest,

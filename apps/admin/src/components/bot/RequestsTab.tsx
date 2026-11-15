@@ -1,5 +1,6 @@
 "use client";
 
+import { enOrFr } from "@traiblazer/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, type BotDetail, type Lead, type LeadStatus } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -84,7 +85,7 @@ export function RequestsTab({
     .sort((a, b) => Number(b.urgent && b.status !== "done") - Number(a.urgent && a.status !== "done"));
   const fieldLabel = (key: string) => {
     const field = detail.defaults.leadFields.find((f) => f.key === key);
-    return field ? field.label[language === "fr" ? "fr" : "en"] : key;
+    return field ? field.label[enOrFr(language)] : key;
   };
 
   return (

@@ -11,6 +11,7 @@ import {
   type ThemeId,
   themeInfo,
 } from "@traiblazer/appearance";
+import { enOrFr } from "@traiblazer/i18n";
 import { type ReactNode, useState } from "react";
 import { ApiError, api, type BotDetail } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -171,7 +172,7 @@ export function AppearanceTab({
   const [previewMode, setPreviewMode] = useState<"inline" | "widget">("widget");
   const [avatarKind, setAvatarKind] = useState<AvatarKind>(settings.avatar?.kind ?? "initials");
   const [uploading, setUploading] = useState(false);
-  const lang2 = language === "fr" ? "fr" : "en";
+  const lang2 = enOrFr(language);
   const key = detail.keys[0]?.publicKey;
 
   async function save(patch: Partial<Settings>) {

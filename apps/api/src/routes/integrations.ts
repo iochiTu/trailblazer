@@ -1,5 +1,5 @@
 import { getAddon } from "@traiblazer/addons";
-import { connectIntegration, JOB_TYPES, publicFetch } from "@traiblazer/core";
+import { connectIntegration, JOB_TYPES, newJob, publicFetch } from "@traiblazer/core";
 import { botAddons, bots, integrationConnections, jobs, leadSyncs, leads, withTenant } from "@traiblazer/db";
 import {
   ConnectorError,
@@ -272,11 +272,13 @@ export async function integrationRoutes(app: FastifyInstance, ctx: AppContext) {
           .where(and(eq(leadSyncs.leadId, leadId), eq(leadSyncs.provider, provider)))
           .limit(1);
         if (sync?.status === "sent") throw new HttpError(409, "already_sent", "Already sent");
-        await tx.insert(jobs).values({
-          tenantId,
-          type: JOB_TYPES.addonEffect,
-          payload: { botId, addonId, effect: { kind: "crm.lead", provider, leadId } },
-        });
+        await tx.insert(jobs).values(
+          newJob({
+            tenantId,
+            type: JOB_TYPES.addonEffect,
+            payload: { botId, addonId, effect: { kind: "crm.lead", provider, leadId } },
+          }),
+        );
         await audit(tx, {
           tenantId,
           actorUserId: request.user?.id ?? null,

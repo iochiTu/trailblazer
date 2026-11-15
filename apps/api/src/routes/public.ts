@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { activeAddons, addonChatLinks } from "@traiblazer/addons";
+import { addonChatLinks } from "@traiblazer/addons";
 import {
   AVATAR_ICONS,
   type AvatarIcon,
@@ -14,10 +14,18 @@ import {
   type PublicAvatar,
   paletteFor,
 } from "@traiblazer/appearance";
-import { type ChatImage, countItemEvent, runChat } from "@traiblazer/core";
+import {
+  businessNameOf,
+  type ChatImage,
+  countItemEvent,
+  installedAddons,
+  listedCatalogItems,
+  noticeRunsAt,
+  runChat,
+  runningNotices,
+} from "@traiblazer/core";
 import {
   type BotSettings,
-  botAddons,
   bots,
   businessProfiles,
   catalogItems,
@@ -35,6 +43,7 @@ import {
 import { getLanguage } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
 import {
+  DEFAULT_TIME_ZONE,
   itemEventSchema,
   MAX_CHAT_IMAGE_BYTES,
   MAX_CHAT_IMAGES,
@@ -43,7 +52,7 @@ import {
   publicChatSchema,
   RESERVED_PAGE_SLUGS,
 } from "@traiblazer/shared";
-import { and, asc, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
 import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guard.js";
@@ -151,17 +160,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .from(businessProfiles)
         .where(eq(businessProfiles.botId, bot.id))
         .limit(1);
-      const addons = activeAddons(
-        await tx
-          .select({
-            addonId: botAddons.addonId,
-            enabled: botAddons.enabled,
-            config: botAddons.config,
-            configVersion: botAddons.configVersion,
-          })
-          .from(botAddons)
-          .where(eq(botAddons.botId, bot.id)),
-      );
+      const addons = await installedAddons(tx, bot.id);
       // A prospect demo: its page says so and is never listed.
       return { ...resolved, bot, profile: profile ?? null, addons, demo: tenant.kind === "demo" };
     });
@@ -174,14 +173,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         await tx
           .select({ title: notices.title })
           .from(notices)
-          .where(
-            and(
-              eq(notices.botId, botId),
-              eq(notices.kind, "offer"),
-              or(isNull(notices.startsAt), lte(notices.startsAt, now)),
-              or(isNull(notices.endsAt), gt(notices.endsAt, now)),
-            ),
-          )
+          .where(and(eq(notices.botId, botId), eq(notices.kind, "offer"), noticeRunsAt(now)))
           .orderBy(asc(notices.createdAt))
           .limit(2)
       ).flatMap((n) => (n.title ? [n.title] : [])),
@@ -197,29 +189,8 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   /** What the business page shows besides the profile: cards, running notices, gallery photos. */
   async function loadPageContent(tenantId: string, botId: string, now: Date) {
     return withTenant(db, tenantId, async (tx) => {
-      const items = await tx
-        .select()
-        .from(catalogItems)
-        .where(and(eq(catalogItems.botId, botId), eq(catalogItems.enabled, true)))
-        .orderBy(asc(catalogItems.position), asc(catalogItems.createdAt));
-      const running = await tx
-        .select({
-          id: notices.id,
-          text: notices.text,
-          kind: notices.kind,
-          title: notices.title,
-          endsAt: notices.endsAt,
-          itemId: notices.catalogItemId,
-        })
-        .from(notices)
-        .where(
-          and(
-            eq(notices.botId, botId),
-            or(isNull(notices.startsAt), lte(notices.startsAt, now)),
-            or(isNull(notices.endsAt), gt(notices.endsAt, now)),
-          ),
-        )
-        .orderBy(asc(notices.createdAt));
+      const items = await listedCatalogItems(tx, botId);
+      const running = await runningNotices(tx, botId, now);
       const photos = await tx
         .select({ assetId: knowledgeImages.assetId, title: knowledgeImages.title })
         .from(knowledgeImages)
@@ -228,17 +199,15 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .limit(12);
       return {
         items,
-        notices: running.filter((n) => n.kind !== "offer").map((n) => n.text),
+        notices: running.notices,
         // Promotions running now, each with the service it is about (when that one is listed).
-        offers: running
-          .filter((n) => n.kind === "offer")
-          .map((n) => ({
-            id: n.id,
-            title: n.title ?? n.text,
-            text: n.text,
-            endsAt: n.endsAt,
-            itemId: items.some((i) => i.id === n.itemId) ? n.itemId : null,
-          })),
+        offers: running.offers.map((n) => ({
+          id: n.id,
+          title: n.title ?? n.text,
+          text: n.text,
+          endsAt: n.endsAt,
+          itemId: items.some((i) => i.id === n.itemId) ? n.itemId : null,
+        })),
         photos,
       };
     });
@@ -305,7 +274,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const settings: BotSettings = bot.settings ?? {};
     const now = new Date();
     const content = await loadPageContent(found.tenantId, bot.id, now);
-    const businessName = profile?.businessName ?? bot.name;
+    const businessName = businessNameOf(bot, profile);
     const appearance = toPublicAppearance(settings, businessName, config.PUBLIC_URL);
     const palette = paletteFor(appearance.color, appearance.theme);
     const links = addonChatLinks(
@@ -341,7 +310,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         profile?.serviceArea ?? (profile?.serviceTowns.length ? profile.serviceTowns.join(", ") : null),
       credentials: profile?.credentials ?? null,
       staffLanguages: (profile?.staffLanguages ?? []).map((code) => getLanguage(code)?.nativeName ?? code),
-      timezone: profile?.timezone ?? "America/Toronto",
+      timezone: profile?.timezone ?? DEFAULT_TIME_ZONE,
       hours: profile?.hours ?? null,
       avatar: appearance.avatar,
       theme: appearance.theme,
@@ -442,7 +411,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const { bot, profile, addons } = found;
     const settings: BotSettings = bot.settings ?? {};
     const template = getTemplate(bot.pack, bot.variant);
-    const businessName = profile?.businessName ?? bot.name;
+    const businessName = businessNameOf(bot, profile);
     // Public, non-sensitive data; the widget loader reads it from the customer's website.
     reply.header("access-control-allow-origin", "*");
     return {

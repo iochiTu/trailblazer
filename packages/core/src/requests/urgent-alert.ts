@@ -10,9 +10,11 @@ import {
   users,
   withTenant,
 } from "@traiblazer/db";
+import { enOrFr } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Mailer } from "../addons/effects.js";
+import { businessNameOf } from "../business.js";
 
 export interface UrgentAlertPayload {
   botId: string;
@@ -112,9 +114,9 @@ export async function runUrgentAlert(
   const to = addonEmail ? [addonEmail] : [...new Set(staff.map((s) => s.email))];
   if (!to.length) return "skipped";
 
-  const lang = tenant?.ownerLanguage === "fr" ? "fr" : "en";
+  const lang = enOrFr(tenant?.ownerLanguage);
   const t = TEXT[lang];
-  const business = profile?.businessName ?? bot.name;
+  const business = businessNameOf(bot, profile);
   const fields = getTemplate(bot.pack, bot.variant).leadFields;
   const line = (label: string, value: string | null | undefined) => (value ? `${label}: ${value}` : null);
   const link = deps.adminUrl ? `${deps.adminUrl}/t/${tenantId}/bots/${payload.botId}?tab=requests` : null;

@@ -8,6 +8,7 @@ import type {
   ToolResultBlock,
 } from "@traiblazer/llm";
 import { z } from "zod";
+import { errorMessage } from "../../errors.js";
 import type { Passage } from "../retrieval.js";
 
 /**
@@ -124,7 +125,7 @@ export async function runToolCalls(
       if (ctx.signal?.aborted) throw error;
       options.log?.("tool failed", {
         tool: tool.name,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       });
       return { isError: true, content: "This lookup failed. Answer with the information you already have." };
     }

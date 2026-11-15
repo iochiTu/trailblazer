@@ -1,26 +1,22 @@
 import {
   type AddonContext,
   type AddonEvent,
-  activeAddons,
   addonEffects,
   addonPrompt,
   hasEventHandlers,
 } from "@traiblazer/addons";
 import {
   type AttachmentRef,
-  botAddons,
   bots,
   businessProfiles,
   type Channel,
   type Citation,
-  catalogItems,
   conversations,
   type Db,
   jobs,
   type MessageFlags,
   messageAttachments,
   messages,
-  notices,
   type ReplyAction,
   type ReplyImage,
   type ReplyOffer,
@@ -28,6 +24,7 @@ import {
   usageEvents,
   withTenant,
 } from "@traiblazer/db";
+import { enOrFr } from "@traiblazer/i18n";
 import { getTemplate } from "@traiblazer/industry-packs";
 import {
   type ChatMessage,
@@ -41,9 +38,12 @@ import {
   toolCallsOf,
   withDeadline,
 } from "@traiblazer/llm";
-import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { DEFAULT_TIME_ZONE } from "@traiblazer/shared";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { businessNameOf, installedAddons, listedCatalogItems, runningNotices } from "../business.js";
+import { errorMessage } from "../errors.js";
 import { queueInsights } from "../insights/analyze.js";
-import { JOB_PRIORITY, JOB_TYPES } from "../jobs.js";
+import { JOB_PRIORITY, JOB_TYPES, newJob } from "../jobs.js";
 import { textOwnerAboutRequest } from "../sms/alerts.js";
 import { countItemEvent, itemStatSurface } from "../stats/item-stats.js";
 import { recordGap } from "./gaps.js";
@@ -271,38 +271,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       .where(eq(businessProfiles.botId, bot.id))
       .limit(1);
     // The business page: services and products the owner lists, and notices running now.
-    const catalog = await tx
-      .select({
-        id: catalogItems.id,
-        action: catalogItems.action,
-        kind: catalogItems.kind,
-        name: catalogItems.name,
-        description: catalogItems.description,
-        priceText: catalogItems.priceText,
-        category: catalogItems.category,
-      })
-      .from(catalogItems)
-      .where(and(eq(catalogItems.botId, bot.id), eq(catalogItems.enabled, true)))
-      .orderBy(asc(catalogItems.position), asc(catalogItems.createdAt));
-    const at = deps.now?.() ?? new Date();
-    const running = await tx
-      .select({
-        id: notices.id,
-        text: notices.text,
-        kind: notices.kind,
-        title: notices.title,
-        endsAt: notices.endsAt,
-        itemId: notices.catalogItemId,
-      })
-      .from(notices)
-      .where(
-        and(
-          eq(notices.botId, bot.id),
-          or(isNull(notices.startsAt), lte(notices.startsAt, at)),
-          or(isNull(notices.endsAt), gt(notices.endsAt, at)),
-        ),
-      )
-      .orderBy(asc(notices.createdAt));
+    const catalog = await listedCatalogItems(tx, bot.id);
+    const running = await runningNotices(tx, bot.id, deps.now?.() ?? new Date());
 
     let conversation = input.conversationId
       ? (
@@ -419,17 +389,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       .where(eq(conversations.id, conversation!.id));
 
     // Add-ons installed on this assistant; the owner's language only matters for notifications.
-    const addons = activeAddons(
-      await tx
-        .select({
-          addonId: botAddons.addonId,
-          enabled: botAddons.enabled,
-          config: botAddons.config,
-          configVersion: botAddons.configVersion,
-        })
-        .from(botAddons)
-        .where(eq(botAddons.botId, bot.id)),
-    );
+    const addons = await installedAddons(tx, bot.id);
     const [tenant] = hasEventHandlers(addons)
       ? await tx
           .select({ ownerLanguage: tenants.ownerLanguage })
@@ -440,8 +400,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     const addonCtx: AddonContext = {
       tenantId: input.tenantId,
       botId: bot.id,
-      businessName: profile?.businessName ?? bot.name,
-      ownerLanguage: tenant?.ownerLanguage === "fr" ? "fr" : "en",
+      businessName: businessNameOf(bot, profile),
+      ownerLanguage: enOrFr(tenant?.ownerLanguage),
       adminUrl: deps.adminUrl,
     };
 
@@ -449,8 +409,8 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       bot,
       profile: profile ?? null,
       catalog,
-      notices: running.filter((n) => n.kind !== "offer").map((n) => n.text),
-      offers: running.filter((n) => n.kind === "offer"),
+      notices: running.notices,
+      offers: running.offers,
       conversationId: conversation!.id,
       isNew,
       history,
@@ -485,12 +445,11 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   };
   // Counted whenever it arrives: a vector that came too late for the search was still paid for.
   void vectorRequest?.then(countEmbedding);
-  const runningNotices = setup.notices;
   /** Promotions running now, each with the short id the model names it by. */
   const runningOffers = setup.offers.map((offer, index) => ({ ...offer, ref: `o${index + 1}` }));
   const addonLog = (msg: string, data?: Record<string, unknown>) =>
     deps.log?.(msg, { ...data, botId: bot.id });
-  const lang2 = language === "fr" ? "fr" : "en";
+  const lang2 = enOrFr(language);
   yield { type: "start", conversationId };
 
   // Triage, layer 1: the platform's danger words and the industry's urgent words (EN/FR, instant).
@@ -690,7 +649,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         if (applyModelTriage(aux.text) && urgency) yield { type: "urgent", level: urgency, phone };
       } else if (message) {
         pendingTriage = analyze().catch((error: unknown) => {
-          deps.log?.("triage failed", { error: error instanceof Error ? error.message : String(error) });
+          deps.log?.("triage failed", { error: errorMessage(error) });
           return null;
         });
       }
@@ -734,12 +693,12 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           passages: passages as Passage[],
           photos: offeredPhotos,
           catalog,
-          notices: runningNotices,
+          notices: setup.notices,
           offers: runningOffers.map((o) => ({
             ref: o.ref,
             title: o.title ?? o.text,
             text: o.text,
-            until: o.endsAt ? lastDay(o.endsAt, profile?.timezone ?? "America/Toronto") : null,
+            until: o.endsAt ? lastDay(o.endsAt, profile?.timezone ?? DEFAULT_TIME_ZONE) : null,
             itemRef: catalog.find((c) => c.id === o.itemId)?.ref ?? null,
           })),
           triage: { urgency, advice },
@@ -880,10 +839,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       }
     } catch (error) {
       if (input.signal?.aborted) return;
-      deps.log?.("chat failed", {
-        error: error instanceof Error ? error.message : String(error),
-        botId: bot.id,
-      });
+      deps.log?.("chat failed", { error: errorMessage(error), botId: bot.id });
       const busy = isCapacityError(error);
       flags.unanswered = undefined;
       if (busy) flags.busy = true;
@@ -1010,23 +966,24 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     const urgentAlerts = events.flatMap((event) =>
       event.type === "request.created" && event.urgent
         ? [
-            {
+            newJob({
               tenantId: input.tenantId,
               type: JOB_TYPES.urgentAlert,
               priority: JOB_PRIORITY.urgent,
               payload: { botId: bot.id, leadId: event.leadId },
-            },
+            }),
           ]
         : [],
     );
     const queued = [
       ...urgentAlerts,
-      ...effects.map(({ addonId, effect }) => ({
-        tenantId: input.tenantId,
-        type: JOB_TYPES.addonEffect,
-        priority: JOB_PRIORITY.normal,
-        payload: { botId: bot.id, addonId, effect } as Record<string, unknown>,
-      })),
+      ...effects.map(({ addonId, effect }) =>
+        newJob({
+          tenantId: input.tenantId,
+          type: JOB_TYPES.addonEffect,
+          payload: { botId: bot.id, addonId, effect },
+        }),
+      ),
     ];
     if (queued.length) await tx.insert(jobs).values(queued);
     // Insights (premium): this conversation is tagged once it goes quiet.

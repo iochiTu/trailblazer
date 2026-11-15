@@ -600,4 +600,5 @@ export const updateOnboardingSchema = z
   })
   .refine((input) => Object.values(input).some((value) => value !== undefined), "Nothing to change");
 
+export * from "./locale.js";
 export * from "./plans.js";
