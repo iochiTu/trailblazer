@@ -495,7 +495,8 @@ One chat web app (`apps/chat`) powers every surface. Customers pick what fits th
 ### 7.3 Phone and SMS — later phase
 
 How it will be built (provider, voice pipeline, phases, the test that decides the voice backend):
-[PHONE_AND_SMS.md](PHONE_AND_SMS.md).
+[PHONE_AND_SMS.md](PHONE_AND_SMS.md). WhatsApp on the same path (planned):
+[WHATSAPP.md](WHATSAPP.md). Facebook Messenger (planned): [MESSENGER.md](MESSENGER.md).
 
 Starts after the paid launch, when pilots ask for it (§14). SMS comes first and sends customers to the
 business page; voice follows. The same assistant, knowledge and services list answer on every channel.
