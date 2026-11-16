@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app/AppShell";
-import { PushControl } from "@/components/app/PushControl";
 import { useTimeAgo } from "@/components/app/time";
 import { rememberTenant, useMe } from "@/components/app/useMe";
 import { ApiError, api, type InboxLead } from "@/lib/api";
@@ -104,8 +103,6 @@ export default function InboxPage() {
           </select>
         </label>
       )}
-
-      <PushControl compact />
 
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((id) => (

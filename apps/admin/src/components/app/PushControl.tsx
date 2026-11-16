@@ -13,9 +13,9 @@ import {
 
 /**
  * Turns push notifications on or off on this device, or says why it can't (blocked, iPhone
- * Safari without the app, no Web Push). `compact`: the inbox banner, shown only while off.
+ * Safari without the app, no Web Push).
  */
-export function PushControl({ compact = false }: { compact?: boolean }) {
+export function PushControl() {
   const { t } = useI18n();
   const [support, setSupport] = useState<PushSupport | null>(null);
   const [state, setState] = useState<PushState | null>(null);
@@ -58,24 +58,6 @@ export function PushControl({ compact = false }: { compact?: boolean }) {
 
   if (support === null) return null;
   const canPush = support === "native" || support === "web";
-
-  if (compact) {
-    // The inbox only nudges while notifications could be on but aren't.
-    if (!canPush || state !== "off") return null;
-    return (
-      <div className="panel flex flex-wrap items-center gap-3 p-4" role="note">
-        <p className="min-w-0 flex-1 text-sm font-medium">{t("notify.banner")}</p>
-        <button type="button" className="btn" onClick={turnOn} disabled={busy}>
-          {t("notify.turnOn")}
-        </button>
-        {error && (
-          <p className="error w-full text-sm" role="alert">
-            {t("notify.error")}
-          </p>
-        )}
-      </div>
-    );
-  }
 
   return (
     <section className="card flex flex-col gap-3 p-5" aria-labelledby="push-device">

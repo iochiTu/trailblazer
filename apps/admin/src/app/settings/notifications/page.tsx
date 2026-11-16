@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AppShell } from "@/components/app/AppShell";
 import { PushControl } from "@/components/app/PushControl";
+import { PAUSE_EVENT } from "@/components/app/SwitchBar";
 import { lastTenant, useMe } from "@/components/app/useMe";
 import { ApiError, api, type NotificationEvent, type NotificationPrefs } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -31,12 +32,25 @@ function NotificationSettings() {
       .catch(() => setStatus(t("common.error")));
   }, [t]);
 
+  // The switch at the top pauses everything: say so here, and keep it in step.
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    const read = () =>
+      api<{ prefs: NotificationPrefs }>("/v1/me/notification-prefs")
+        .then((d) => setPaused(Boolean(d.prefs.paused)))
+        .catch(() => undefined);
+    void read();
+    window.addEventListener(PAUSE_EVENT, read);
+    return () => window.removeEventListener(PAUSE_EVENT, read);
+  }, []);
+
   /** Saves at once: one tap is one change, no save button to forget. */
   async function save(next: NotificationPrefs) {
     setPrefs(next);
     setStatus("saving");
     try {
-      await api("/v1/me/notification-prefs", { method: "PUT", body: next });
+      const { paused: _, ...form } = next;
+      await api("/v1/me/notification-prefs", { method: "PUT", body: form });
       setStatus("saved");
     } catch (err) {
       setStatus(err instanceof ApiError ? err.message : t("common.error"));
@@ -48,6 +62,11 @@ function NotificationSettings() {
   return (
     <AppShell title={t("notify.title")} tab="alerts" tenantId={tenantId}>
       <p className="muted text-sm">{t("notify.intro")}</p>
+      {paused && (
+        <p className="panel p-4 text-sm font-medium" role="status">
+          {t("switch.paused")}
+        </p>
+      )}
       <PushControl />
 
       {prefs && (

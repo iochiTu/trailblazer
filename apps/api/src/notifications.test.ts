@@ -5,7 +5,9 @@ import {
   jobs,
   leads,
   memberships,
+  phoneNumbers,
   pushDevices,
+  resolvePhoneNumber,
   runMigrations,
   tenants,
   users,
@@ -155,6 +157,7 @@ describe("notification preferences", () => {
       quietEnd: null,
       timeZone: null,
       urgentInQuietHours: true,
+      paused: false,
     });
     const prefs = {
       events: { "request.new": false },
@@ -164,7 +167,10 @@ describe("notification preferences", () => {
       urgentInQuietHours: true,
     };
     expect((await call("PUT", "/v1/me/notification-prefs", prefs)).statusCode).toBe(200);
-    expect((await call("GET", "/v1/me/notification-prefs")).json().prefs).toEqual(prefs);
+    expect((await call("GET", "/v1/me/notification-prefs")).json().prefs).toEqual({
+      ...prefs,
+      paused: false,
+    });
 
     for (const bad of [
       { ...prefs, quietEnd: null },
@@ -173,6 +179,90 @@ describe("notification preferences", () => {
       { ...prefs, events: { "request.everything": false } },
     ]) {
       expect((await call("PUT", "/v1/me/notification-prefs", bad)).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+  });
+
+  it("pauses every notification with one switch, without touching the other choices", async () => {
+    const before = (await call("GET", "/v1/me/notification-prefs")).json().prefs;
+    expect((await call("PATCH", "/v1/me/notification-prefs", { paused: true })).json()).toEqual({
+      paused: true,
+    });
+    expect((await call("GET", "/v1/me/notification-prefs")).json().prefs).toEqual({
+      ...before,
+      paused: true,
+    });
+    // Saving the settings form leaves the switch as it is.
+    const { paused: _, ...form } = before;
+    await call("PUT", "/v1/me/notification-prefs", form);
+    expect((await call("GET", "/v1/me/notification-prefs")).json().prefs.paused).toBe(true);
+    await call("PATCH", "/v1/me/notification-prefs", { paused: false });
+    expect((await call("GET", "/v1/me/notification-prefs")).json().prefs.paused).toBe(false);
+    expect((await call("PATCH", "/v1/me/notification-prefs", { paused: "yes" })).statusCode).toBe(400);
+
+    // A user who never saved settings can pause too.
+    const fresh = await newUser(app, emails, "pause-first");
+    expect((await call("PATCH", "/v1/me/notification-prefs", { paused: true }, fresh)).statusCode).toBe(200);
+    expect((await call("GET", "/v1/me/notification-prefs", undefined, fresh)).json().prefs.paused).toBe(true);
+  });
+});
+
+describe("answering switch", () => {
+  it("pauses and resumes calls and texts on every number of the business", async () => {
+    const url = `/v1/tenants/${tenantId}/answering`;
+    expect((await call("GET", url)).json()).toEqual({ numbers: 0, on: false, canChange: true, botId: null });
+    expect((await call("PUT", url, { on: false })).statusCode).toBe(404);
+
+    const e164s = ["+18075550181", "+18075550182"];
+    await ownerDb.db.insert(phoneNumbers).values([
+      { tenantId, botId: botA, e164: e164s[0]!, provider: "fake", callMode: "text_back" },
+      { tenantId, botId: botB, e164: e164s[1]!, provider: "fake", smsEnabled: false, callMode: "text_back" },
+    ]);
+    try {
+      expect((await call("GET", url)).json()).toMatchObject({ numbers: 2, on: true, canChange: true });
+      expect((await call("PUT", url, { on: false })).json()).toEqual({ on: false, numbers: 2 });
+      expect((await call("GET", url)).json().on).toBe(false);
+      // Incoming texts and calls see the number as off…
+      for (const e164 of e164s) {
+        expect(await resolvePhoneNumber(appDb.db, e164)).toMatchObject({
+          smsEnabled: false,
+          callMode: "off",
+        });
+      }
+      // …and each number's own settings come back when answering resumes.
+      await call("PUT", url, { on: true });
+      expect(await resolvePhoneNumber(appDb.db, e164s[0]!)).toMatchObject({
+        smsEnabled: true,
+        callMode: "text_back",
+      });
+      expect(await resolvePhoneNumber(appDb.db, e164s[1]!)).toMatchObject({
+        smsEnabled: false,
+        callMode: "text_back",
+      });
+
+      const audits = await ownerDb.db
+        .select({ action: auditLogs.action })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.tenantId, tenantId),
+            inArray(auditLogs.action, ["phone.answering_on", "phone.answering_off"]),
+          ),
+        );
+      expect(audits.map((a) => a.action).sort()).toEqual(["phone.answering_off", "phone.answering_on"]);
+
+      // Editors and view-only members see it but can't change it.
+      const editor = await newUser(app, emails, "answering-editor");
+      await ownerDb.db
+        .insert(memberships)
+        .values({ tenantId, userId: await userIdOf(editor), role: "editor" });
+      expect((await call("GET", url, undefined, editor)).json()).toMatchObject({
+        on: true,
+        canChange: false,
+      });
+      expect((await call("PUT", url, { on: false }, editor)).statusCode).toBe(403);
+      expect((await call("PUT", url, { on: "off" })).statusCode).toBe(400);
+    } finally {
+      await ownerDb.db.delete(phoneNumbers).where(inArray(phoneNumbers.e164, e164s));
     }
   });
 });

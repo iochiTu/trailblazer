@@ -892,7 +892,6 @@ export const en = {
   "notify.unsupported":
     "Notifications aren't available in this browser. Use the Traiblazer app on your phone.",
   "notify.error": "Notifications couldn't be turned on. Please try again.",
-  "notify.banner": "Turn on notifications so you never miss a customer.",
   "notify.events": "Notify me about",
   "notify.event.request.urgent": "Urgent requests",
   "notify.event.request.urgent.help": "A customer needs help now: no heat, flooding, a gas smell…",
@@ -909,6 +908,22 @@ export const en = {
   "notify.allDevices": "These choices apply on all your devices.",
   "notify.channel.urgent": "Urgent requests",
   "notify.channel.requests": "Requests",
+  "switch.label": "Quick switches",
+  "switch.notify": "Notifications",
+  "switch.answering": "Answering",
+  "switch.on": "On",
+  "switch.off": "Off",
+  "switch.notifyHelp.on": "You get new and urgent requests. Tap to pause them all.",
+  "switch.notifyHelp.off": "Notifications are paused. Tap to turn them on.",
+  "switch.answeringHelp.on": "Your assistant answers calls and texts. Tap to pause it.",
+  "switch.answeringHelp.off": "Your assistant isn't answering calls or texts. Tap to turn it on.",
+  "switch.answeringConfirmOff":
+    "Pause answering? Your assistant will stop answering calls and texts on your number until you turn it back on.",
+  "switch.noPhone": "No number yet",
+  "switch.adminOnly": "Only the owner or an admin can change this.",
+  "switch.denied": "Notifications are blocked for this app. Allow them in your phone's settings.",
+  "switch.error": "That didn't work. Please try again.",
+  "switch.paused": "Notifications are paused on all your devices. Turn them on with the switch at the top.",
 } as const;
 
 export type MessageKey = keyof typeof en;

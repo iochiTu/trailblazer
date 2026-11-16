@@ -197,6 +197,24 @@ describe("push notifications to the team", () => {
     ).toBe("skipped");
   });
 
+  it("sends nothing at all, urgent included, to someone who paused notifications", async () => {
+    await addDevice(userIds.sam, "apns-sam", "ios");
+    await addDevice(userIds.jo, "fcm-jo", "android");
+    await owner.db.insert(notificationPrefs).values({ userId: userIds.jo, paused: true });
+    const push = new FakePush();
+    const totals = await runPushNotify({ db: app.db, push }, tenantId, {
+      event: "request.urgent",
+      botId,
+      leadId,
+    });
+    expect(totals).toEqual({ sent: 1, skipped: 2, failed: 0 });
+    expect(push.sent.map((s) => s.target.token)).toEqual(["apns-sam"]);
+    const log = await withTenant(app.db, tenantId, (tx) =>
+      tx.select().from(notifications).where(eq(notifications.userId, userIds.jo)),
+    );
+    expect(log.map((l) => l.reason)).toEqual(["paused"]);
+  });
+
   it("keeps quiet hours, except for urgent requests", async () => {
     await addDevice(userIds.sam, "apns-sam", "ios");
     await owner.db.insert(notificationPrefs).values({

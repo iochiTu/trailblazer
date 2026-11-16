@@ -520,6 +520,10 @@ export const notificationPrefsSchema = z
     path: ["quietEnd"],
   });
 export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
+/** The one switch at the top of the owner app: all notifications off, or back on. */
+export const notificationPausedSchema = z.object({ paused: z.boolean() });
+/** The business's "answering" switch: the assistant answers calls and texts, or doesn't. */
+export const answeringSchema = z.object({ on: z.boolean() });
 
 /** Questions the assistant couldn't answer: the business answers them (see `qaPairSchema`) or dismisses them. */
 export const updateGapSchema = z.object({ status: z.enum(["open", "dismissed"]) });

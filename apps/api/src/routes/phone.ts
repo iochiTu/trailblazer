@@ -9,6 +9,7 @@ import {
   smsOptOuts,
   withTenant,
 } from "@traiblazer/db";
+import { answeringSchema } from "@traiblazer/shared";
 import { formatPhone, toE164 } from "@traiblazer/telephony";
 import { and, count, eq, gte } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -17,9 +18,10 @@ import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
 import { badRequest, forbidden, HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
-import { requireTenantRole } from "../plugins/auth.js";
+import { hasRole, requireTenantRole } from "../plugins/auth.js";
 
 type BotParams = { Params: { tenantId: string; botId: string } };
+type TenantParams = { Params: { tenantId: string } };
 
 const attachSchema = z.object({ number: z.string().trim().min(7).max(32) });
 /** The daily spend cap a business may set: 50 cents to 200 dollars. */
@@ -56,6 +58,9 @@ const shown = <T extends { e164: string }>(row: T) => ({ ...row, display: format
  *   PUT    /v1/tenants/:t/bots/:b/phone     assign a number (Traiblazer staff, in support mode)
  *   PATCH  /v1/tenants/:t/bots/:b/phone     texting on or off; what a call does (admin)
  *   DELETE /v1/tenants/:t/bots/:b/phone     take the number away (Traiblazer staff)
+ *
+ *   GET    /v1/tenants/:t/answering         the business's answering switch (owner app)
+ *   PUT    /v1/tenants/:t/answering         { on }: pause or resume calls and texts on every number
  *
  * The number itself is bought and pointed at our webhooks at the provider by staff, so only staff
  * can assign or remove it; the business decides how it is used.
@@ -207,4 +212,58 @@ export async function phoneRoutes(app: FastifyInstance, { db, telephony, config 
     });
     return reply.code(204).send();
   });
+
+  /**
+   * One switch for the whole business, at the top of the owner app: when it is off, no number of
+   * the business answers calls or texts (the resolver treats them as off); each number keeps its
+   * own settings for when it is turned back on.
+   */
+  app.get<TenantParams>(
+    "/v1/tenants/:tenantId/answering",
+    { preHandler: requireTenantRole(db, "viewer") },
+    async (request) => {
+      const { tenantId } = request.params;
+      const numbers = await withTenant(db, tenantId, (tx) =>
+        tx
+          .select({ botId: phoneNumbers.botId, answering: phoneNumbers.answering })
+          .from(phoneNumbers)
+          .orderBy(phoneNumbers.createdAt),
+      );
+      return {
+        numbers: numbers.length,
+        // On while any number answers, so a half-paused business can still be paused in one tap.
+        on: numbers.some((n) => n.answering),
+        canChange: hasRole(request.tenant!.role, "admin"),
+        // Where its phone settings are, for "set up a number".
+        botId: numbers[0]?.botId ?? null,
+      };
+    },
+  );
+
+  app.put<TenantParams>(
+    "/v1/tenants/:tenantId/answering",
+    { preHandler: requireTenantRole(db, "admin") },
+    async (request) => {
+      const { tenantId } = request.params;
+      const { on } = answeringSchema.parse(request.body);
+      const changed = await withTenant(db, tenantId, async (tx) => {
+        const rows = await tx
+          .update(phoneNumbers)
+          .set({ answering: on, updatedAt: new Date() })
+          .where(eq(phoneNumbers.tenantId, tenantId))
+          .returning({ id: phoneNumbers.id });
+        if (!rows.length) throw notFound("Phone number");
+        await audit(tx, {
+          tenantId,
+          actorUserId: request.user!.id,
+          action: on ? "phone.answering_on" : "phone.answering_off",
+          targetType: "tenant",
+          targetId: tenantId,
+          metadata: { numbers: rows.length },
+        });
+        return rows.length;
+      });
+      return { on, numbers: changed };
+    },
+  );
 }

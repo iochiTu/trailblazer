@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import { useI18n } from "@/lib/i18n";
+import { SwitchBar } from "./SwitchBar";
 
 type Tab = "inbox" | "bots" | "alerts";
 
@@ -86,6 +87,8 @@ export function AppShell({
           <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{title}</h1>
           {action}
         </div>
+        {/* Always in view: whether notifications reach me and whether the assistant is answering. */}
+        <SwitchBar tenantId={tenantId} />
       </header>
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-4">{children}</main>

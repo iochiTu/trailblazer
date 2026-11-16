@@ -204,6 +204,11 @@ export async function runPushNotify(
       totals.skipped++;
       log.push({ ...entry, status: "skipped", reason });
     };
+    // The big switch in the app: nothing at all, urgent included.
+    if (pref?.paused) {
+      skip("paused");
+      continue;
+    }
     if (pref?.events[payload.event] === false) {
       skip("turned_off");
       continue;
