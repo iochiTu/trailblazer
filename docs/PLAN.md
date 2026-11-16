@@ -994,7 +994,7 @@ default is done-for-you; self-serve stays open for those who want it.
 | **Self-serve: Free trial** | $0 (14 days) | Everyone | 1 bot, 50 pages, 100 replies | built |
 | **Self-serve: Local** | ~$29–49/mo | Restaurants, cafés, retail, salons, lodging, anyone who sets up alone | 1 bot, 200 pages, ~1,000 replies, EN/FR + automatic multilingual answers; seasonal pause | built |
 | **Self-serve: Local Plus** | ~$69–99/mo | Same, busier or multilingual communities | 2 bots, 1,000 pages, ~3,000 replies, translated inbox, no branding, own domain | 2 |
-| **Agency / white-label** | Wholesale price or revenue share | Local web design and SEO agencies | Client workspaces under the agency's name | 2 |
+| **Agency / white-label** | Per client: client pays the agency's price monthly to us and we pay the agency its share on a fixed date, or the agency pays our wholesale price | Local web design and SEO agencies | Client workspaces under the agency's name; see [AGENCY.md](AGENCY.md) | 2 |
 | **Referral** | 20 % recurring commission | Bookkeepers, IT managed-service providers | Per introduced customer, while they stay | 2 |
 | **Clinic / Professional** | Set after Phase 2 | Clinics, accounting, legal, immigration | Integrations, Canada residency, scope output checks, document chaser | 3 |
 | **Business** | from ~$499/mo | Industrial, institutions | Internal assistant, SSO, custom integrations | 4 |
