@@ -146,3 +146,31 @@ export interface OperatorOnboarding {
   /** Every step done or not needed. */
   finished: boolean;
 }
+
+type Localized = { en: string; fr: string };
+
+/** A question of the setup interview's set (Onboarding questions tab). */
+export interface OperatorQuestion {
+  id: string;
+  /** Stable: businesses' answers are stored under it. */
+  key: string;
+  /** Industry slugs it is asked for; empty: every industry. */
+  packs: string[];
+  kind: "short" | "long" | "choice";
+  question: Localized;
+  hint: Localized;
+  options: Localized[];
+  sortOrder: number;
+  enabled: boolean;
+  /** One of the standard questions (it can be reset to the standard wording). */
+  standard: boolean;
+  /** Changed from the standard wording. */
+  modified: boolean;
+  updatedAt: string;
+}
+
+export interface OperatorQuestionPack {
+  slug: string;
+  name: string;
+  phase: number;
+}

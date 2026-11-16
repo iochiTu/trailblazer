@@ -32,7 +32,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             }
           : { email: form.get("email"), password: form.get("password") };
       await api(`/v1/auth/${mode}`, { method: "POST", body });
-      router.push("/dashboard");
+      // A new account starts with the onboarding chat.
+      router.push(mode === "signup" ? "/welcome" : "/dashboard");
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 401

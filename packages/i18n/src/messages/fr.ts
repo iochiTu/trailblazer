@@ -971,4 +971,50 @@ export const fr: Record<MessageKey, string> = {
   "switch.error": "Ça n'a pas fonctionné. Veuillez réessayer.",
   "switch.paused":
     "Les notifications sont en pause sur tous vos appareils. Réactivez-les avec l'interrupteur en haut.",
+  "tenants.guided": "Configurer une entreprise avec le guide",
+  "welcome.title": "Configurez votre entreprise",
+  "welcome.intro":
+    "Quelques questions, environ cinq minutes. Passez ce que vous ne savez pas encore : vous pourrez modifier chaque réponse plus tard.",
+  "welcome.later": "Terminer plus tard",
+  "welcome.chatLabel": "Conversation de configuration",
+  "welcome.hello":
+    "Bonjour {name}! Je vais configurer votre assistant et la page de votre entreprise avec vous. D'abord, comment s'appelle votre entreprise?",
+  "welcome.resume": "Bon retour! Reprenons là où nous nous étions arrêtés.",
+  "welcome.namePlaceholder": "Le nom de votre entreprise",
+  "welcome.industryAsk":
+    "Enchanté, {business}! Quel genre d'entreprise est-ce? Choisissez-en un, ou décrivez-la en quelques mots.",
+  "welcome.industryPlaceholder": "p. ex. boulangerie familiale, plomberie, salon de coiffure",
+  "welcome.industryGuess": "On dirait : {industry}. Est-ce exact?",
+  "welcome.industryUnsure": "Je n'ai pas pu le déterminer. Lequel de ces choix s'en approche le plus?",
+  "welcome.yes": "Oui",
+  "welcome.pickAnother": "Non, je choisis",
+  "welcome.other": "Autre entreprise",
+  "welcome.variantAsk": "Lequel de ces choix la décrit le mieux?",
+  "welcome.variantNone": "Aucun de ceux-ci",
+  "welcome.languagesAsk": "Dans quelles langues votre assistant doit-il répondre aux clients?",
+  "welcome.languagesBoth": "Français et anglais",
+  "welcome.languagesEn": "Anglais seulement",
+  "welcome.languagesFr": "Français seulement",
+  "welcome.websiteAsk": "Avez-vous un site Web? Collez son adresse et je le lirai pour vous.",
+  "welcome.websitePlaceholder": "votreentreprise.ca",
+  "welcome.noWebsite": "Pas de site Web",
+  "welcome.websiteInvalid":
+    "Cela ne ressemble pas à une adresse Web. Réessayez, ou choisissez « Pas de site Web ».",
+  "welcome.websiteAdded": "Merci, je lis {site} en arrière-plan.",
+  "welcome.questionsIntro":
+    "Maintenant, {count, plural, one {une question} other {# questions}} sur {business}. Vos réponses deviennent ce que votre assistant sait, mot pour mot : écrivez-les comme vous le diriez à un client.",
+  "welcome.progress": "Question {current, number} sur {total, number}",
+  "welcome.skip": "Passer",
+  "welcome.skipped": "Passée",
+  "welcome.send": "Envoyer",
+  "welcome.answer": "Votre réponse",
+  "welcome.longNote": "Un élément par ligne. Choisissez Envoyer quand vous avez terminé.",
+  "welcome.saving": "Enregistrement de vos réponses…",
+  "welcome.preparing":
+    "Votre assistant connaît déjà vos réponses. Je prépare maintenant une proposition de page, de services et de message d'accueil à partir de celles-ci. Vous réviserez tout avant que quoi que ce soit soit public.",
+  "welcome.done":
+    "C'est prêt! Votre assistant connaît déjà vos réponses. Ouvrez-le et choisissez « Proposer ma configuration » pour en faire votre page et vos services.",
+  "welcome.open": "Ouvrir mon assistant",
+  "welcome.error": "Une erreur s'est produite. Veuillez réessayer.",
+  "welcome.thinking": "Un instant…",
 };

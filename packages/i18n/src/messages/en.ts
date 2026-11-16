@@ -924,6 +924,51 @@ export const en = {
   "switch.denied": "Notifications are blocked for this app. Allow them in your phone's settings.",
   "switch.error": "That didn't work. Please try again.",
   "switch.paused": "Notifications are paused on all your devices. Turn them on with the switch at the top.",
+  "tenants.guided": "Set up a business with the guide",
+  "welcome.title": "Set up your business",
+  "welcome.intro":
+    "A few questions, about five minutes. Skip anything you don't know yet: you can change every answer later.",
+  "welcome.later": "Finish later",
+  "welcome.chatLabel": "Setup conversation",
+  "welcome.hello":
+    "Hi {name}! I'll set up your assistant and your business page with you. First, what's your business called?",
+  "welcome.resume": "Welcome back! Let's pick up where we left off.",
+  "welcome.namePlaceholder": "Your business's name",
+  "welcome.industryAsk":
+    "Nice to meet you, {business}! What kind of business is it? Pick one, or describe it in a few words.",
+  "welcome.industryPlaceholder": "e.g. family bakery, plumbing, hair salon",
+  "welcome.industryGuess": "Sounds like {industry}. Is that right?",
+  "welcome.industryUnsure": "I couldn't tell from that. Which of these is closest?",
+  "welcome.yes": "Yes",
+  "welcome.pickAnother": "No, I'll choose",
+  "welcome.other": "Other business",
+  "welcome.variantAsk": "Which of these describes it best?",
+  "welcome.variantNone": "None of these",
+  "welcome.languagesAsk": "Which languages should your assistant answer customers in?",
+  "welcome.languagesBoth": "English and French",
+  "welcome.languagesEn": "English only",
+  "welcome.languagesFr": "French only",
+  "welcome.websiteAsk": "Do you have a website? Paste its address and I'll read it for you.",
+  "welcome.websitePlaceholder": "yourbusiness.ca",
+  "welcome.noWebsite": "No website",
+  "welcome.websiteInvalid": "That doesn't look like a web address. Try again, or choose “No website”.",
+  "welcome.websiteAdded": "Thanks, I'm reading {site} in the background.",
+  "welcome.questionsIntro":
+    "Now {count, plural, one {one question} other {# questions}} about {business}. Your answers become what your assistant knows, word for word, so write them the way you'd tell a customer.",
+  "welcome.progress": "Question {current, number} of {total, number}",
+  "welcome.skip": "Skip",
+  "welcome.skipped": "Skipped",
+  "welcome.send": "Send",
+  "welcome.answer": "Your answer",
+  "welcome.longNote": "One item per line. Choose Send when you're done.",
+  "welcome.saving": "Saving your answers…",
+  "welcome.preparing":
+    "Your assistant already knows your answers. I'm now preparing a suggested page, services and greeting from them. You'll review everything before anything goes public.",
+  "welcome.done":
+    "All set! Your assistant already knows your answers. Open it and choose “Suggest my setup” to turn them into your page and services.",
+  "welcome.open": "Open my assistant",
+  "welcome.error": "Something went wrong. Please try again.",
+  "welcome.thinking": "One moment…",
 } as const;
 
 export type MessageKey = keyof typeof en;

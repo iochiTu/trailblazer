@@ -131,10 +131,10 @@ test.describe("business owners", () => {
     }
   });
 
-  test("dashboard, usage, billing and every tab of the assistant", async ({ page }) => {
+  test("dashboard, onboarding chat, usage, billing and every tab of the assistant", async ({ page }) => {
     await page.context().addCookies(await signIn(page.request, OWNER));
     const { tenantId, botId } = await demoBusiness(page.request);
-    for (const path of ["/dashboard", `/t/${tenantId}/usage`, `/t/${tenantId}/billing`]) {
+    for (const path of ["/dashboard", "/welcome", `/t/${tenantId}/usage`, `/t/${tenantId}/billing`]) {
       await page.goto(`${ADMIN}${path}`);
       await settle(page);
       await audit(page, path);
@@ -186,9 +186,13 @@ test.describe("staff", () => {
     await page.goto(`${ADMIN}/operator`);
     await settle(page);
     await audit(page, "operator console");
-    await page.getByRole("tab", { name: "Onboarding" }).click();
+    await page.getByRole("tab", { name: "Onboarding", exact: true }).click();
     await settle(page);
     await audit(page, "operator console: onboarding");
     await fitsScreen(page, "operator console: onboarding");
+    await page.getByRole("tab", { name: "Onboarding questions" }).click();
+    await settle(page);
+    await audit(page, "operator console: onboarding questions");
+    await fitsScreen(page, "operator console: onboarding questions");
   });
 });

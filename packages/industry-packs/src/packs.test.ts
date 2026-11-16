@@ -5,8 +5,10 @@ import {
   getTemplate,
   hasTemplate,
   isSelectable,
+  matchIndustry,
   packs,
   resolveBehavior,
+  STANDARD_QUESTIONS,
   WORKFLOW_LIMITS,
 } from "./index.js";
 
@@ -169,11 +171,18 @@ describe("setup interview", () => {
       const keys = questions.map((question) => question.key);
       expect(new Set(keys).size).toBe(keys.length);
       expect(keys.slice(0, 6)).toEqual(["about", "services", "where", "hours", "contact", "payment"]);
+      expect(keys.at(-1)).toBe("faq");
       for (const question of questions) {
-        expect(question.key).toMatch(/^[a-z]{1,40}$/);
-        expect(
-          question.question.en && question.question.fr && question.hint.en && question.hint.fr,
-        ).toBeTruthy();
+        expect(question.question.en && question.question.fr).toBeTruthy();
+        // A hint is optional, but never in one language only.
+        expect(Boolean(question.hint.en)).toBe(Boolean(question.hint.fr));
+        if (question.kind === "choice") {
+          expect(question.options.length).toBeGreaterThan(1);
+          for (const option of question.options) expect(option.en && option.fr).toBeTruthy();
+        } else {
+          expect(question.options).toEqual([]);
+          expect(question.hint.en).toBeTruthy();
+        }
       }
     }
     expect(getInterview("trades").map((question) => question.key)).toContain("emergency");
@@ -182,6 +191,49 @@ describe("setup interview", () => {
       expect.arrayContaining(["visit", "vehicles", "tires", "warranty"]),
     );
     // An industry without its own questions, or an unknown one, gets the common ones.
-    expect(getInterview("unknown-pack")).toHaveLength(6);
+    expect(getInterview("unknown-pack").map((question) => question.key)).toEqual([
+      "about",
+      "services",
+      "where",
+      "hours",
+      "contact",
+      "payment",
+      "faq",
+    ]);
+  });
+
+  it("has its own questions for every industry that can be chosen today", () => {
+    const keys = new Set(STANDARD_QUESTIONS.map((entry) => entry.key));
+    expect(keys.size).toBe(STANDARD_QUESTIONS.length);
+    for (const entry of STANDARD_QUESTIONS) {
+      expect(entry.key).toMatch(/^[a-z][a-z0-9_]{1,39}$/);
+      for (const slug of entry.packs) expect(packs.map((p) => p.slug)).toContain(slug);
+    }
+    for (const pack of availablePacks().filter((p) => p.slug !== "generic")) {
+      expect(STANDARD_QUESTIONS.some((entry) => entry.packs.includes(pack.slug))).toBe(true);
+    }
+  });
+});
+
+describe("industry from a description", () => {
+  const available = availablePacks();
+  it.each([
+    ["Family plumbing company in Guelph", "trades", "plumbing"],
+    ["On fait du déneigement et de l'aménagement paysager", "trades", "landscaping-snow"],
+    ["Garage et pneus", "auto-repair", "tires"],
+    ["We're a small bakery, custom cakes too", "cafe-bakery", "bakery"],
+    ["Neighbourhood pub with live music", "restaurant", "pub"],
+    ["Barber shop", "personal-care", "barber"],
+    ["Bed and breakfast by the lake", "lodging", null],
+    ["Escape room", "attractions", null],
+    ["Fleuriste au centre-ville", "retail", "florist"],
+  ])("%s", (description, pack, variant) => {
+    expect(matchIndustry(description, available)).toEqual({ pack, variant });
+  });
+
+  it("finds nothing in words that only contain a cue, and leaves a tie to the model", () => {
+    expect(matchIndustry("Spaghetti and public relations", available)).toBeNull();
+    expect(matchIndustry("We help people", available)).toBeNull();
+    expect(matchIndustry("Coffee and flowers", available)).toBeNull();
   });
 });

@@ -76,7 +76,7 @@ describe("setup interview", () => {
     expect(keys).toEqual(expect.arrayContaining(["about", "services", "emergency", "quotes"]));
     expect(data.questions[1]).toMatchObject({
       key: "services",
-      long: true,
+      kind: "long",
       question: { en: expect.any(String), fr: expect.any(String) },
     });
   });
