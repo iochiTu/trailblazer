@@ -21,6 +21,7 @@ import {
   type JobType,
   runAddonEffect,
   runCapAlert,
+  runContactEmail,
   runPushNotify,
   runSetup,
   runUrgentAlert,
@@ -76,6 +77,15 @@ const handlers: { [T in JobType]: (job: JobRow, payload: JobPayloads[T]) => Prom
       messageId,
     );
     log("text", { id: job.id, messageId, outcome });
+  },
+  [JOB_TYPES.contactEmail]: async (job, payload) => {
+    const outcome = await runContactEmail(
+      { db, mailer, mailConfigured: !!process.env.SMTP_URL },
+      job.tenantId,
+      payload,
+      job.attempts >= job.maxAttempts,
+    );
+    log("contact email", { id: job.id, messageId: payload.messageId, outcome });
   },
   [JOB_TYPES.phoneCapAlert]: async (job, payload) => {
     const outcome = await runCapAlert({ db, mailer, adminUrl }, job.tenantId, payload);

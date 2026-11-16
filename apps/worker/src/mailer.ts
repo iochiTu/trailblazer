@@ -21,7 +21,15 @@ export function createMailerFromEnv(
   const transport = createTransport(env.SMTP_URL);
   return {
     async send(message) {
-      await transport.sendMail({ from, to: message.to, subject: message.subject, text: message.text });
+      // Under another name (a business writing to its customer), the address stays ours.
+      const address = /<([^>]+)>/.exec(from)?.[1] ?? from;
+      await transport.sendMail({
+        from: message.fromName ? { name: message.fromName, address } : from,
+        to: message.to,
+        subject: message.subject,
+        text: message.text,
+        replyTo: message.replyTo,
+      });
     },
   };
 }

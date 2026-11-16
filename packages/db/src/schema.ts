@@ -1126,11 +1126,43 @@ export interface MessageFlags {
   offers?: ReplyOffer[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
+  /** Written by a member of the business's team from Contacts, not by the assistant. */
+  staff?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
 // Requests from visitors (RLS enforced)
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * A person the business can follow up with (Contacts in the owner app): someone who left a request
+ * with the assistant, texted or called its number. One row per person and business, found again by
+ * phone number, then by email. Personal data: shown only to the business's members, removable one
+ * by one.
+ */
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** As the person gave it; null for someone known only by their number. */
+    name: text("name"),
+    /** E.164; a number that can't be read as one is left out (the request keeps what was typed). */
+    phone: text("phone"),
+    /** Lower case. */
+    email: text("email"),
+    /** Their last request or text, or the team's last message to them. */
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("contacts_phone_uq").on(t.tenantId, t.phone),
+    index("contacts_email_idx").on(t.tenantId, t.email),
+    index("contacts_activity_idx").on(t.tenantId, t.lastActivityAt),
+  ],
+);
 
 /** What the visitor wants the business to do. */
 export const leadKinds = ["callback", "quote", "booking", "question", "complaint", "other"] as const;
@@ -1156,6 +1188,8 @@ export const leads = pgTable(
      * later removed, and reads are tenant-scoped either way.
      */
     conversationId: uuid("conversation_id"),
+    /** Who left it (Contacts); null for the owner's own tests. */
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     /** "playground" = left by the owner while testing; never notified. */
     channel: text("channel").$type<Channel>().notNull(),
     kind: text("kind").$type<LeadKind>().notNull(),
@@ -1189,6 +1223,7 @@ export const leads = pgTable(
   (t) => [
     index("leads_bot_created_idx").on(t.tenantId, t.botId, t.createdAt),
     index("leads_conversation_idx").on(t.tenantId, t.conversationId),
+    index("leads_contact_idx").on(t.tenantId, t.contactId),
     foreignKey({
       name: "leads_bot_tenant_fk",
       columns: [t.botId, t.tenantId],
@@ -1849,9 +1884,10 @@ export const phoneNumbers = pgTable(
 
 /**
  * "reply": an answer to a text; "text_back": the text after a missed call; "system": HELP and the
- * like; "alert": a text to the business's owner (a new request, the daily cap reached).
+ * like; "alert": a text to the business's owner (a new request, the daily cap reached); "staff": a
+ * text a member of the team wrote to a contact.
  */
-export const outboundMessageKinds = ["reply", "text_back", "system", "alert"] as const;
+export const outboundMessageKinds = ["reply", "text_back", "system", "alert", "staff"] as const;
 export type OutboundMessageKind = (typeof outboundMessageKinds)[number];
 export const outboundMessageStatuses = ["queued", "sent", "delivered", "failed"] as const;
 export type OutboundMessageStatus = (typeof outboundMessageStatuses)[number];
@@ -1911,6 +1947,42 @@ export const smsOptOuts = pgTable(
   ],
 );
 
+export const contactMessageChannels = ["sms", "email", "call", "note"] as const;
+export type ContactMessageChannel = (typeof contactMessageChannels)[number];
+export const contactMessageStatuses = ["queued", "sent", "failed"] as const;
+export type ContactMessageStatus = (typeof contactMessageStatuses)[number];
+
+/**
+ * What the business's team sent to a contact, or noted about them: a text ("sms", sent from the
+ * assistant's number; delivery is on its `outbound_messages` row), an email (sent by the worker), a
+ * call they made ("call": a record, the call itself is placed from their own phone) or a note.
+ */
+export const contactMessages = pgTable(
+  "contact_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    channel: text("channel").$type<ContactMessageChannel>().notNull(),
+    authorUserId: uuid("author_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** Emails only. */
+    subject: text("subject"),
+    body: text("body").notNull(),
+    /** Notes and calls are "sent" at once; an email is "queued" until the worker sends it. */
+    status: text("status").$type<ContactMessageStatus>().notNull().default("sent"),
+    error: text("error"),
+    /** Texts: the assistant whose number sent it, and the queued text. */
+    botId: uuid("bot_id"),
+    outboundMessageId: uuid("outbound_message_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("contact_messages_contact_idx").on(t.tenantId, t.contactId, t.createdAt)],
+);
+
 /** Tables protected by row-level security. Keep in sync with migrations. */
 export const rlsTables = [
   "usage_counters",
@@ -1946,4 +2018,6 @@ export const rlsTables = [
   "sms_opt_outs",
   "lead_comments",
   "notifications",
+  "contacts",
+  "contact_messages",
 ] as const;

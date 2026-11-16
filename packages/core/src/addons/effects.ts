@@ -6,7 +6,15 @@ import { pushLeadToCrm } from "../integrations/crm.js";
 
 /** Sends email. The worker picks the transport (SMTP, or the log in development). */
 export interface Mailer {
-  send(message: { to: string[]; subject: string; text: string }): Promise<void>;
+  send(message: {
+    to: string[];
+    subject: string;
+    text: string;
+    /** Shown as the sender's name, in front of the platform's own address. */
+    fromName?: string;
+    /** Where an answer goes. */
+    replyTo?: string;
+  }): Promise<void>;
 }
 
 export interface EffectDeps {

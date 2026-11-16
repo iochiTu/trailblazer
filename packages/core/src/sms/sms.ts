@@ -26,6 +26,7 @@ import {
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { type ChatDeps, type ChatImage, runChat } from "../chat/engine.js";
 import { guessLanguage } from "../chat/language.js";
+import { touchContactByPhone } from "../contacts/contacts.js";
 import { errorMessage } from "../errors.js";
 import { countItemEvent } from "../stats/item-stats.js";
 import { noteCapReached, phoneBudget } from "./alerts.js";
@@ -48,7 +49,7 @@ export interface SmsNumber {
 const hoursAgo = (now: Date, hours: number) => new Date(now.getTime() - hours * 3600_000);
 
 /** The customer's thread with this number, while it is recent enough to continue. */
-async function currentThread(tx: Tx, botId: string, from: string, now: Date) {
+export async function currentThread(tx: Tx, botId: string, from: string, now: Date) {
   const [thread] = await tx
     .select({ id: conversations.id, language: conversations.language })
     .from(conversations)
@@ -165,6 +166,8 @@ export async function handleInboundText(
     const budget = await phoneBudget(tx, number.botId, now);
     // The owner answering one of our alerts isn't a customer: nothing to answer.
     if (budget?.number.alertNumber === message.from) return { outcome: "owner" as const };
+    // Whoever texts the business is someone it can follow up with (Contacts).
+    await touchContactByPhone(tx, number.tenantId, message.from, now);
     // The daily spend cap: no answer (it would cost), and the business is told once.
     if (budget?.capped) {
       await noteCapReached(tx, budget, now);
@@ -381,6 +384,7 @@ export async function handleMissedCall(
     const t = smsText(info.language);
     const noText = { say: t.callAnswerNoText(info.name), language: info.language, texted: false };
     if (!call.from || (await optedOut(tx, number.botId, call.from))) return noText;
+    await touchContactByPhone(tx, number.tenantId, call.from, now);
     // At the daily spend cap nothing more is sent; the business is told once.
     const budget = await phoneBudget(tx, number.botId, now);
     if (budget?.capped) {

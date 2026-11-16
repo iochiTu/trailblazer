@@ -478,8 +478,67 @@ export interface InboxLead
   botId: string;
   botName: string;
   businessName: string | null;
+  /** Who left it (Contacts); null for the owner's own tests. */
+  contactId: string | null;
   /** How many notes the team added. */
   comments: number;
+}
+
+/** Someone the business can follow up with, as the Contacts list shows them. */
+export interface ContactSummary {
+  id: string;
+  name: string | null;
+  /** E.164. */
+  phone: string | null;
+  email: string | null;
+  lastActivityAt: string;
+  requests: number;
+  openRequests: number;
+  urgentRequests: number;
+  /** What they last asked for. */
+  lastRequest: string | null;
+}
+
+export type ContactChannel = "sms" | "email" | "call" | "note";
+export type ContactUnavailable = "no_phone" | "no_email" | "no_number" | "opted_out" | "capped";
+
+/** One thing that happened with a contact, oldest first. */
+export type ContactTimelineItem =
+  | {
+      type: "request";
+      id: string;
+      at: string;
+      botId: string;
+      kind: Lead["kind"];
+      status: LeadStatus;
+      urgent: boolean;
+      channel: string;
+      message: string;
+    }
+  /** A text in their thread with the assistant's number. */
+  | { type: "text"; id: string; at: string; from: "contact" | "assistant"; body: string }
+  /** What the team sent or noted. */
+  | {
+      type: "team";
+      id: string;
+      at: string;
+      channel: ContactChannel;
+      subject: string | null;
+      body: string;
+      status: "queued" | "sent" | "delivered" | "failed";
+      error: string | null;
+      /** null when the author's account was removed. */
+      authorName: string | null;
+    };
+
+export interface ContactDetail {
+  contact: Pick<ContactSummary, "id" | "name" | "phone" | "email" | "lastActivityAt">;
+  /** Whether a text or an email can be sent from the portal, and why not. */
+  reach: {
+    sms: { ok: true; from: string } | { ok: false; reason: ContactUnavailable };
+    email: { ok: true } | { ok: false; reason: ContactUnavailable };
+  };
+  timeline: ContactTimelineItem[];
 }
 
 /** A note staff added to a request. */

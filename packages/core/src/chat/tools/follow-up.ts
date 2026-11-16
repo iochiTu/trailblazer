@@ -11,6 +11,7 @@ import {
 import type { LeadField } from "@traiblazer/industry-packs";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { contactFor } from "../../contacts/contacts.js";
 import { countItemEvent, itemStatSurface } from "../../stats/item-stats.js";
 import { clean, digits, emailSchema, typedByVisitor } from "./contact.js";
 import { defineTool, type ToolContext } from "./contract.js";
@@ -224,6 +225,12 @@ After it succeeds, tell the visitor their request was passed on and the business
               catalogItemId: item?.id ?? latest.catalogItemId,
               itemName: item?.name ?? latest.itemName,
               attachmentIds: [...new Set([...latest.attachmentIds, ...photos.map((p) => p.id).reverse()])],
+              contactId: await requestContact(tx, ctx, {
+                name: clean(input.name) ?? latest.name,
+                email: email ?? latest.email,
+                phone: phone ?? latest.phone,
+                current: latest.contactId,
+              }),
               updatedAt: new Date(),
             })
             .where(eq(leads.id, latest.id))
@@ -270,6 +277,7 @@ After it succeeds, tell the visitor their request was passed on and the business
             catalogItemId: item?.id ?? null,
             itemName: item?.name ?? null,
             attachmentIds: photos.map((p) => p.id).reverse(),
+            contactId: await requestContact(tx, ctx, { name: clean(input.name) ?? input.name, email, phone }),
           })
           .returning();
 
@@ -283,6 +291,16 @@ After it succeeds, tell the visitor their request was passed on and the business
       });
     },
   });
+
+/** The contact a request belongs to (Contacts in the owner app); none for the owner's own tests. */
+export async function requestContact(
+  tx: Tx,
+  ctx: ToolContext,
+  who: { name: string | null; email: string | null; phone: string | null; current?: string | null },
+): Promise<string | null> {
+  if (ctx.channel === "playground") return who.current ?? null;
+  return contactFor(tx, ctx.tenantId, who, { current: who.current });
+}
 
 /** Statistics: a request about this service was passed on (not for the owner's own tests). */
 export async function countRequested(tx: Tx, ctx: ToolContext, itemId: string) {

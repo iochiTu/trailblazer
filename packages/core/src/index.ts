@@ -39,6 +39,18 @@ export {
   type Urgency,
 } from "./chat/triage.js";
 export {
+  addContactMessage,
+  type ContactDetails,
+  type ContactEmailDeps,
+  type ContactMessageResult,
+  contactFor,
+  type NewContactMessage,
+  runContactEmail,
+  type TextReach,
+  textReach,
+  touchContactByPhone,
+} from "./contacts/contacts.js";
+export {
   buildDemo,
   DEMO_RETRY_MS,
   DEMO_SOURCE_WAIT_MS,
