@@ -1339,6 +1339,7 @@ store and for desktop owners.
 
 | Job | In the app | Notes |
 |---|---|---|
+| **Two switches, always in view** | At the top of every app screen: **Notifications** on/off (pauses all of my notifications on every device, urgent included; turning on also registers this phone) and **Answering** on/off (the assistant answers calls and texts on the business's numbers, or is paused; owners and admins only, asks before pausing) | Pausing keeps every other setting, so turning back on restores them (`notification_prefs.paused`, `phone_numbers.answering`) |
 | **See what came in** | Inbox: new requests, urgent requests on top, conversations (auto-translated), customer comments and team notes on a request; mark handled, call back, text back (SMS phase) | The first screen |
 | **Update the business** | Hours and seasons, notices ("closed Dec 24–26, emergency calls only"), services and prices, policies (warranty, payment, cancellation, deposit), Q&A pairs, knowledge sources | Same rules as the portal: Q&A pairs override everything; changes are audit-logged |
 | **Update by voice or photo** | Tap the mic and say the change, or photograph a price list, flyer or sign; the assistant drafts the change (notice, Q&A pair, service or price), the owner approves it | Reuses the setup assistant and the price list reading (§7.1); nothing goes live without approval |

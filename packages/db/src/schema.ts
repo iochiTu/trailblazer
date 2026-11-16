@@ -327,6 +327,8 @@ export const notificationPrefs = pgTable("notification_prefs", {
   timeZone: text("time_zone"),
   /** Urgent requests still come through during quiet hours. */
   urgentInQuietHours: boolean("urgent_in_quiet_hours").notNull().default(true),
+  /** The one big switch in the app: true = no notifications at all until turned back on. */
+  paused: boolean("paused").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -1784,6 +1786,11 @@ export const phoneNumbers = pgTable(
     provider: text("provider").notNull(),
     smsEnabled: boolean("sms_enabled").notNull().default(true),
     callMode: text("call_mode").$type<PhoneCallMode>().notNull().default("text_back"),
+    /**
+     * The business's "answering" switch in the owner app. False pauses calls and texts on this
+     * number (as if texting and calls were off) without losing `smsEnabled` and `callMode`.
+     */
+    answering: boolean("answering").notNull().default(true),
     /**
      * Most that texts (and later calls) on this number may cost in 24 hours, in cents. At the cap
      * the assistant stops answering by text until spending drops below it again.

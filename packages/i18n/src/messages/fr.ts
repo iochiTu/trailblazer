@@ -933,7 +933,6 @@ export const fr: Record<MessageKey, string> = {
   "notify.unsupported":
     "Les notifications ne sont pas offertes dans ce navigateur. Utilisez l'application Traiblazer sur votre téléphone.",
   "notify.error": "Les notifications n'ont pas pu être activées. Veuillez réessayer.",
-  "notify.banner": "Activez les notifications pour ne jamais manquer un client.",
   "notify.events": "M'avertir pour",
   "notify.event.request.urgent": "Les demandes urgentes",
   "notify.event.request.urgent.help":
@@ -951,4 +950,25 @@ export const fr: Record<MessageKey, string> = {
   "notify.allDevices": "Ces choix s'appliquent sur tous vos appareils.",
   "notify.channel.urgent": "Demandes urgentes",
   "notify.channel.requests": "Demandes",
+  "switch.label": "Interrupteurs rapides",
+  "switch.notify": "Notifications",
+  "switch.answering": "Réponse",
+  "switch.on": "Activé",
+  "switch.off": "Désactivé",
+  "switch.notifyHelp.on":
+    "Vous recevez les nouvelles demandes et les urgences. Touchez pour tout mettre en pause.",
+  "switch.notifyHelp.off": "Les notifications sont en pause. Touchez pour les activer.",
+  "switch.answeringHelp.on":
+    "Votre assistant répond aux appels et aux textos. Touchez pour le mettre en pause.",
+  "switch.answeringHelp.off":
+    "Votre assistant ne répond pas aux appels ni aux textos. Touchez pour le réactiver.",
+  "switch.answeringConfirmOff":
+    "Mettre la réponse en pause? Votre assistant cessera de répondre aux appels et aux textos sur votre numéro jusqu'à ce que vous le réactiviez.",
+  "switch.noPhone": "Aucun numéro",
+  "switch.adminOnly": "Seul le propriétaire ou un administrateur peut modifier ce réglage.",
+  "switch.denied":
+    "Les notifications sont bloquées pour cette application. Autorisez-les dans les réglages du téléphone.",
+  "switch.error": "Ça n'a pas fonctionné. Veuillez réessayer.",
+  "switch.paused":
+    "Les notifications sont en pause sur tous vos appareils. Réactivez-les avec l'interrupteur en haut.",
 };

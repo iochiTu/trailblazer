@@ -1,5 +1,5 @@
 import { notificationPrefs, pushDevices } from "@traiblazer/db";
-import { notificationPrefsSchema, registerDeviceSchema } from "@traiblazer/shared";
+import { notificationPausedSchema, notificationPrefsSchema, registerDeviceSchema } from "@traiblazer/shared";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
@@ -13,6 +13,7 @@ const DEFAULT_PREFS = {
   quietEnd: null,
   timeZone: null,
   urgentInQuietHours: true,
+  paused: false,
 };
 
 /**
@@ -21,7 +22,8 @@ const DEFAULT_PREFS = {
  *   POST   /v1/me/devices                   register this phone or browser for pushes
  *   DELETE /v1/me/devices/:deviceId         stop pushes to it (turning notifications off)
  *   GET    /v1/me/notification-prefs        which events, quiet hours
- *   PUT    /v1/me/notification-prefs
+ *   PUT    /v1/me/notification-prefs        (everything but the pause)
+ *   PATCH  /v1/me/notification-prefs        { paused }: the big on/off switch at the top of the app
  *
  * A device belongs to the sign-in (session) that registered it: signing out removes it, so a
  * phone that was handed on stops getting the business's notifications. The same token
@@ -84,5 +86,15 @@ export async function notificationRoutes(app: FastifyInstance, { db, config }: A
       .values(values)
       .onConflictDoUpdate({ target: notificationPrefs.userId, set: values });
     return { prefs: input };
+  });
+
+  // Separate from PUT so the settings form and the switch never overwrite each other.
+  app.patch("/v1/me/notification-prefs", { preHandler: requireUser }, async (request) => {
+    const { paused } = notificationPausedSchema.parse(request.body);
+    await db
+      .insert(notificationPrefs)
+      .values({ userId: request.user!.id, paused })
+      .onConflictDoUpdate({ target: notificationPrefs.userId, set: { paused, updatedAt: new Date() } });
+    return { paused };
   });
 }

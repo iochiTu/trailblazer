@@ -498,6 +498,8 @@ export interface NotificationPrefs {
   quietEnd: string | null;
   timeZone: string | null;
   urgentInQuietHours: boolean;
+  /** The switch at the top of the app (changed with PATCH, never by the settings form). */
+  paused?: boolean;
 }
 
 /** An assistant's phone number and what it does (Phone tab). */
