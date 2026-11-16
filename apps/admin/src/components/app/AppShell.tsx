@@ -6,7 +6,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { useI18n } from "@/lib/i18n";
 import { SwitchBar } from "./SwitchBar";
 
-type Tab = "inbox" | "bots" | "alerts";
+type Tab = "inbox" | "contacts" | "bots" | "alerts";
 
 /**
  * The owner app's frame (PLAN §20.3), phone first: a top bar (title, back link, an action) and a
@@ -37,6 +37,22 @@ export function AppShell({
       label: t("nav.inbox"),
       icon: <path d="M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2-8Z" />,
     },
+    // Contacts belong to one business: without one, the inbox picks it first.
+    ...(tenantId
+      ? [
+          {
+            id: "contacts" as const,
+            href: `/t/${tenantId}/contacts`,
+            label: t("nav.contacts"),
+            icon: (
+              <>
+                <circle cx="9" cy="8" r="3.5" />
+                <path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.2a6.5 6.5 0 0 1 3.5 5.3" />
+              </>
+            ),
+          },
+        ]
+      : []),
     {
       id: "bots",
       href: "/dashboard",
@@ -97,7 +113,7 @@ export function AppShell({
         aria-label={t("app.name")}
         className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)]"
       >
-        <ul className="mx-auto grid max-w-2xl grid-cols-3">
+        <ul className="mx-auto grid max-w-2xl auto-cols-fr grid-flow-col">
           {tabs.map((item) => (
             <li key={item.id}>
               <Link

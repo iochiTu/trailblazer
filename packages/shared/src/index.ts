@@ -540,6 +540,28 @@ export const leadCommentSchema = z.object({ body: z.string().trim().min(1).max(L
 export type LeadCommentInput = z.infer<typeof leadCommentSchema>;
 
 /**
+ * What a team member sends to a contact from Contacts: a text from the assistant's number, an
+ * email, a record of a call they made, or a note for the team.
+ */
+export const CONTACT_MESSAGE_CHANNELS = ["sms", "email", "call", "note"] as const;
+/** Four message parts in the plain alphabet. */
+export const CONTACT_TEXT_MAX = 640;
+export const CONTACT_EMAIL_MAX = 5000;
+export const CONTACT_SUBJECT_MAX = 150;
+export const contactMessageSchema = z.discriminatedUnion("channel", [
+  z.object({ channel: z.literal("sms"), body: z.string().trim().min(1).max(CONTACT_TEXT_MAX) }),
+  z.object({
+    channel: z.literal("email"),
+    subject: z.string().trim().min(1).max(CONTACT_SUBJECT_MAX),
+    body: z.string().trim().min(1).max(CONTACT_EMAIL_MAX),
+  }),
+  // What came of the call ("left a voicemail"); may be left empty.
+  z.object({ channel: z.literal("call"), body: z.string().trim().max(LEAD_COMMENT_MAX).default("") }),
+  z.object({ channel: z.literal("note"), body: z.string().trim().min(1).max(LEAD_COMMENT_MAX) }),
+]);
+export type ContactMessageInput = z.infer<typeof contactMessageSchema>;
+
+/**
  * A phone or browser registering for push notifications: the owner app's APNs or FCM token, or
  * a browser's Web Push subscription (endpoint + keys).
  */

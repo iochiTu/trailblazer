@@ -24,6 +24,8 @@ export const JOB_TYPES = {
   embedChunks: "embed.chunks",
   /** Sends one queued text message through the telephony provider. */
   messageSend: "message.send",
+  /** Sends an email a team member wrote to a contact. */
+  contactEmail: "contact.email",
   /** Emails the business that its number's daily spend cap was reached. */
   phoneCapAlert: "phone.cap_alert",
   /** Push notifications to the business's team: a new or urgent request, a note on one (PLAN §20). */
@@ -45,6 +47,7 @@ export interface JobPayloads {
   [JOB_TYPES.demoBuild]: DemoBuildPayload;
   [JOB_TYPES.embedChunks]: { botId: string };
   [JOB_TYPES.messageSend]: { messageId: string };
+  [JOB_TYPES.contactEmail]: { messageId: string };
   [JOB_TYPES.phoneCapAlert]: { botId: string; spentMicros?: number };
   [JOB_TYPES.pushNotify]: PushNotifyPayload;
 }

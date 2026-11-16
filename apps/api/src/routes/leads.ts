@@ -187,6 +187,7 @@ export async function leadRoutes(app: FastifyInstance, { db }: AppContext) {
     botName: bots.name,
     businessName: businessProfiles.businessName,
     conversationId: leads.conversationId,
+    contactId: leads.contactId,
     channel: leads.channel,
     kind: leads.kind,
     status: leads.status,

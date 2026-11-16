@@ -24,6 +24,7 @@ import {
   countRequested,
   MAX_REQUEST_PHOTOS,
   MAX_REQUESTS_PER_CONVERSATION,
+  requestContact,
   requestEvent,
 } from "./follow-up.js";
 
@@ -409,6 +410,7 @@ export const bookAppointmentTool = (
             catalogItemId: item?.id ?? null,
             itemName: item?.name ?? null,
             attachmentIds: photos.map((p) => p.id).reverse(),
+            contactId: await requestContact(tx, ctx, { name, email, phone }),
           })
           .returning();
         await tx

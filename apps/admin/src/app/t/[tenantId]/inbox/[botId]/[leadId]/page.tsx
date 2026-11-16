@@ -311,6 +311,12 @@ export default function RequestPage() {
         </p>
       )}
 
+      {lead.contactId && (
+        <Link href={`/t/${tenantId}/contacts/${lead.contactId}`} className="btn btn-ghost min-h-12">
+          {t("request.openContact", { name: lead.name })}
+        </Link>
+      )}
+
       <Link
         href={`/t/${tenantId}/bots/${botId}?tab=requests`}
         className="muted self-center text-sm underline underline-offset-4"
