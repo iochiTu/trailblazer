@@ -9,6 +9,7 @@ import { BrandMark } from "@/components/BrandMark";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ApiError, api, type Bot, type Language, type Me, type Pack, type PublicPlan } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { forgetPushDevice } from "@/lib/push";
 
 export default function DashboardPage() {
   const { t } = useI18n();
@@ -38,6 +39,8 @@ export default function DashboardPage() {
   }, [loadMe]);
 
   async function signOut() {
+    // The server forgets this device's push registration with the session.
+    forgetPushDevice();
     await api("/v1/auth/logout", { method: "POST" });
     router.replace("/login");
   }
@@ -86,6 +89,11 @@ export default function DashboardPage() {
                 </option>
               ))}
             </select>
+            {tenantId && (
+              <Link href={`/t/${tenantId}/inbox`} className="btn">
+                {t("inbox.title")}
+              </Link>
+            )}
             {tenantId && (
               <Link href={`/t/${tenantId}/usage`} className="btn btn-ghost">
                 {t("nav.usage")}

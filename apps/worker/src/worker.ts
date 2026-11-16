@@ -1,6 +1,6 @@
 /**
  * Background worker: polls the Postgres job queue and runs jobs (website crawls, text indexing,
- * reading uploaded price lists and brochures, add-on effects such as notification emails, urgent request alerts, the setup assistant, Insights).
+ * reading uploaded price lists and brochures, add-on effects such as notification emails, urgent request alerts, push notifications, the setup assistant, Insights).
  * Several workers can run side by side; jobs are claimed with FOR UPDATE SKIP LOCKED.
  */
 import { hostname } from "node:os";
@@ -21,6 +21,7 @@ import {
   type JobType,
   runAddonEffect,
   runCapAlert,
+  runPushNotify,
   runSetup,
   runUrgentAlert,
   sendQueuedText,
@@ -29,6 +30,7 @@ import {
 import { createDb } from "@traiblazer/db";
 import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
+import { createPushFromEnv } from "@traiblazer/push";
 import { createTelephonyFromEnv } from "@traiblazer/telephony";
 import { createMailerFromEnv } from "./mailer.js";
 
@@ -56,6 +58,8 @@ const mailer = createMailerFromEnv(process.env, log);
 const setupInputChars = Number(process.env.SETUP_MAX_INPUT_CHARS) || undefined;
 /** Admin portal origin, for links in urgent alerts. */
 const adminUrl = process.env.ADMIN_ORIGIN ? new URL(process.env.ADMIN_ORIGIN).origin : undefined;
+/** Push notifications to the owner app and browsers (PLAN §20); each provider is optional. */
+const push = createPushFromEnv(process.env);
 /** CRM connections (Jobber, ServiceTitan…): off without INTEGRATIONS_SECRET_KEY. */
 const integrations = loadIntegrationsConfig(process.env);
 
@@ -91,6 +95,10 @@ const handlers: { [T in JobType]: (job: JobRow, payload: JobPayloads[T]) => Prom
   [JOB_TYPES.urgentAlert]: async (job, payload) => {
     const outcome = await runUrgentAlert({ db, mailer, adminUrl }, job.tenantId, payload);
     log("urgent alert", { id: job.id, leadId: payload.leadId, outcome });
+  },
+  [JOB_TYPES.pushNotify]: async (job, payload) => {
+    const outcome = await runPushNotify({ db, push }, job.tenantId, payload);
+    log("push", { id: job.id, event: payload.event, leadId: payload.leadId, outcome });
   },
   [JOB_TYPES.demoBuild]: async (job, payload) => {
     const outcome = await buildDemo(
@@ -141,6 +149,7 @@ log("worker started", {
   embeddings: embeddings?.model ?? null,
   smtp: !!process.env.SMTP_URL,
   integrations: !!integrations.secretKey,
+  push: push.platforms,
 });
 while (!stopping) {
   let job: JobRow | null = null;

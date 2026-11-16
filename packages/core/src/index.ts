@@ -75,6 +75,16 @@ export { clearSource, indexDocuments, searchableText, tsvectorSql } from "./know
 export { assertPublicUrl, publicFetch, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";
 export { planAllows, planFeatures } from "./plan-features.js";
+export {
+  inQuietHours,
+  type PushMessage,
+  type PushNotifyDeps,
+  type PushNotifyPayload,
+  type PushOutcome,
+  type PushSender,
+  type PushTarget,
+  runPushNotify,
+} from "./push/notify.js";
 export { runUrgentAlert, type UrgentAlertDeps, type UrgentAlertPayload } from "./requests/urgent-alert.js";
 export { type AppliedSetup, applySetup, CatalogLimitError, suggestionToInput } from "./setup/apply.js";
 export {

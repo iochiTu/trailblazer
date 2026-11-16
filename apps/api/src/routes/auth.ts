@@ -113,7 +113,8 @@ export async function authRoutes(app: FastifyInstance, { db, config, limiter }: 
   });
 
   app.get("/v1/auth/me", { preHandler: requireUser }, async (request) => {
-    const user = request.user!;
+    // The session id stays on the server (push devices are tied to it).
+    const { sessionId: _, ...user } = request.user!;
     const myTenants = await db
       .select({
         id: tenants.id,

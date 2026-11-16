@@ -451,6 +451,55 @@ export interface Lead {
   createdAt: string;
 }
 
+/** A request as the owner app's inbox shows it (every assistant of the business). */
+export interface InboxLead
+  extends Pick<
+    Lead,
+    | "id"
+    | "conversationId"
+    | "channel"
+    | "kind"
+    | "status"
+    | "name"
+    | "email"
+    | "phone"
+    | "bestTime"
+    | "message"
+    | "language"
+    | "urgent"
+    | "details"
+    | "itemName"
+    | "attachmentIds"
+    | "createdAt"
+  > {
+  botId: string;
+  botName: string;
+  businessName: string | null;
+  /** How many notes the team added. */
+  comments: number;
+}
+
+/** A note staff added to a request. */
+export interface LeadComment {
+  id: string;
+  body: string;
+  authorUserId: string | null;
+  /** null when the author's account was removed. */
+  authorName: string | null;
+  createdAt: string;
+}
+
+export type NotificationEvent = "request.urgent" | "request.new" | "request.comment";
+
+/** A user's notification choices (the same on all their devices). */
+export interface NotificationPrefs {
+  events: Partial<Record<NotificationEvent, boolean>>;
+  quietStart: string | null;
+  quietEnd: string | null;
+  timeZone: string | null;
+  urgentInQuietHours: boolean;
+}
+
 /** An assistant's phone number and what it does (Phone tab). */
 export interface PhoneNumber {
   id: string;

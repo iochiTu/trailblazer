@@ -1021,8 +1021,26 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           ]
         : [],
     );
+    // Push to the team's phones (PLAN §20): urgent ones ahead of everything else.
+    const pushes = events.flatMap((event) =>
+      event.type === "request.created"
+        ? [
+            newJob({
+              tenantId: input.tenantId,
+              type: JOB_TYPES.pushNotify,
+              priority: event.urgent ? JOB_PRIORITY.urgent : JOB_PRIORITY.normal,
+              payload: {
+                event: event.urgent ? "request.urgent" : "request.new",
+                botId: bot.id,
+                leadId: event.leadId,
+              },
+            }),
+          ]
+        : [],
+    );
     const queued = [
       ...urgentAlerts,
+      ...pushes,
       ...effects.map(({ addonId, effect }) =>
         newJob({
           tenantId: input.tenantId,
