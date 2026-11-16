@@ -1,6 +1,11 @@
 import { AVATAR_ICON_IDS, type AvatarIcon, THEMES } from "@traiblazer/appearance";
 import { isSupportedLanguage, normalizeLanguageTag } from "@traiblazer/i18n";
-import { INTERVIEW_LIMITS, WORKFLOW_LIMITS as L } from "@traiblazer/industry-packs";
+import {
+  INTERVIEW_KINDS,
+  INTERVIEW_LIMITS,
+  WORKFLOW_LIMITS as L,
+  QUESTION_KEY_PATTERN,
+} from "@traiblazer/industry-packs";
 import { z } from "zod";
 
 const avatarSchema = z.discriminatedUnion("kind", [
@@ -236,13 +241,76 @@ export const uploadSourceFileSchema = z.object({
 });
 
 /**
- * The owner's answers to the setup interview, by question key (see `getInterview` in
- * @traiblazer/industry-packs). An empty answer is a skipped question.
+ * The owner's answers to the setup interview, by question key (the question set is in the
+ * `onboarding_questions` table). An empty answer is a skipped question.
  */
 export const interviewAnswersSchema = z.object({
   answers: z.record(z.string().max(40), z.string().max(INTERVIEW_LIMITS.answerLength)),
 });
 export type InterviewAnswersInput = z.infer<typeof interviewAnswersSchema>;
+
+const localized = (max: number) =>
+  z.object({ en: z.string().trim().max(max), fr: z.string().trim().max(max) });
+
+/** A question of the setup interview's set, as staff write it in the operator console. */
+const onboardingQuestionFields = {
+  packs: z.array(z.string().trim().min(1).max(60)).max(60),
+  kind: z.enum(INTERVIEW_KINDS),
+  question: localized(INTERVIEW_LIMITS.questionLength),
+  hint: localized(INTERVIEW_LIMITS.hintLength),
+  options: z.array(localized(INTERVIEW_LIMITS.optionLength)).max(INTERVIEW_LIMITS.options),
+  sortOrder: z.number().int().min(0).max(100_000),
+  enabled: z.boolean(),
+};
+
+export const createOnboardingQuestionSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .regex(QUESTION_KEY_PATTERN, "Lowercase letters, digits and _, starting with a letter (2–40)"),
+  ...onboardingQuestionFields,
+  packs: onboardingQuestionFields.packs.default([]),
+  // Left out: after the last question.
+  sortOrder: onboardingQuestionFields.sortOrder.optional(),
+  options: onboardingQuestionFields.options.default([]),
+  enabled: onboardingQuestionFields.enabled.default(true),
+});
+export type CreateOnboardingQuestionInput = z.infer<typeof createOnboardingQuestionSchema>;
+
+/** The key stays: businesses' answers are stored under it. */
+export const updateOnboardingQuestionSchema = z.object(onboardingQuestionFields).partial();
+export type UpdateOnboardingQuestionInput = z.infer<typeof updateOnboardingQuestionSchema>;
+
+/**
+ * What's wrong with a question as it would be saved (null: nothing). Checked on the whole question,
+ * after an update is merged into it: both languages, a hint in both or neither, quick answers only
+ * (and at least two) on a "choice" question.
+ */
+export function onboardingQuestionProblem(question: {
+  kind: string;
+  question: { en: string; fr: string };
+  hint: { en: string; fr: string };
+  options: { en: string; fr: string }[];
+}): string | null {
+  if (!question.question.en || !question.question.fr) return "Write the question in English and French";
+  if (Boolean(question.hint.en) !== Boolean(question.hint.fr)) {
+    return "Write the hint in both languages, or leave both empty";
+  }
+  if (question.kind === "choice") {
+    if (question.options.length < 2) return "A choice question needs at least two quick answers";
+    if (question.options.some((o) => !o.en || !o.fr)) {
+      return "Write every quick answer in English and French";
+    }
+  } else if (question.options.length) {
+    return "Only choice questions have quick answers";
+  }
+  return null;
+}
+
+/** The onboarding chat: how the owner describes their business, to find its industry. */
+export const onboardingIndustrySchema = z.object({
+  description: z.string().trim().min(1).max(300),
+});
 
 export const updateTextSourceSchema = z
   .object({

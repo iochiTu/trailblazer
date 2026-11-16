@@ -503,22 +503,43 @@ per assistant (PLAN milestone 1.4).
   model once.
 - A Word document is a zip: one whose directory declares more than 40 MB unpacked is refused.
 
-## Interview (no website)
+## Onboarding chat and interview
 
-A business with nothing written down can answer a few questions instead: **No website? Answer a few
-questions** on the **Knowledge** tab (PLAN milestone 1.4). Every question can be skipped.
+A new account starts with the **onboarding chat** (`/welcome`; sign-up goes there, and so does the
+dashboard while the account has no business). It asks, one message at a time: the business's name, its
+industry (tapped from a list, or recognized from the owner's own words), the languages, the website,
+then the setup interview's questions for that industry. Every question can be skipped, and the owner
+can leave and pick up where they left off (progress is kept in that browser). Each step uses the
+portal's usual routes, so the result is the same as setting up by hand: the business, its assistant,
+the website being read and the interview's answers. At the end the setup assistant is started, so a
+suggested page, services and greeting are waiting on the **Knowledge** tab. "Set up a business with the
+guide" on the dashboard starts another one.
 
-- The questions come from the industry (`packages/industry-packs/src/interview.ts`): six common ones
-  (what the business does, services and prices, where, hours, how to reach or book, payment), parking
-  and access for businesses customers visit, then the industry's own (trades: emergency calls, quotes,
-  licences and warranty; auto repair: vehicles, tires, waiting and loaners, warranty; restaurants and
-  cafés: dietary needs, ordering). English and French.
+The same questions are on the **Knowledge** tab later: **No website? Answer a few questions** (PLAN
+milestone 1.4).
+
+- **The question set is edited by staff** in the operator console's **Onboarding questions** tab
+  (`onboarding_questions` table; see below). Each question is asked of every industry, or only of the
+  industries chosen; a business gets them in the set's order. A question has a short, long (one line
+  per item) or quick-answer form, and is written in English and French.
+- The standard set (`STANDARD_QUESTIONS` in `packages/industry-packs/src/interview.ts`) seeds the table:
+  six common questions (what the business does, services and prices, where, hours, how to reach or
+  book, payment), parking and access for businesses customers visit, each phase-1 industry's own
+  (trades: emergency calls, quotes, licences; auto repair: vehicles, tires, waiting, warranty;
+  restaurants and cafés: dietary needs, ordering, custom orders, groups; retail: brands, online and
+  pickup, returns; salons: appointments, first visit, cancellation; lodging: check-in, what's included,
+  pets, cancellation; attractions: tickets, season, groups), then the customers' most frequent questions.
 - The answers are saved as one text source per assistant ("Interview answers"), each answer with its
   question so it keeps its meaning, in the assistant's default language (English for other languages).
   It is indexed like pasted text, and the setup assistant reads it like any other source. The answers
-  are edited in the interview, not as pasted text; clearing every answer removes the source.
-- `GET` / `PUT /v1/tenants/:t/bots/:b/interview`. No model is involved: the follow-up questions come
-  from the setup assistant's "Questions your information doesn't answer yet".
+  are edited in the interview, not as pasted text; clearing every answer removes the source. Answers to
+  questions staff later remove or turn off are no longer shown, and drop out the next time the owner saves.
+- `GET` / `PUT /v1/tenants/:t/bots/:b/interview`. No model writes or rephrases anything: the answers are
+  the owner's own words.
+- `POST /v1/tenants/:t/onboarding/industry` turns the owner's description into an industry: words are
+  matched first (`matchIndustry`, English and French, no model call); only when they find nothing or
+  can't decide is the auxiliary model asked, and its cost is recorded as `llm.aux` usage. The
+  description isn't stored.
 
 ## Setup assistant (onboarding)
 
@@ -722,6 +743,16 @@ within a minute or so.
   comes off. The assistant stays a draft, so the page is listed only once the owner activates it.
 - **Delete** removes the demo business and everything in it. Statuses: building, ready, nothing to
   read (`needs_information`), couldn't fill the page in (`failed`), handed over.
+
+### Onboarding questions
+
+The console's **Onboarding questions** tab edits what the onboarding chat and the Knowledge tab's
+interview ask (see "Onboarding chat and interview"). Staff can add a question (its key is permanent:
+answers are stored under it), change its wording, form, quick answers or industries, reorder the set,
+turn a question off, delete it, reset a standard question to its standard wording, and add back
+standard questions that were deleted. **Show: As asked of …** previews one industry's questions in
+order. Every change is recorded in `operator_audit_logs` (`onboarding_question.*`); changes apply to the
+next business that answers.
 
 ### Onboarding checklist
 

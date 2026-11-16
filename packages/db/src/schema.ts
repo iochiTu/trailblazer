@@ -159,6 +159,38 @@ export const platformSettings = pgTable("platform_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export type LocalizedText = { en: string; fr: string };
+
+/**
+ * The setup interview's question set (operator console): what the onboarding chat and the
+ * Knowledge tab's interview ask a business, per industry. Platform table, edited by staff only and
+ * read by everyone; it holds no business's data (the answers live in each business's knowledge
+ * source). Seeded from STANDARD_QUESTIONS in @traiblazer/industry-packs.
+ */
+export const onboardingQuestions = pgTable(
+  "onboarding_questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Stable: businesses' answers are stored under it. */
+    key: text("key").notNull().unique(),
+    /** Industry pack slugs it is asked for; empty: every industry. */
+    packs: text("packs").array().notNull().default(sql`'{}'::text[]`),
+    /** "short", "long" or "choice" (see INTERVIEW_KINDS). */
+    kind: text("kind").notNull().default("short"),
+    question: jsonb("question").$type<LocalizedText>().notNull(),
+    hint: jsonb("hint").$type<LocalizedText>().notNull(),
+    /** Quick answers for "choice" questions. */
+    options: jsonb("options").$type<LocalizedText[]>().notNull().default([]),
+    /** Lower is asked first. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Turned off: kept, but not asked. */
+    enabled: boolean("enabled").notNull().default(true),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("onboarding_questions_order_idx").on(t.sortOrder)],
+);
+
 /**
  * building: sources are being read and the page filled in; ready: review it, then share the link;
  * needs_information: nothing could be read from the sources; failed: the setup assistant couldn't

@@ -69,18 +69,40 @@ export function InterviewSection({
       {open ? (
         <form className="flex flex-col gap-4" onSubmit={save}>
           {interview.questions.map((question) => (
-            <label key={question.key} className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{question.question[lang]}</span>
-              <textarea
-                className="input"
-                name={question.key}
-                rows={question.long ? 6 : 2}
-                maxLength={2000}
-                dir="auto"
-                defaultValue={interview.answers[question.key] ?? ""}
-              />
-              <span className="muted text-xs">{question.hint[lang]}</span>
-            </label>
+            <div key={question.key} className="flex flex-col gap-1 text-sm">
+              <label className="font-medium" htmlFor={`answer-${question.key}`}>
+                {question.question[lang]}
+              </label>
+              {question.kind === "choice" ? (
+                <input
+                  id={`answer-${question.key}`}
+                  className="input"
+                  name={question.key}
+                  maxLength={2000}
+                  dir="auto"
+                  list={`interview-${question.key}`}
+                  defaultValue={interview.answers[question.key] ?? ""}
+                />
+              ) : (
+                <textarea
+                  id={`answer-${question.key}`}
+                  className="input"
+                  name={question.key}
+                  rows={question.kind === "long" ? 6 : 2}
+                  maxLength={2000}
+                  dir="auto"
+                  defaultValue={interview.answers[question.key] ?? ""}
+                />
+              )}
+              {question.kind === "choice" && (
+                <datalist id={`interview-${question.key}`}>
+                  {question.options.map((option) => (
+                    <option key={option.en} value={option[lang]} />
+                  ))}
+                </datalist>
+              )}
+              {question.hint[lang] && <span className="muted text-xs">{question.hint[lang]}</span>}
+            </div>
           ))}
           {error && (
             <p className="error text-sm" role="alert">

@@ -26,6 +26,8 @@ import { leadRoutes } from "./routes/leads.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
+import { onboardingChatRoutes } from "./routes/onboarding-chat.js";
+import { onboardingQuestionRoutes } from "./routes/onboarding-questions.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { pageRoutes } from "./routes/page.js";
 import { phoneRoutes } from "./routes/phone.js";
@@ -138,6 +140,8 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => operatorRoutes(scope, ctx));
   await app.register(async (scope) => demoRoutes(scope, ctx));
   await app.register(async (scope) => onboardingRoutes(scope, ctx));
+  await app.register(async (scope) => onboardingQuestionRoutes(scope, ctx));
+  await app.register(async (scope) => onboardingChatRoutes(scope, ctx));
   await app.register(async (scope) => mcpRoutes(scope, ctx));
   await app.register(async (scope) => publicRoutes(scope, ctx));
   await app.register(async (scope) => telephonyRoutes(scope, ctx));

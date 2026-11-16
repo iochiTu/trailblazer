@@ -26,6 +26,11 @@ export default function DashboardPage() {
         router.replace("/operator");
         return;
       }
+      // No business yet: the onboarding chat sets the first one up.
+      if (!data.user.demo && data.tenants.length === 0) {
+        router.replace("/welcome");
+        return;
+      }
       setMe(data);
       setTenantId((current) => current ?? data.tenants[0]?.id ?? null);
     } catch (err) {
@@ -108,6 +113,11 @@ export default function DashboardPage() {
         )}
         {tenant && <PlanSummary planId={tenant.plan} />}
         {/* A demo account tries its demo business only. */}
+        {!me.user.demo && (
+          <Link href="/welcome" className="self-start underline underline-offset-4 text-sm">
+            {t("tenants.guided")}
+          </Link>
+        )}
         {!me.user.demo && (
           <CreateTenantForm
             onCreated={async (id) => {

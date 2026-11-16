@@ -372,8 +372,11 @@ export interface Source {
 export interface InterviewQuestion {
   key: string;
   question: { en: string; fr: string };
+  /** An example of the kind of answer (may be empty). */
   hint: { en: string; fr: string };
-  long?: boolean;
+  /** short: a line or two; long: one line per item; choice: quick answers (own words allowed). */
+  kind: "short" | "long" | "choice";
+  options: { en: string; fr: string }[];
 }
 
 export interface Interview {

@@ -1,7 +1,7 @@
 import { enqueueJob, JOB_TYPES } from "@traiblazer/core";
 import { bots, knowledgeSources, withTenant } from "@traiblazer/db";
 import { enOrFr } from "@traiblazer/i18n";
-import { getInterview, type InterviewQuestion } from "@traiblazer/industry-packs";
+import type { InterviewQuestion } from "@traiblazer/industry-packs";
 import { interviewAnswersSchema } from "@traiblazer/shared";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -9,6 +9,7 @@ import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
 import { badRequest, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
+import { interviewFor } from "../lib/interview-questions.js";
 import { requireTenantRole } from "../plugins/auth.js";
 
 type BotParams = { Params: { tenantId: string; botId: string } };
@@ -42,7 +43,8 @@ export function interviewText(
 }
 
 /**
- * Interview mode of the setup assistant: questions for a business without a website.
+ * Interview mode of the setup assistant: the questions for the business's industry (staff keep the
+ * set in the operator console), also asked by the onboarding chat when a business signs up.
  *   GET /v1/tenants/:t/bots/:b/interview   the questions for its industry, and the saved answers
  *   PUT /v1/tenants/:t/bots/:b/interview   save the answers as a knowledge source (one per assistant)
  * The answers are indexed like pasted text; with every answer empty the source is removed.
@@ -70,9 +72,12 @@ export async function interviewRoutes(app: FastifyInstance, { db }: AppContext) 
       const [bot] = await tx.select({ pack: bots.pack }).from(bots).where(eq(bots.id, botId)).limit(1);
       if (!bot) throw notFound("Assistant");
       const [source] = await findSource(tx, botId);
+      const questions = await interviewFor(tx, bot.pack);
+      // Answers to questions staff have since removed or turned off aren't shown (or counted).
+      const saved = source?.settings.interview?.answers ?? {};
       return {
-        questions: getInterview(bot.pack),
-        answers: source?.settings.interview?.answers ?? {},
+        questions,
+        answers: Object.fromEntries(questions.flatMap((q) => (saved[q.key] ? [[q.key, saved[q.key]]] : []))),
         sourceId: source?.id ?? null,
         updatedAt: source?.updatedAt ?? null,
       };
@@ -88,7 +93,7 @@ export async function interviewRoutes(app: FastifyInstance, { db }: AppContext) 
     const result = await withTenant(db, tenantId, async (tx) => {
       const [bot] = await tx.select().from(bots).where(eq(bots.id, botId)).limit(1);
       if (!bot) throw notFound("Assistant");
-      const questions = getInterview(bot.pack);
+      const questions = await interviewFor(tx, bot.pack);
       const known = new Set(questions.map((question) => question.key));
       const unknown = Object.keys(input.answers).filter((key) => !known.has(key));
       if (unknown.length) throw badRequest(`Unknown question: ${unknown.join(", ")}`);
