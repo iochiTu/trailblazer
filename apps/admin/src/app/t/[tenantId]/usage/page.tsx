@@ -4,7 +4,7 @@ import { enOrFr } from "@traiblazer/i18n";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ConsoleShell } from "@/components/app/SideNav";
 import { SupportBanner } from "@/components/SupportBanner";
 import { DailyChart, type DailyPoint } from "@/components/usage/DailyChart";
 import { ApiError, api } from "@/lib/api";
@@ -222,104 +222,105 @@ export default function UsagePage() {
     ["hosted", "inline", "widget", "playground", "sms"].includes(c) ? t(`usage.channel.${c as "hosted"}`) : c;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6">
-      <SupportBanner tenantId={tenantId} />
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <Link href="/dashboard" className="muted text-sm underline-offset-4 hover:underline">
-            ← {t("tenants.title")}
-          </Link>
-          <h1 className="text-xl font-semibold">
-            {t("usage.title")} · {tenant.name}
-          </h1>
-        </div>
-        <LanguageSwitcher />
-      </header>
+    <ConsoleShell tenantId={tenantId} active="usage">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
+        <SupportBanner tenantId={tenantId} />
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <Link href="/dashboard" className="muted text-sm underline-offset-4 hover:underline lg:hidden">
+              ← {t("tenants.title")}
+            </Link>
+            <h1 className="text-xl font-semibold">
+              {t("usage.title")} · {tenant.name}
+            </h1>
+          </div>
+        </header>
 
-      <QuotaMeter report={report} />
+        <QuotaMeter report={report} />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label={t("usage.remaining")} value={fmt.format(report.month.remaining)} />
-        <StatTile
-          label={t("usage.refused")}
-          value={fmt.format(refused)}
-          note={t("usage.refusedBreakdown", {
-            quota: report.month.blockedQuota,
-            busy: report.month.blockedBusy,
-            abuse: report.month.blockedVisitor,
-          })}
-        />
-        <StatTile
-          label={t("usage.conversations30")}
-          value={fmt.format(report.daily.reduce((sum, d) => sum + d.conversations, 0))}
-        />
-        {report.month.costMicros !== null && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile label={t("usage.remaining")} value={fmt.format(report.month.remaining)} />
           <StatTile
-            label={t("usage.cost")}
-            value={new Intl.NumberFormat(language, { style: "currency", currency: "USD" }).format(
-              report.month.costMicros / 1_000_000,
-            )}
-            note={t("usage.costNote")}
+            label={t("usage.refused")}
+            value={fmt.format(refused)}
+            note={t("usage.refusedBreakdown", {
+              quota: report.month.blockedQuota,
+              busy: report.month.blockedBusy,
+              abuse: report.month.blockedVisitor,
+            })}
           />
-        )}
-      </div>
+          <StatTile
+            label={t("usage.conversations30")}
+            value={fmt.format(report.daily.reduce((sum, d) => sum + d.conversations, 0))}
+          />
+          {report.month.costMicros !== null && (
+            <StatTile
+              label={t("usage.cost")}
+              value={new Intl.NumberFormat(language, { style: "currency", currency: "USD" }).format(
+                report.month.costMicros / 1_000_000,
+              )}
+              note={t("usage.costNote")}
+            />
+          )}
+        </div>
 
-      <section className="card p-5">
-        <DailyChart data={report.daily} />
-      </section>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="card flex flex-col gap-2 p-5">
-          <h3 className="font-medium">{t("usage.byAssistant")}</h3>
-          <table className="w-full text-sm">
-            <tbody className="tabular-nums">
-              {report.byAssistant.map((row) => (
-                <tr key={row.botId} className="border-t border-[var(--border)] first:border-0">
-                  <td className="py-1.5">{row.name}</td>
-                  <td className="py-1.5 text-end">{fmt.format(row.questions)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="card p-5">
+          <DailyChart data={report.daily} />
         </section>
-        <section className="card flex flex-col gap-2 p-5">
-          <h3 className="font-medium">{t("usage.byChannel")}</h3>
-          {report.byChannel.length === 0 ? (
-            <p className="muted text-sm">{t("usage.noData")}</p>
-          ) : (
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <section className="card flex flex-col gap-2 p-5">
+            <h3 className="font-medium">{t("usage.byAssistant")}</h3>
             <table className="w-full text-sm">
               <tbody className="tabular-nums">
-                {report.byChannel.map((row) => (
-                  <tr key={row.channel} className="border-t border-[var(--border)] first:border-0">
-                    <td className="py-1.5">{channelName(row.channel)}</td>
+                {report.byAssistant.map((row) => (
+                  <tr key={row.botId} className="border-t border-[var(--border)] first:border-0">
+                    <td className="py-1.5">{row.name}</td>
                     <td className="py-1.5 text-end">{fmt.format(row.questions)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </section>
+          <section className="card flex flex-col gap-2 p-5">
+            <h3 className="font-medium">{t("usage.byChannel")}</h3>
+            {report.byChannel.length === 0 ? (
+              <p className="muted text-sm">{t("usage.noData")}</p>
+            ) : (
+              <table className="w-full text-sm">
+                <tbody className="tabular-nums">
+                  {report.byChannel.map((row) => (
+                    <tr key={row.channel} className="border-t border-[var(--border)] first:border-0">
+                      <td className="py-1.5">{channelName(row.channel)}</td>
+                      <td className="py-1.5 text-end">{fmt.format(row.questions)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+
+        <section className="card flex flex-col gap-4 p-5">
+          <h2 className="font-medium">{t("usage.limits")}</h2>
+          {canManage ? (
+            <LimitsForm report={report} base={base} onSaved={load} />
+          ) : (
+            <p className="muted text-sm">
+              {t("usage.limitsReadOnly", { limit: report.limits.effectiveMonthlyLimit })}
+            </p>
           )}
+          <div className="panel p-4 text-sm">
+            <p className="font-medium">{t("usage.protection")}</p>
+            <p className="muted">
+              {t("usage.protectionHint", {
+                concurrent: report.plan.concurrent,
+                perMinute: report.plan.perMinute,
+              })}
+            </p>
+          </div>
         </section>
       </div>
-
-      <section className="card flex flex-col gap-4 p-5">
-        <h2 className="font-medium">{t("usage.limits")}</h2>
-        {canManage ? (
-          <LimitsForm report={report} base={base} onSaved={load} />
-        ) : (
-          <p className="muted text-sm">
-            {t("usage.limitsReadOnly", { limit: report.limits.effectiveMonthlyLimit })}
-          </p>
-        )}
-        <div className="panel p-4 text-sm">
-          <p className="font-medium">{t("usage.protection")}</p>
-          <p className="muted">
-            {t("usage.protectionHint", {
-              concurrent: report.plan.concurrent,
-              perMinute: report.plan.perMinute,
-            })}
-          </p>
-        </div>
-      </section>
-    </div>
+    </ConsoleShell>
   );
 }
