@@ -1,9 +1,14 @@
-# Traiblazer — Multi-Tenant AI Business Page and Chat Assistant Platform for Small Businesses
+# Traiblazer — Multi-Tenant AI Business Page, Chat, Phone and Front-Desk Assistant Platform, for Individuals to Large Companies
 
 > Working name taken from the project folder. Status: **web chat platform and AI business page built
 > (Phase 1, milestones 1.1–1.3 — see README); setup without a website (1.4) built except Google
 > listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics, EN/FR evals and the prospect demo generator built;
 > Phase 2 started: plans bought online with Stripe (setup fee + monthly plan, CAD), appointment booking in Google Calendar; phone and SMS not started**.
+> **v7 2026-11-15: call center replacement becomes a business line (§19):** an AI front desk for inbound
+> calls and texts for every size of customer, from individuals to large companies, built on the existing platform
+> (providers, knowledge base, engine, integrations, billing) with a warm hand-off to people; no outbound AI sales calls.
+> The audience widens to **every size of customer** (§2): individuals, small, mid-size and large companies and
+> institutions on one platform, sized by plan. The first pilots stay with trades and auto shops (§2.1).
 > **v6 2026-11-10: chat first.** The first pilot product is the chat assistant with its **AI business page**:
 > the hosted chat page works as the business's website, for businesses that have no site or an outdated
 > one (§7.1). Phone and SMS move to a later phase. The audience is unchanged from v5.
@@ -21,23 +26,42 @@
 
 ## 1. Product in one paragraph
 
-A local business — a plumber, an HVAC or roofing contractor, an auto repair or tire shop, a property
-manager, later a clinic or an accounting or law office — gets an **AI business page**: one link that works
-as its website. The page shows who they are, what they offer (services or products, with photos and
-prices), where they work and when they're open. In front sits an AI assistant that answers customers'
-questions 24/7 from the business's **own content**, takes quote and booking requests with photos, flags the
-urgent ones and passes them to the owner. A business with no website, or one that is years out of date,
-**skips building a website**: we set the page up from whatever exists (a Google listing, a Facebook page, a
-price list, a short interview) and it goes on the Google Business Profile, a QR code, the truck and the
-invoice. A solo contractor gets the same thing as a personal page; a business that already has a good
-website adds the same assistant to it as a widget. Answers come in English, French and the customer's own
-language. **Phone and SMS answering come in a later phase** on the same engine (§7.3). The assistant is a
+Anyone who has customers calling, texting or searching for them gets an **AI assistant that answers for
+them**, from their **own content**, 24/7, in English, French and the customer's own language. It answers
+questions, takes quote and booking requests with photos, books appointments, flags urgent problems and
+hands off to a person. The same platform serves **every size of customer**: an individual (a solo
+contractor, a real estate agent, a consultant, a landlord) gets a personal page and an assistant on their
+phone; a local business — a plumber, an auto shop, a property manager, later a clinic or a law office —
+gets an **AI business page**, one link that works as its website, set up from whatever exists (a Google
+listing, a Facebook page, a price list, a short interview) if it has no site; a business with a good
+website adds the assistant as a widget; a mid-size or large company, or an institution, uses it as an
+**AI front desk** that takes the repetitive share of its call center, routed to its locations or
+departments, with its own staff taking the transfers (§19). Chat and the business page come first; **phone
+and SMS** follow on the same engine (§7.3), and the front desk is built on them. The size of the customer
+changes the plan and the features it switches on, not the product. The assistant is a
 **customer-service assistant**: it answers questions about the business, takes requests and hands off — it
-never gives professional advice. You (the operator) run one shared platform serving many businesses cheaply.
+never gives professional advice. You (the operator) run one shared platform serving many customers cheaply.
 
 ## 2. Target market and go-to-market order
 
-**Launch market:** small and mid-sized Canadian cities and suburban hubs, starting in Ontario
+**Who it is for: every size, one platform.** Each size uses the same engine, knowledge base, tools and
+integrations; the plan sets allowances (replies, minutes, texts, locations, seats) and switches features on
+(`planAllows`).
+
+| Size | Examples | What they mainly use | How they buy | When we sell to them |
+|---|---|---|---|---|
+| **Individuals** | Solo contractors, real estate agents, consultants, coaches, tutors, freelancers, landlords | Personal page, chat, phone and text answering while they work, booking | Self-serve, monthly | From the start (the personal preset exists); phone with the SMS release |
+| **Small businesses** | Trades, auto shops, salons, restaurants, retail | Business page, chat, requests, missed-call text-back, booking | Done-for-you or self-serve, monthly | **First pilots** (§2.1) |
+| **Mid-size and multi-location** | Property managers, clinic groups, franchises, auto groups, professional firms | Assistant per location, integrations, AI front desk with their staff taking transfers | Sales call, setup fee and monthly | Phase 2–3 |
+| **Large companies** | Companies with an outsourced or offshore tier-1 contact center, dealer networks, utilities | AI front desk for tier 1, departments, single sign-on, agent view, CRM and ticketing, SLA | Sales cycle, contract | After the front desk and its scale and reporting exist (§19.10) |
+| **Institutions** | Colleges, universities, municipalities | Widget on their site, 311 and help-desk calls, departments | Procurement | Phase 4 (§18) |
+| **Partners** | Web agencies, answering services, BPOs | White-label for their clients | Wholesale or revenue share | Phase 2 onward |
+
+**Order:** start where the sale is short and the risk is low — individuals and small businesses — and
+earn references; add mid-size and large companies and institutions as the features they require (§18,
+§19.6) are built. Rules that keep the larger markets open while we sell small are in §18.4 and §19.
+
+**Launch market (first pilots):** small and mid-sized Canadian cities and suburban hubs, starting in Ontario
 (Kitchener-Waterloo, London, Kingston, Barrie, Guelph), then Kelowna, Halifax and the suburbs of the GTA and
 Metro Vancouver. Start with **one or two cities and one industry** so references and word of mouth build up
 in one place. The Northern Ontario research list (Thunder Bay, Sudbury, Sault Ste. Marie; 451 businesses)
@@ -48,7 +72,7 @@ in it, so each launch city needs its own prospect list (§2.2).
 can be live for a business in a day. Phone and SMS answering are a later phase (§14), sold to the same
 customers once the page has shown its value.
 
-**Why these businesses** (assumptions to confirm in the pilots):
+**Why these businesses first** (assumptions to confirm in the pilots):
 
 1. **Many have no website, or an outdated one.** A solo contractor or small shop often has only a Google
    listing and a Facebook page. A website project costs them money and weeks, and nobody maintains it
@@ -85,6 +109,8 @@ only (no health or case details), to learn their workflow before the full packs 
 |---|---|
 | **Local businesses** — restaurants, cafés, retail, salons, lodging, attractions | Self-serve: sign up, add the website or build the page, paste the widget. The same product at a low price; a good offer for agency partners |
 | **Car dealerships** | Phase 3 — inventory feeds, CRM and lead-response tooling |
+| **Individuals** | Self-serve personal page and assistant; phone and text answering once SMS is live (§19.3) |
+| **Mid-size and large companies** | AI front desk and call center replacement (§19); sold once warm transfer, the agent view and reporting exist |
 | **Industrial & institutions** | Phase 4 — long enterprise sales, procurement, security reviews. Universities, colleges and municipalities: what they need and what to respect while building now is in §18 |
 
 **Needs that come up in every early-stage industry:**
@@ -901,7 +927,8 @@ Durations are estimates for 1–2 developers.
 | **3. Clinics and professional services (customer service only)** | ~6–8 weeks | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; clinic booking integrations (as API access allows); **document chaser** with secure upload and vision check; minimal intake; catalog feeds; packs: Clinic (vet first), Pharmacy, Accounting & tax, Law firm, Immigration consultant, Insurance & financial, Real estate, **Car dealership**; with phone and SMS in place: waitlist backfill & recall |
 | **4. Business tier and self-serve growth** | later | Self-serve local packs on demand (events, menu OCR, WordPress plugin); internal knowledge assistant (SSO, SharePoint/Drive), RFQ, careers; packs: Mining supply, Engineering, Manufacturing, Auto manufacturer & parts maker, Transportation, Utilities, Colleges; public API; WhatsApp |
 
-Phone and SMS are a channel, not an industry phase: they can run before, alongside or after Phase 3. The
+Phone and SMS are a channel, not an industry phase: they can run before, alongside or after Phase 3. Call
+center replacement (§19) is built on that channel, in the order in §19.10. The
 pack phases in code (1–4) follow the industry phases above.
 
 **Phase 1 milestones**
@@ -1010,6 +1037,10 @@ Plan allowances stay editable in the operator console.
 13. Product name, team size and target launch date.
 14. **Institutions (§18):** which comes first (a college or a mid-size municipality), whether the first
     deal is a pilot under the open-competition threshold, and when to start SOC 2.
+15. **Call center replacement (§19):** the voice model (decided by the voice test), who takes the
+    transfers when the business has no staff free (its own team, an on-call list, or a partner
+    answering service), the price model (per minute or per call handled), and which US states to sell in
+    first (recording consent and chatbot disclosure rules differ).
 
 ## 18. Institutions: universities, colleges and municipalities
 
@@ -1100,3 +1131,173 @@ These cost little today and are expensive to retrofit. Every new feature is chec
 A realistic first deal: a college department or a mid-size municipality's service desk, as a paid
 pilot below the open-competition threshold, public information only, widget on their site, EN/FR.
 
+
+## 19. Call center replacement
+
+A business line next to the business page and the phone and SMS assistant: **an AI front desk that
+answers every call and text in English and French, 24/7, and hands the rest to people.** It takes over
+the inbound, repetitive work that businesses now send to offshore or outsourced call centers, and keeps
+the calls that need a person for the business's own staff or a partner team.
+
+Two rules shape it:
+
+- **Reuse first.** It is not a second product. It is the phone and SMS channel (§7.3,
+  [PHONE_AND_SMS.md](PHONE_AND_SMS.md)) on the platform that exists: the same tenants and security, AI
+  providers, knowledge base, engine and tools, requests, integrations, billing, usage and reporting
+  (§19.2). New code is limited to what a call center needs and the platform lacks (§19.6).
+- **One product for every size,** from one person with a phone to a large company with a contact
+  center (§19.3). Size changes the plan and the features it switches on, not the code path.
+
+Market facts, model names and prices below were checked on the web in November 2026, mostly
+from third-party pages; legal points must be confirmed with a lawyer in Canada and in each US state
+before selling there.
+
+### 19.1 What we sell, and what we don't
+
+- **We sell:** inbound answering (questions, requests, booking, triage, after-hours, overflow, missed
+  calls), by phone and text, with a warm hand-off to a person and a summary of every call.
+- **We don't sell:** outbound sales or telemarketing calls with an AI voice, collections, or a promise to
+  replace every agent. The pitch is "every call answered, people only where they matter", not "fire your
+  call center".
+- **Against an offshore call center:** local-sounding English and French, no hold time at peak, the same
+  answer every time from the business's own content, every call summarized and searchable, and a cost
+  per minute measured in cents (to be confirmed by the voice test, §19.7).
+
+### 19.2 Built on the platform we have
+
+| Need in a call center | What exists today (reused as is) | What is added |
+|---|---|---|
+| Accounts, security, data isolation | Tenants, memberships and roles, RLS on every table, audit log, support mode (`packages/db`) | Departments and single sign-on (shared with §18.3) |
+| AI providers | LLM gateway with ordered routes and fallbacks: Anthropic, OpenRouter, any OpenAI-compatible endpoint, offline test provider (`packages/llm`) | A `voice` purpose next to `chat`, `aux` and `agent`; speech-to-speech backends behind `VoiceSession` |
+| Knowledge base | Website crawl, text and Q&A sources, price lists and brochures, interview, setup assistant, services and products, notices, embeddings with keyword and fuzzy search (`packages/core/src/knowledge`, `setup`) | Nothing: calls answer from the same knowledge |
+| The brain | `runChat` with retrieval, scope policy, triage, industry packs, markers (`packages/core/src/chat`, `packages/industry-packs`) | A `voice` channel and reply shape, as `sms` was added |
+| Actions during a call | Tools: search knowledge, request (follow-up), service area, booking, contact (`packages/core/src/chat/tools`) | `transfer_call`, `send_text`, `verify_caller`, `send_payment_link` in the same tool registry |
+| Requests and hand-off | Requests with photos, urgent flag and email, "one request, not two", owner alerts by text | Warm transfer and callback requests use the same request record |
+| Phone and texts | `packages/telephony` (Twilio adapter, fake provider), SMS in and out, missed-call text-back, STOP/HELP, daily spend cap, MMS photos | Calls answered by `apps/voice`; call log |
+| Background work | Postgres job queue and `apps/worker` (`message.send`, alerts) | Post-call summary and recording jobs |
+| Integrations | Jobber, Housecall Pro, ServiceTitan, webhook, Google Calendar (`packages/integrations`) | Read calls for account lookups (order, appointment, job status) |
+| Billing and plans | Stripe checkout, plan changes, customer portal; plan features and allowances in the operator console | Per-minute allowances, seats and locations per plan |
+| Usage and cost | `usage_events` per business, cost per conversation, caps | `voice.minute` and `voice.speech` (already counted by the cap) |
+| Reporting | Insights (funnel, intent, sentiment, blockers), page statistics, knowledge gaps | Containment, transfer rate and reasons, cost per handled call |
+| Staff tools | Admin portal (Conversations, Requests, Phone & texts tab), operator console, onboarding checklist, demo generator | Agent view for transfers; call transcripts and recordings in Conversations |
+| Quality | Evals EN/FR (chat and SMS cases), a11y checks, EN/FR strings everywhere | Voice eval cases from the same scenarios |
+
+### 19.3 Who buys: every size, one product
+
+| Size | Example | Today | What they use |
+|---|---|---|---|
+| **Individual** | Solo contractor, real estate agent, consultant, coach, freelancer, landlord | Calls go to voicemail while they work | One number (or their own, forwarded), the personal page preset (§7.1), the assistant answers calls and texts, takes requests and books; transfer to their mobile when they choose; a summary of every call by text |
+| **Small business** (our current market) | Trades, auto shops, salons | Voicemail, the owner's mobile, a local answering service | Missed and after-hours calls, overflow; transfer to the owner or the on-call list |
+| **Mid-size and multi-location** | Clinic groups, property managers, franchises, auto groups | A front desk per location, a shared answering service | One assistant for every location, routed per location; their own staff take the transfers in the agent view |
+| **Large company** | A company with an outsourced or offshore tier-1 contact center | A BPO for tier-1 inbound | The repetitive tier-1 share; departments, single sign-on, agent view, integration with their CRM or ticketing, SLA; their team or BPO keeps tier 2 |
+| **Institutions** (§18) | Colleges, universities, municipalities | Registrar and IT help desks at peak, 311 lines | Peak and after-hours volume in EN/FR, routed to departments |
+| **Answering services and BPOs** (channel) | Canadian and US answering services | Human agents on every call | White-label: the AI takes tier 1, their agents take the transfers |
+
+**How sizes differ in the product:** only by plan. Each plan switches features on through
+`planAllows` (`packages/core/src/plan-features.ts`, today: Insights) and sets allowances (minutes,
+texts, simultaneous calls, locations, seats). An individual and a large company run the same engine,
+the same knowledge base and the same tools; the large company's plan adds departments, single sign-on,
+the agent view, more simultaneous calls and an SLA. Every feature in §19.6 is built so it can be off.
+
+**Sales order:** individuals and small businesses first (self-serve and done-for-you, as today), then
+multi-location businesses and institutions, then large companies, once the scale and reporting in §19.6
+exist.
+
+### 19.4 What the AI handles, and what goes to a person
+
+| Call type | Who handles it | Built today |
+|---|---|---|
+| Questions about the business (hours, prices, area, policies, services) | AI, from the knowledge base, with "I don't know" and a knowledge gap when the answer isn't there | Chat and SMS; voice not built |
+| New request, quote, lead (name, problem, address, photos by text) | AI | Built (chat, SMS) |
+| Booking an appointment | AI | Google Calendar built; Jobber next |
+| Emergency (burst pipe, gas smell, no heat) | AI triage → safety message → transfer to on-call | Triage built; call transfer not built |
+| Account questions ("where's my order", "my bill") | AI after verifying the caller, through the business's systems | Not built |
+| Payment | AI sends a secure payment link by text; never takes a card number by voice | Not built |
+| Angry, complex, sensitive, or "talk to a person" | Person: warm transfer with the summary; callback request when nobody is available | Not built |
+
+### 19.5 What the law allows (Canada and the US)
+
+| Rule | What it means for us |
+|---|---|
+| **US TCPA** (the FCC treats AI-generated voices as artificial voices) | No outbound AI-voice calls to consumers without prior express consent; marketing calls need prior express written consent. We only call back customers who asked |
+| **Canada: CRTC Unsolicited Telecommunications Rules** (automatic dialing and announcing, National DNCL) | No outbound AI sales calls; callbacks the customer asked for and calls to the business's own on-call contacts only (§12) |
+| **CASL** (Canada) and **A2P 10DLC / toll-free verification** (US texting) | Replies and transactional texts only; STOP honoured (built) |
+| **Call recording** | Canada: notice in the greeting. US: some states (California and others) require the consent of everyone on the call, so the greeting always discloses recording and recording stays a per-business setting, off by default |
+| **AI disclosure** | The greeting says it is an automated assistant (§7.3); some US states have or are adding chatbot disclosure laws: check per state |
+| **Privacy** | PIPEDA; Quebec's Law 25 (an assessment before personal information leaves Quebec, which also applies to US-hosted AI providers); FIPPA and MFIPPA for institutions (§18.2); US state privacy laws |
+| **Payments** | No card numbers spoken to the AI or stored in transcripts (PCI DSS); payment by a secure link |
+| **Health** | PHIPA and other health privacy laws: clinic calls wait for Phase 3 measures |
+
+### 19.6 What the product needs (only what is new)
+
+Each item extends an existing module (§19.2) and can be switched off by plan.
+
+1. **Voice v1** (PHONE_AND_SMS §4.3) after the voice test.
+2. **Warm transfer and a human queue:** transfer to the business's staff, an on-call list or a partner
+   team, with the call summary spoken or shown before the person picks up; a callback request when
+   nobody answers; "talk to a person" always works.
+3. **Live agent view:** for businesses or partners with their own agents, a screen that shows the
+   incoming transfer, the transcript so far and the request, and lets the agent take over a text
+   thread.
+4. **Caller verification and account lookups** through integrations (one-time code by text, or details
+   checked against the business's system) before any account-specific answer.
+5. **Secure payment links** sent by text (Stripe for our customers' customers, or the business's own
+   payment page).
+6. **Scale:** simultaneous calls per business by plan, load tests for peaks (a storm, registration
+   week), an SLA and a status page, voicemail and text-back when anything fails.
+7. **Quality and reporting:** calls handled without a person (containment), transfer rate, reasons for
+   transfer, caller ratings, made-up answers found in review, cost per call; Insights (§7.4.1) is the
+   base. A staff review queue to correct answers, and voice evals per pack (§15).
+8. **Multi-location and department routing:** one number or many, routed per location or department
+   (shares the work in §18.3).
+9. **White-label** for answering services and BPOs (shares the agency work in §14 Phase 2).
+
+### 19.7 Voice model and caller experience
+
+The caller experience decides this business line, so voice uses a **speech-to-speech model for the
+conversation, grounded by our engine through tools**: the model handles turn-taking, interruptions and
+tone; every fact, price, hour or policy comes from a tool (`answer_from_business_info`) that runs our
+retrieval, scope rules and triage, and requests, transfers and texts go through our tools too. One
+source of truth for chat, SMS and voice, and the same evals.
+
+| Candidate | Why | Risk |
+|---|---|---|
+| **Google Gemini 3.8 Live** (first choice) | Non-blocking tool calls (it keeps talking while our engine looks up the answer); about $0.02–0.03 per minute for the model | A bridge from Twilio Media Streams; French audio issue reported by one developer; Canadian processing unconfirmed |
+| **xAI Grok Voice 3.0** (backup) | Direct SIP with Twilio, call transfer and keypad input; fast first audio in one ranking; flat $0.05–0.08 per minute | Data kept 30 days by default (zero retention is an option); US and EU regions only |
+| **Twilio ConversationRelay + our engine** (institutions) | Any model, including a Canadian-hosted or self-hosted one | Slower: depends on the engine's first-sentence time |
+
+The test in PHONE_AND_SMS §6 decides, with Quebec French calls added and these bars: first words within
+about 1.2 s, no silence longer than about 1.5 s during a lookup, no invented price, correct triage every
+time. The voice code stays behind `VoiceSession`, so the model can change as the market does.
+
+### 19.8 Pricing (illustrative — set after the voice test measures cost)
+
+| Offer | For | Price model |
+|---|---|---|
+| **Personal** | Individuals (add-on to the personal page) | Monthly, with a small allowance of minutes and texts; self-serve |
+| **After-hours and overflow** | Small businesses (add-on to the phone and SMS assistant, §16) | Monthly, with an allowance of minutes |
+| **AI front desk** | Multi-location businesses, clinics after Phase 3 | Platform fee per location plus minutes |
+| **Contact center tier 1** | Large and mid-size companies, institutions | Platform fee plus a price per minute or per call handled without a person; setup fee for integrations |
+| **White-label** | Answering services, BPOs | Wholesale price per minute |
+
+Priced against what the buyer pays today per handled call, not against our cost; our cost per minute
+(model, speech, carrier) is measured in the voice test and tracked per business in usage records.
+
+### 19.9 Measures of success
+
+- Share of calls handled without a person, by call type; transfer rate and reasons.
+- First words within about 1.2 s (median); no unanswered call; every urgent call reaches a person or
+  the on-call list.
+- No invented price or policy in reviewed calls; caller rating; repeat calls on the same problem.
+- Cost per handled call against the buyer's current cost.
+
+### 19.10 Order of work
+
+| Step | Work | Depends on |
+|---|---|---|
+| 1 | Live SMS with Twilio (phase 0 registration), visible test call, forwarding sheets | Twilio account and sender registration |
+| 2 | Voice test: Gemini 3.8 Live, Grok Voice 3.0, ConversationRelay + engine, EN and Quebec French | A Twilio number |
+| 3 | Voice v1 with the grounding tools, warm transfer, callback request, voicemail fallback | Step 2 |
+| 4 | Secure payment links by text; live agent view | Step 3 |
+| 5 | Caller verification and account lookups through integrations; multi-location routing | Integration access (§17.7) |
+| 6 | Scale, SLA, status page, reporting and review queue; white-label | First multi-location or institution customer |
