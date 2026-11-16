@@ -66,6 +66,11 @@ const envSchema = z.object({
   BUSINESS_COUNTRY: z.string().optional(),
   /** Shared rate limits and counters across API servers. Without it, limits are per server. */
   REDIS_URL: z.string().optional(),
+  /**
+   * Public VAPID key for Web Push (browsers and the installed PWA, PLAN §20); the worker holds the
+   * private one. Without it the portal offers notifications in the iOS / Android app only.
+   */
+  VAPID_PUBLIC_KEY: z.string().optional(),
   /** How long an answer waits for the question's vector once the keyword search is ready (docs/EMBEDDINGS.md). */
   EMBEDDINGS_QUERY_WAIT_MS: z.coerce.number().int().min(0).max(5000).default(250),
 });

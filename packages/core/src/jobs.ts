@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import type { AddonEffectPayload } from "./addons/effects.js";
 import type { DemoBuildPayload } from "./demo/build.js";
 import { errorMessage } from "./errors.js";
+import type { PushNotifyPayload } from "./push/notify.js";
 import type { UrgentAlertPayload } from "./requests/urgent-alert.js";
 
 export type JobRow = typeof jobs.$inferSelect;
@@ -25,6 +26,8 @@ export const JOB_TYPES = {
   messageSend: "message.send",
   /** Emails the business that its number's daily spend cap was reached. */
   phoneCapAlert: "phone.cap_alert",
+  /** Push notifications to the business's team: a new or urgent request, a note on one (PLAN §20). */
+  pushNotify: "push.notify",
 } as const;
 
 /** Job priorities: higher runs first. */
@@ -43,6 +46,7 @@ export interface JobPayloads {
   [JOB_TYPES.embedChunks]: { botId: string };
   [JOB_TYPES.messageSend]: { messageId: string };
   [JOB_TYPES.phoneCapAlert]: { botId: string; spentMicros?: number };
+  [JOB_TYPES.pushNotify]: PushNotifyPayload;
 }
 
 export interface NewJob<T extends JobType> {

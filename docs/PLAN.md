@@ -4,6 +4,9 @@
 > (Phase 1, milestones 1.1–1.3 — see README); setup without a website (1.4) built except Google
 > listing details (open decision §17.4); pilot readiness (1.5) in progress: page statistics, EN/FR evals and the prospect demo generator built;
 > Phase 2 started: plans bought online with Stripe (setup fee + monthly plan, CAD), appointment booking in Google Calendar; phone and SMS not started**.
+> **v8 2026-11-16: owner mobile app (§20):** the admin portal becomes phone-first and ships as a PWA and,
+> in a Capacitor wrapper, as iOS and Android store apps with native push, so owners who rarely read email
+> get requests, comments and alerts on their phone and update their business by tapping, talking or taking a photo.
 > **v7 2026-11-15: call center replacement becomes a business line (§19):** an AI front desk for inbound
 > calls and texts for every size of customer, from individuals to large companies, built on the existing platform
 > (providers, knowledge base, engine, integrations, billing) with a warm hand-off to people; no outbound AI sales calls.
@@ -544,6 +547,8 @@ landline, mobile or VoIP line, so setup uses a per-carrier sheet and ends with a
 7. **Inbox** (auto-translated), **Leads**, **Analytics** (page visits, questions, requests, languages used,
    knowledge gaps), **Insights** (premium, §7.4.1)
 8. **Install**, **Team & roles**, **Billing & usage** (CAD)
+9. **Mobile app** (§20): Inbox, requests with comments, "update my business" and notifications, phone-first,
+   as a PWA and as iOS / Android store apps
 
 #### 7.4.1 Insights (premium BI)
 
@@ -621,7 +626,8 @@ later phases; the rest exists today.
                                                     │ live calls only           │           │
                                                     └────────────┬─────────────┘           │
  Visitor's browser ──► chat page / iframe / widget ─┐            │ same engine             │
- Business owner  ──► Admin portal (Next.js) ────────┤            │ (packages/core)         │
+ Business owner  ──► Admin portal (Next.js; PWA ────┤            │                         │
+                     + iOS/Android app, §20)        │            │ (packages/core)         │
                                                     ▼            ▼                         ▼
                       ┌───────────────────────────────────────────────────────────────────────┐      ┌─────────────────────┐
                       │ API service (stateless)                                               │─────►│ LLM gateway          │──► Anthropic / Bedrock / Azure
@@ -649,7 +655,8 @@ later phases; the rest exists today.
 | Workers           | Postgres-backed job queue (`FOR UPDATE SKIP LOCKED`) in a worker process; move to BullMQ/SQS if volume requires                               |
 | DB                | PostgreSQL 17 + pgvector + full-text (EN/FR) + `pg_trgm`                                                                                       |
 | ORM               | Drizzle                                                                                                                                        |
-| Auth              | Own email/password + session-cookie auth with tenant memberships (built in Phase 0); password reset & email verification in Phase 1; SSO later |
+| Auth              | Own email/password + session-cookie auth with tenant memberships (built in Phase 0); password reset & email verification in Phase 1; phone number + SMS code with the mobile app (§20.3); SSO later |
+| Owner mobile app  | The admin portal as a PWA (manifest, service worker, Web Push) + Capacitor shell for iOS and Android (native push through APNs / FCM, camera, microphone, deep links) (§20) |
 | Billing           | Stripe (CAD, Canadian sales tax)                                                                                                               |
 | LLM               | Own `LLMProvider` interface; Claude adapter (official Anthropic SDK) + OpenAI-compatible adapter (OpenRouter etc.) + offline test provider (§9) |
 | Translation       | The LLM via the gateway (cheap model); no separate service                                                                                     |
@@ -673,6 +680,7 @@ traiblazer/
     chat/             Preact chat page / business page + widget loader       (built; page Phase 1)
     worker/           background jobs, outbound texts                        (built; texts later)
     voice/            live phone calls                                       (later)
+    mobile/           Capacitor shell for the iOS and Android owner app       (§20)
   packages/
     core/             conversation engine, tools, retrieval, prompt builder, crawler, job queue
     llm/              LLM gateway (incl. translate helper), embeddings
@@ -924,6 +932,7 @@ Durations are estimates for 1–2 developers.
 | **1. Chat assistant + AI business page — pilots with trades and auto shops** | milestones 1.1–1.3 done; the rest ~2–4 weeks | **Built:** LLM gateway (Claude, OpenAI-compatible, offline provider); website crawl, text and Q&A sources; engine with tools, streaming, sources; hosted page, iframe, widget; admin portal (EN/FR); requests (lead capture & handoff); knowledge gaps; setup assistant; add-ons; workflows; photos; limits, usage page, operator console; **Trades and Auto repair packs**; the **business page** (header, contact buttons, services & products, gallery, hours, notices), friendly links and search-engine basics; urgent request flag with immediate email, quote requests with photos and industry fields, service-area check, call and book buttons, scope guard (keyword rules + auxiliary model). Setup without a website (interview, price list and brochure upload, services proposed from the sources); page statistics; evals EN/FR; prospect demo page generator. Accessibility pass (axe, WCAG 2.2 AA, `pnpm a11y`); done-for-you onboarding checklist (operator console). **To build:** Google listing details (§17.4) |
 | **2. Paid launch + property management** | ~5–6 weeks | **Built:** Stripe (CAD; setup fee + monthly plan: checkout, plan changes, customer portal, webhook; Stripe Tax optional); booking through **Google Calendar** (add-on: open times from opening hours minus busy times, the assistant books the chosen time as a calendar event and a booking request; Google app verification needed before general use). **To build:** own domain for the page; page analytics (visits, questions, requests); booking through **Jobber** (and calendar choice, buffers, a confirmation to the visitor); payment and deposit links; seasonal scripts; pack: **Property management & rentals** (maintenance requests, rental inquiry pre-screening after a privacy check); design-partner clinics and firms; agency white-label and referral tracking; Tier 2 reviewed UI strings |
 | **Later phase — Phone and SMS** | ~6–8 weeks; starts after the paid launch, when pilots ask for it | **SMS first:** telephony (numbers, signed webhooks), missed-call text-back with a link to the business page, two-way SMS/MMS, owner alerts by text, reminders. **Then voice:** voice agent on a managed orchestrator with a fast model profile, emergency transfer, call log (recording, transcript, summary), EN then FR. Housecall Pro; status & pickup alerts from shop software; minutes and SMS metering |
+| **Owner mobile app** (§20) | ~4–6 weeks; alongside Phase 2 | Phone-first Inbox, requests with comments, "update my business"; PWA with Web Push; Capacitor iOS / Android apps with native push, deep links and camera; voice and photo updates with owner approval; store release. Phone-number sign-in and the text fallback for urgent alerts come with the SMS phase |
 | **3. Clinics and professional services (customer service only)** | ~6–8 weeks | Lawyer-reviewed scope policy & ToS; output check; Canada data residency + PHIPA measures; clinic booking integrations (as API access allows); **document chaser** with secure upload and vision check; minimal intake; catalog feeds; packs: Clinic (vet first), Pharmacy, Accounting & tax, Law firm, Immigration consultant, Insurance & financial, Real estate, **Car dealership**; with phone and SMS in place: waitlist backfill & recall |
 | **4. Business tier and self-serve growth** | later | Self-serve local packs on demand (events, menu OCR, WordPress plugin); internal knowledge assistant (SSO, SharePoint/Drive), RFQ, careers; packs: Mining supply, Engineering, Manufacturing, Auto manufacturer & parts maker, Transportation, Utilities, Colleges; public API; WhatsApp |
 
@@ -1041,6 +1050,9 @@ Plan allowances stay editable in the operator console.
     transfers when the business has no staff free (its own team, an on-call list, or a partner
     answering service), the price model (per minute or per call handled), and which US states to sell in
     first (recording consent and chatbot disclosure rules differ).
+16. **Owner mobile app (§20):** the store name and publisher account (company or individual), whether
+    the iOS app needs anything beyond push, camera and microphone to pass review, and whether customers
+    (not only owners) ever get an app — recommended: no, they stay on the page, chat and SMS.
 
 ## 18. Institutions: universities, colleges and municipalities
 
@@ -1301,3 +1313,130 @@ Priced against what the buyer pays today per handled call, not against our cost;
 | 4 | Secure payment links by text; live agent view | Step 3 |
 | 5 | Caller verification and account lookups through integrations; multi-location routing | Integration access (§17.7) |
 | 6 | Scale, SLA, status page, reporting and review queue; white-label | First multi-location or institution customer |
+
+## 20. Owner mobile app (PWA + Capacitor, iOS and Android)
+
+Many owners in the first industries — trades, auto shops, solo contractors — live on their phone and rarely
+read email. Email alerts (the urgent request flag today) reach them late or not at all. The owner side
+therefore gets a **mobile app**: the same admin portal, made phone-first, installable as a **PWA** and
+shipped to the **App Store and Google Play** in a **Capacitor** wrapper with native push.
+
+### 20.1 Decision
+
+| Option | iOS push | In the stores | Extra code | Verdict |
+|---|---|---|---|---|
+| PWA only | Only after the owner adds it to the home screen from Safari (no install prompt on iOS) | No | Small | Fine on Android, too much friction on iOS |
+| **PWA + Capacitor wrapper** | **Native (APNs / FCM)** | **Yes** | **Small: the same React code** | **Chosen** |
+| React Native / Expo | Native | Yes | A second app to maintain | Better feel, about twice the upkeep |
+| Flutter / fully native | Native | Yes | Another stack | Too much for the team size |
+
+Why: one codebase (`apps/admin`), owners find it by searching the store ("search Traiblazer in the App
+Store" works on a phone call), push works on iPhone without the home-screen step, and the camera and
+microphone are available for photo and voice updates. The PWA stays for Android users who don't want the
+store and for desktop owners.
+
+### 20.2 What owners do in the app
+
+| Job | In the app | Notes |
+|---|---|---|
+| **See what came in** | Inbox: new requests, urgent requests on top, conversations (auto-translated), customer comments and team notes on a request; mark handled, call back, text back (SMS phase) | The first screen |
+| **Update the business** | Hours and seasons, notices ("closed Dec 24–26, emergency calls only"), services and prices, policies (warranty, payment, cancellation, deposit), Q&A pairs, knowledge sources | Same rules as the portal: Q&A pairs override everything; changes are audit-logged |
+| **Update by voice or photo** | Tap the mic and say the change, or photograph a price list, flyer or sign; the assistant drafts the change (notice, Q&A pair, service or price), the owner approves it | Reuses the setup assistant and the price list reading (§7.1); nothing goes live without approval |
+| **Get notified** | Push for urgent requests, new requests, new comments, booking made or cancelled, knowledge gaps worth answering, limit warnings | Per-user and per-type settings, quiet hours, on-call person (§20.4) |
+| **Fix an answer** | From a conversation: "fix this answer" → Q&A pair, as in the playground | |
+| **Quick look** | Page statistics, usage meter | Insights stay on the full portal at first |
+
+Not in the app at first: onboarding wizard, appearance, install codes, billing changes, team management.
+They open the portal in the browser.
+
+### 20.3 How it is built
+
+- **Phone-first portal screens.** Inbox, request detail, "update my business", notifications settings and
+  the voice/photo update flow are designed for a phone first (large tap targets, one column, bottom
+  navigation), then laid out wider for desktop. Other portal pages only need to work on a phone.
+- **PWA basics** in `apps/admin`: web app manifest (name, icons, theme colour, `display: standalone`),
+  a service worker that caches the app shell and shows an offline screen ("No connection — your changes
+  will be sent when you're back online" only for drafts; live data is never served stale without saying
+  so), **Web Push** with VAPID keys for Android and desktop.
+- **Capacitor shell** in a new `apps/mobile`: the native project loads the hosted portal (its server
+  renders and the API session is a cookie on the portal's origin, §8.1), with a bundled offline screen.
+  Native plugins: push (FCM on Android, APNs on iOS, through `@capacitor/push-notifications`), camera,
+  microphone, share, deep links from a notification to the request it is about, app badge with the
+  unhandled count. Store builds and signing from CI; over-the-air web updates come for free because the
+  portal is loaded from the server, so store releases are needed only for native changes.
+- **App Store review:** Apple rejects wrappers with too little native function (guideline 4.2). Native
+  push, camera and microphone, deep links and the offline screen are what the iOS build ships with, not
+  a bare web view.
+- **Notifications are sent by the worker.** A new `notifications` job in `apps/worker` picks the
+  channels each user has turned on — native push, web push, email, and text in the SMS phase — sends,
+  retries and records delivery. The API only enqueues. Push payloads carry an ID and a short safe
+  title ("Urgent request — no heat"); the detail loads in the app after sign-in, so no customer data
+  sits on the lock screen beyond what the owner chose to show.
+- **Sign-in without email.** Phone number + one-time code by SMS as a sign-in method next to email and
+  password (and SSO later, §18.4: sign-in stays replaceable). Long sessions on the device, protected by
+  the phone's own lock (Face ID / fingerprint unlock through a Capacitor plugin) instead of frequent
+  re-sign-in. The code-by-SMS method needs the telephony provider (§7.3); until then the app signs in
+  with email and password, or a magic link texted manually during done-for-you setup.
+
+### 20.4 Notification rules
+
+| Event | Default | Fallback |
+|---|---|---|
+| Urgent request | Push to the owner and the on-call person at once, with sound | Text if the push isn't opened within 5 minutes (SMS phase); email as today |
+| New request (quote, booking, callback) | Push | Email digest |
+| New customer comment or team note on a request | Push to people on that request | — |
+| Booking made, moved or cancelled | Push | — |
+| Knowledge gap seen 3+ times this week | One weekly push: "Customers asked about X — answer it" | — |
+| Limits at 80 % / 100 % | Push to owners and admins | Email |
+
+Quiet hours per user; urgent requests can break through quiet hours only for the on-call person.
+Transactional only: no marketing pushes to owners from the app without opt-in.
+
+### 20.5 Data model additions
+
+| Table | Key fields |
+|---|---|
+| `devices` | user, platform (ios / android / web), push token or Web Push subscription, app version, last seen, revoked_at |
+| `notification_prefs` | user, event type, channels, quiet hours, on-call flag |
+| `notifications` | tenant, user, event type, ref (request / conversation), channel, sent_at, delivered/opened, error |
+| `request_comments` | tenant, request, author (staff user or customer message ref), text, created_at |
+
+All carry `tenant_id` with RLS except `devices` and `notification_prefs`, which belong to the user and
+are filtered by membership; push tokens are deleted on sign-out and when the provider reports them
+invalid.
+
+### 20.6 Rules (§18.4 applied)
+
+- Push providers (Apple, Google/Firebase) go on the subprocessor list; payloads carry IDs and safe
+  titles only.
+- Every change made from the app writes the audit log, like the portal.
+- The app's screens are in the `pnpm a11y` checks at phone width; Dynamic Type / font scaling and
+  screen readers (VoiceOver, TalkBack) tested on the native builds.
+- Every owner-facing string in English and French.
+- Voice updates are transcribed through our provider interface; the audio is not kept after the text
+  is approved.
+
+### 20.7 Order of work
+
+| Step | Work | Depends on |
+|---|---|---|
+| 1 | Phone-first Inbox, request detail with comments, "update my business" (hours, notices, services, policies, Q&A) | — |
+| 2 | PWA: manifest, service worker, offline screen, Web Push; notifications job in the worker with per-user settings | Step 1 |
+| 3 | Capacitor shell (`apps/mobile`): native push (FCM, APNs), deep links, badge, camera; TestFlight and internal Play testing with 3–5 pilot owners | Step 2; Apple Developer ($99/year) and Google Play ($25 once) accounts |
+| 4 | Voice and photo updates with owner approval | Step 1; reuses the setup assistant |
+| 5 | Store release (EN/FR listings, privacy labels, review notes) | Step 3 |
+| 6 | Phone-number sign-in with a code by SMS; text fallback for unopened urgent pushes | SMS phase (§7.3) |
+
+**Built (2026-11-16):** steps 2 and 3 and most of step 1: the phone-first Inbox (every assistant's
+requests, urgent first), a request with call / text / email buttons, status and team notes, and
+Notifications settings (events, quiet hours) in `apps/admin`; manifest, icons, service worker and
+offline page; `push_devices` (tied to the sign-in), `notification_prefs`, `notifications` and
+`lead_comments`; the `push.notify` job for new and urgent requests and notes; `packages/push` (APNs over
+HTTP/2, FCM HTTP v1, Web Push); the Capacitor shell `apps/mobile` with iOS and Android projects
+(push entitlement and APNs hookup, iOS icon). **Not yet:** phone-first "update my business" screens
+(they use the existing portal tabs for now), Android icons, real-device push tests (needs the Apple,
+Google and Firebase accounts and keys in `apps/mobile/README.md`), steps 4–6.
+
+**Measures of success:** at least 70 % of pilot owners install the app in the first week; median time
+from an urgent request to the owner opening it under 5 minutes; at least half of the knowledge and
+notice changes made from a phone.

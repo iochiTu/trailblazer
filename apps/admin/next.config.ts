@@ -17,6 +17,8 @@ const contentSecurityPolicy = [
   `frame-src ${chatOrigin}`,
   // The admin portal is never framed by anyone (clickjacking).
   "frame-ancestors 'none'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
@@ -41,7 +43,11 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     // API responses keep the API's own headers (helmet); every admin page gets these.
-    return [{ source: "/((?!api/).*)", headers: securityHeaders }];
+    return [
+      { source: "/((?!api/).*)", headers: securityHeaders },
+      // The service worker (owner app, PLAN §20) must never be served stale from a cache.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] },
+    ];
   },
   poweredByHeader: false,
 };

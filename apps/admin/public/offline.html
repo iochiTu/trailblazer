@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>No connection · Traiblazer</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f3f5fb; --surface: #fff; --text: #1b1c22; --muted: #5b5f6e; --accent: #3b5bdb; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #111318; --surface: #1a1c22; --text: #e6e7ee; --muted: #a5a9b8; --accent: #a8b9ff; } }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
+        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 16px; box-sizing: border-box; }
+      main { background: var(--surface); border-radius: 28px; padding: 32px 24px; max-width: 420px; width: 100%; text-align: center; }
+      img { width: 64px; height: 64px; }
+      h1 { font-size: 1.25rem; margin: 16px 0 8px; }
+      p { color: var(--muted); margin: 0 0 8px; }
+      button { margin-top: 16px; min-height: 48px; padding: 0 28px; border: 0; border-radius: 999px; background: var(--accent);
+        color: var(--surface); font: inherit; font-weight: 600; cursor: pointer; }
+      hr { border: 0; border-top: 1px solid color-mix(in srgb, var(--muted) 25%, transparent); margin: 24px 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/icon-192.png" alt="" />
+      <h1>No connection</h1>
+      <p>Check your signal or Wi-Fi. Your requests will be here when you're back online.</p>
+      <hr />
+      <h1 lang="fr">Pas de connexion</h1>
+      <p lang="fr">Vérifiez votre signal ou le Wi-Fi. Vos demandes seront ici dès que vous serez de nouveau en ligne.</p>
+      <button type="button" onclick="location.reload()">Try again · Réessayer</button>
+    </main>
+  </body>
+</html>

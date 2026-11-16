@@ -162,6 +162,24 @@ test.describe("business owners", () => {
   });
 });
 
+test.describe("owner app", () => {
+  test("inbox, a request with its notes, and notification settings (PLAN §20)", async ({ page }) => {
+    await page.context().addCookies(await signIn(page.request, OWNER));
+    const { tenantId } = await demoBusiness(page.request);
+    const { leads } = await (
+      await page.request.get(`${ADMIN}/api/v1/tenants/${tenantId}/inbox?status=all`)
+    ).json();
+    const paths = [`/t/${tenantId}/inbox`, "/settings/notifications"];
+    if (leads.length) paths.push(`/t/${tenantId}/inbox/${leads[0].botId}/${leads[0].id}`);
+    for (const path of paths) {
+      await page.goto(`${ADMIN}${path}`);
+      await settle(page);
+      await audit(page, path);
+      await fitsScreen(page, path);
+    }
+  });
+});
+
 test.describe("staff", () => {
   test("operator console", async ({ page }) => {
     await page.context().addCookies(await signIn(page.request, STAFF));

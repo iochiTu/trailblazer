@@ -287,6 +287,16 @@ describe("urgent requests", () => {
       .where(and(eq(jobs.tenantId, tenantId), eq(jobs.type, JOB_TYPES.urgentAlert)));
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ priority: JOB_PRIORITY.urgent, payload: { botId, leadId: lead!.id } });
+    // The team's phones are told too, ahead of other jobs (PLAN §20).
+    const pushes = await owner.db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.tenantId, tenantId), eq(jobs.type, JOB_TYPES.pushNotify)));
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]).toMatchObject({
+      priority: JOB_PRIORITY.urgent,
+      payload: { event: "request.urgent", botId, leadId: lead!.id },
+    });
   });
 
   it("emails the owners, or the notification address when that add-on is on", async () => {

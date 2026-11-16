@@ -20,13 +20,15 @@ apps/
   api/              Fastify API: auth, tenants, bots, knowledge, public chat, chat page + widget.js
   admin/            Next.js admin portal (EN/FR): knowledge, test chat, share & install, requests, conversations
   chat/             Preact chat page (hosted link / iframe / widget panel) + widget.js loader
-  worker/           Background jobs: website crawling, reading uploaded files, indexing
+  worker/           Background jobs: website crawling, reading uploaded files, indexing, push notifications
+  mobile/           iOS and Android owner app: Capacitor shell around the portal (see apps/mobile/README.md)
   e2e/              Accessibility checks in a real browser (Playwright + axe, `pnpm a11y`)
 packages/
   core/             Chat engine, tools, retrieval, prompt (locked platform rules), crawler, job queue
   llm/              LLM gateway: Claude (Anthropic SDK), OpenAI-compatible (OpenRouter…), offline provider; tool calling
   db/               Drizzle schema, migrations (incl. row-level security), withTenant()
   addons/           Add-on market: add-on contract, registry, built-in add-ons (email notifications, online shop, CRMs)
+  push/             Push senders: APNs (iPhone), FCM (Android), Web Push (browsers, installed PWA)
   integrations/     CRM connectors (Jobber, Housecall Pro, ServiceTitan, webhook), Google Calendar, credential sealing
   i18n/             Language registry (tiers, RTL), UI messages (ICU), language negotiation
   industry-packs/   Industry catalog + templates (response guidelines, suggested questions, workflows)

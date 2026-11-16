@@ -268,6 +268,68 @@ export const sessions = pgTable(
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
 
+export const devicePlatforms = ["web", "ios", "android"] as const;
+export type DevicePlatform = (typeof devicePlatforms)[number];
+
+/** Web Push subscription keys (the browser's `PushSubscription.toJSON().keys`). */
+export interface WebPushKeys {
+  p256dh: string;
+  auth: string;
+}
+
+/**
+ * A phone or browser that receives push notifications for a user (PLAN §20): the owner app on iOS
+ * (APNs device token) or Android (FCM registration token), or a browser / installed PWA (Web Push
+ * endpoint + keys). Tied to the session that registered it, so signing out — or the session
+ * expiring — stops pushes to that device (the row goes with the session). One row per token: a
+ * shared tablet signed in by someone else moves to them.
+ */
+export const pushDevices = pgTable(
+  "push_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    platform: text("platform").$type<DevicePlatform>().notNull(),
+    /** APNs device token, FCM registration token, or the Web Push endpoint URL. */
+    token: text("token").notNull(),
+    /** Web Push only. */
+    keys: jsonb("keys").$type<WebPushKeys | null>(),
+    appVersion: text("app_version"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("push_devices_token_uq").on(t.token), index("push_devices_user_idx").on(t.userId)],
+);
+
+/** What a user can be notified about on their phone (PLAN §20.4). */
+export const notificationEvents = ["request.urgent", "request.new", "request.comment"] as const;
+export type NotificationEvent = (typeof notificationEvents)[number];
+
+/**
+ * A user's notification choices, the same in every business they belong to. No row = defaults:
+ * every event on, no quiet hours.
+ */
+export const notificationPrefs = pgTable("notification_prefs", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** Events turned off (absent or true = on). */
+  events: jsonb("events").$type<Partial<Record<NotificationEvent, boolean>>>().notNull().default({}),
+  /** Quiet hours as "HH:MM" in `timeZone`; both null = none. May wrap past midnight. */
+  quietStart: text("quiet_start"),
+  quietEnd: text("quiet_end"),
+  /** IANA time zone the quiet hours are in, from the user's phone. */
+  timeZone: text("time_zone"),
+  /** Urgent requests still come through during quiet hours. */
+  urgentInQuietHours: boolean("urgent_in_quiet_hours").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const memberRoles = ["owner", "admin", "editor", "viewer"] as const;
 export type MemberRole = (typeof memberRoles)[number];
 
@@ -1101,6 +1163,64 @@ export const leads = pgTable(
   ],
 );
 
+/**
+ * A note on a request: staff talking about it among themselves ("called, coming Tuesday"). Only
+ * the business's team sees them; adding one pushes the others on the request's business (PLAN §20).
+ */
+export const leadComments = pgTable(
+  "lead_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    authorUserId: uuid("author_user_id").references(() => users.id, { onDelete: "set null" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("lead_comments_lead_idx").on(t.tenantId, t.leadId, t.createdAt),
+    foreignKey({
+      name: "lead_comments_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const notificationStatuses = ["sent", "failed", "skipped"] as const;
+export type NotificationStatus = (typeof notificationStatuses)[number];
+
+/**
+ * One push notification to one user about one event (PLAN §20.3): what was sent, to how many of
+ * their devices, and why not when it wasn't (no device, turned off, quiet hours). Titles only —
+ * the customer's details stay on the request.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    event: text("event").$type<NotificationEvent>().notNull(),
+    botId: uuid("bot_id"),
+    leadId: uuid("lead_id"),
+    status: text("status").$type<NotificationStatus>().notNull(),
+    /** Devices it reached. */
+    devices: integer("devices").notNull().default(0),
+    /** Why it was skipped or failed: no_device, turned_off, quiet_hours, or the provider's error. */
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notifications_tenant_created_idx").on(t.tenantId, t.createdAt)],
+);
+
 // ---------------------------------------------------------------------------------------------
 // Integrations: CRMs and calendars (RLS enforced)
 // ---------------------------------------------------------------------------------------------
@@ -1785,4 +1905,6 @@ export const rlsTables = [
   "phone_numbers",
   "outbound_messages",
   "sms_opt_outs",
+  "lead_comments",
+  "notifications",
 ] as const;

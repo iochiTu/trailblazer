@@ -15,6 +15,7 @@
     "@traiblazer/db": "workspace:*",
     "@traiblazer/integrations": "workspace:*",
     "@traiblazer/llm": "workspace:*",
+    "@traiblazer/push": "workspace:*",
     "@traiblazer/telephony": "workspace:*",
     "nodemailer": "8.0.11"
   },

@@ -1,7 +1,18 @@
-import { bookings, bots, leadSyncs, leads, withTenant } from "@traiblazer/db";
+import { JOB_PRIORITY, JOB_TYPES, newJob } from "@traiblazer/core";
+import {
+  bookings,
+  bots,
+  businessProfiles,
+  jobs,
+  leadComments,
+  leadSyncs,
+  leads,
+  users,
+  withTenant,
+} from "@traiblazer/db";
 import { getConnector } from "@traiblazer/integrations";
-import { LEAD_STATUSES, updateLeadSchema } from "@traiblazer/shared";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { LEAD_STATUSES, leadCommentSchema, updateLeadSchema } from "@traiblazer/shared";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
@@ -19,9 +30,13 @@ type LeadParams = { Params: { tenantId: string; botId: string; leadId: string } 
  *                                                        the appointment booked with it, if any
  *   PATCH  /v1/tenants/:t/bots/:b/leads/:leadId          move to new / in_progress / done
  *   DELETE /v1/tenants/:t/bots/:b/leads/:leadId          remove (e.g. on the visitor's request)
+ *   GET    /v1/tenants/:t/bots/:b/leads/:leadId          one request with its notes (the owner app)
+ *   POST   /v1/tenants/:t/bots/:b/leads/:leadId/comments add a note; the rest of the team is pushed
+ *   GET    /v1/tenants/:t/inbox[?status=open|done|all]   requests from every assistant of the business,
+ *                                                        urgent ones still to do first (the owner app)
  *
- * Every member can read them; changing or removing one needs the editor role and is audited
- * (without the visitor's details).
+ * Every member can read them; changing or removing one, or adding a note, needs the editor role
+ * and is audited (without the visitor's details or the note's text).
  */
 export async function leadRoutes(app: FastifyInstance, { db }: AppContext) {
   const base = "/v1/tenants/:tenantId/bots/:botId/leads";
@@ -162,6 +177,168 @@ export async function leadRoutes(app: FastifyInstance, { db }: AppContext) {
         });
       });
       return reply.code(204).send();
+    },
+  );
+
+  /** A request as the inbox shows it: the assistant's or business's name and how many notes it has. */
+  const inboxColumns = {
+    id: leads.id,
+    botId: leads.botId,
+    botName: bots.name,
+    businessName: businessProfiles.businessName,
+    conversationId: leads.conversationId,
+    channel: leads.channel,
+    kind: leads.kind,
+    status: leads.status,
+    name: leads.name,
+    email: leads.email,
+    phone: leads.phone,
+    bestTime: leads.bestTime,
+    message: leads.message,
+    language: leads.language,
+    urgent: leads.urgent,
+    details: leads.details,
+    itemName: leads.itemName,
+    attachmentIds: leads.attachmentIds,
+    createdAt: leads.createdAt,
+    comments: sql<number>`(select count(*)::int from ${leadComments} where ${leadComments.leadId} = ${leads.id})`,
+  };
+
+  app.get<{ Params: { tenantId: string }; Querystring: { status?: string } }>(
+    "/v1/tenants/:tenantId/inbox",
+    { preHandler: requireTenantRole(db, "viewer") },
+    async (request) => {
+      const status = request.query.status ?? "open";
+      if (!["open", "done", "all"].includes(status)) throw badRequest("Unknown status");
+      return withTenant(db, request.tenant!.id, async (tx) => {
+        const list = await tx
+          .select(inboxColumns)
+          .from(leads)
+          .innerJoin(bots, eq(bots.id, leads.botId))
+          .leftJoin(businessProfiles, eq(businessProfiles.botId, leads.botId))
+          .where(
+            and(
+              // The owner's own tests stay on the assistant's Requests tab.
+              ne(leads.channel, "playground"),
+              status === "open"
+                ? ne(leads.status, "done")
+                : status === "done"
+                  ? eq(leads.status, "done")
+                  : undefined,
+            ),
+          )
+          // Urgent requests still to do first, then the newest.
+          .orderBy(desc(sql`${leads.urgent} and ${leads.status} <> 'done'`), desc(leads.createdAt))
+          .limit(200);
+        const [counts] = await tx
+          .select({
+            newCount: sql<number>`count(*) filter (where ${leads.status} = 'new')::int`,
+            urgentCount: sql<number>`count(*) filter (where ${leads.urgent} and ${leads.status} <> 'done')::int`,
+          })
+          .from(leads)
+          .where(ne(leads.channel, "playground"));
+        return { leads: list, newCount: counts?.newCount ?? 0, urgentCount: counts?.urgentCount ?? 0 };
+      });
+    },
+  );
+
+  app.get<LeadParams>(`${base}/:leadId`, { preHandler: requireTenantRole(db, "viewer") }, async (request) => {
+    const { botId, leadId } = request.params;
+    if (!isUuid(botId) || !isUuid(leadId)) throw notFound("Request");
+    return withTenant(db, request.tenant!.id, async (tx) => {
+      const [lead] = await tx
+        .select(inboxColumns)
+        .from(leads)
+        .innerJoin(bots, eq(bots.id, leads.botId))
+        .leftJoin(businessProfiles, eq(businessProfiles.botId, leads.botId))
+        .where(and(eq(leads.id, leadId), eq(leads.botId, botId)))
+        .limit(1);
+      if (!lead) throw notFound("Request");
+      const [booking] = await tx
+        .select({
+          provider: bookings.provider,
+          startsAt: bookings.startsAt,
+          endsAt: bookings.endsAt,
+          timeZone: bookings.timeZone,
+          externalUrl: bookings.externalUrl,
+        })
+        .from(bookings)
+        .where(and(eq(bookings.leadId, leadId), eq(bookings.status, "booked")))
+        .limit(1);
+      const comments = await tx
+        .select({
+          id: leadComments.id,
+          body: leadComments.body,
+          authorUserId: leadComments.authorUserId,
+          authorName: users.name,
+          createdAt: leadComments.createdAt,
+        })
+        .from(leadComments)
+        .leftJoin(users, eq(users.id, leadComments.authorUserId))
+        .where(eq(leadComments.leadId, leadId))
+        .orderBy(asc(leadComments.createdAt))
+        .limit(500);
+      return {
+        lead: {
+          ...lead,
+          booking: booking
+            ? { ...booking, providerName: getConnector(booking.provider)?.name ?? booking.provider }
+            : null,
+        },
+        comments,
+      };
+    });
+  });
+
+  app.post<LeadParams>(
+    `${base}/:leadId/comments`,
+    { preHandler: requireTenantRole(db, "editor") },
+    async (request, reply) => {
+      const { botId, leadId } = request.params;
+      if (!isUuid(botId) || !isUuid(leadId)) throw notFound("Request");
+      const { body } = leadCommentSchema.parse(request.body);
+      const tenantId = request.tenant!.id;
+      const actorUserId = request.user!.id;
+      const comment = await withTenant(db, tenantId, async (tx) => {
+        const [lead] = await tx
+          .select({ id: leads.id, channel: leads.channel })
+          .from(leads)
+          .where(and(eq(leads.id, leadId), eq(leads.botId, botId)))
+          .limit(1);
+        if (!lead) throw notFound("Request");
+        const [row] = await tx
+          .insert(leadComments)
+          .values({ tenantId, botId, leadId, authorUserId: actorUserId, body })
+          .returning();
+        await audit(tx, {
+          tenantId,
+          actorUserId,
+          action: "lead.comment",
+          targetType: "lead",
+          targetId: leadId,
+        });
+        // The rest of the team hears about it on their phones (support staff's notes don't push).
+        if (lead.channel !== "playground" && !request.tenant!.support) {
+          await tx.insert(jobs).values(
+            newJob({
+              tenantId,
+              type: JOB_TYPES.pushNotify,
+              priority: JOB_PRIORITY.normal,
+              payload: { event: "request.comment", botId, leadId, commentId: row!.id, actorUserId },
+            }),
+          );
+        }
+        return row!;
+      });
+      return reply.code(201).send({
+        comment: {
+          id: comment.id,
+          body: comment.body,
+          authorUserId: actorUserId,
+          authorName: request.user!.name,
+          createdAt: comment.createdAt,
+        },
+      });
     },
   );
 }

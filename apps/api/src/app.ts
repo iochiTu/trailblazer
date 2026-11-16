@@ -24,6 +24,7 @@ import { interviewRoutes } from "./routes/interview.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
 import { leadRoutes } from "./routes/leads.js";
 import { mcpRoutes } from "./routes/mcp.js";
+import { notificationRoutes } from "./routes/notifications.js";
 import { onboardingRoutes } from "./routes/onboarding.js";
 import { operatorRoutes } from "./routes/operator.js";
 import { pageRoutes } from "./routes/page.js";
@@ -127,6 +128,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => pageRoutes(scope, ctx));
   await app.register(async (scope) => insightsRoutes(scope, ctx));
   await app.register(async (scope) => leadRoutes(scope, ctx));
+  await app.register(async (scope) => notificationRoutes(scope, ctx));
   await app.register(async (scope) => gapRoutes(scope, ctx));
   await app.register(async (scope) => setupRoutes(scope, ctx));
   await app.register(async (scope) => interviewRoutes(scope, ctx));

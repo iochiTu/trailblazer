@@ -466,6 +466,61 @@ export const LEAD_STATUSES = ["new", "in_progress", "done"] as const;
 export const updateLeadSchema = z.object({ status: z.enum(LEAD_STATUSES) });
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 
+/** A note staff add to a request (PLAN §20). */
+export const LEAD_COMMENT_MAX = 2000;
+export const leadCommentSchema = z.object({ body: z.string().trim().min(1).max(LEAD_COMMENT_MAX) });
+export type LeadCommentInput = z.infer<typeof leadCommentSchema>;
+
+/**
+ * A phone or browser registering for push notifications: the owner app's APNs or FCM token, or
+ * a browser's Web Push subscription (endpoint + keys).
+ */
+export const registerDeviceSchema = z.discriminatedUnion("platform", [
+  z.object({
+    platform: z.enum(["ios", "android"]),
+    token: z.string().trim().min(8).max(4096),
+    appVersion: z.string().max(40).optional(),
+  }),
+  z.object({
+    platform: z.literal("web"),
+    token: z
+      .url()
+      .max(4096)
+      .refine((u) => u.startsWith("https://"), "Must be an https URL"),
+    keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+    appVersion: z.string().max(40).optional(),
+  }),
+]);
+export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
+
+export const NOTIFICATION_EVENTS = ["request.urgent", "request.new", "request.comment"] as const;
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM");
+/** A user's notification choices (PLAN §20.4). Quiet hours: both times, or neither. */
+export const notificationPrefsSchema = z
+  .object({
+    events: z.partialRecord(z.enum(NOTIFICATION_EVENTS), z.boolean()),
+    quietStart: hhmm.nullable(),
+    quietEnd: hhmm.nullable(),
+    timeZone: z
+      .string()
+      .max(64)
+      .refine((tz) => {
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Unknown time zone")
+      .nullable(),
+    urgentInQuietHours: z.boolean(),
+  })
+  .refine((p) => (p.quietStart === null) === (p.quietEnd === null), {
+    message: "Set both quiet-hours times, or neither",
+    path: ["quietEnd"],
+  });
+export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
+
 /** Questions the assistant couldn't answer: the business answers them (see `qaPairSchema`) or dismisses them. */
 export const updateGapSchema = z.object({ status: z.enum(["open", "dismissed"]) });
 export type UpdateGapInput = z.infer<typeof updateGapSchema>;

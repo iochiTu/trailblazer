@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Traiblazer</title>
+    <script src="portal.js"></script>
+  </head>
+  <body style="margin:0;background:#3b5bdb">
+    <!-- The app loads the portal (capacitor.config.ts server.url); this page only shows if that's unset. -->
+    <script>
+      if (window.TB_PORTAL_URL) location.replace(window.TB_PORTAL_URL);
+    </script>
+  </body>
+</html>

@@ -16,6 +16,8 @@ export interface SessionUser {
   platformRole: PlatformRole | null;
   /** A prospect's demo account (signed in with an access code; owns its demo business only). */
   demo: boolean;
+  /** The session row (not its token): push devices registered from this sign-in belong to it. */
+  sessionId: string;
 }
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -47,6 +49,7 @@ export async function getSessionUser(db: Db, token: string): Promise<SessionUser
       uiLanguage: users.uiLanguage,
       platformRole: users.platformRole,
       demo: users.demo,
+      sessionId: sessions.id,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
