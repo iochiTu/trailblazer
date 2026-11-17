@@ -14,8 +14,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const translated = page.paths.en !== page.paths.fr;
     const entry = (path: string) => ({
       url: url(path),
-      changeFrequency: page.kind === "pricing" ? ("weekly" as const) : ("monthly" as const),
-      priority: page.kind === "home" ? 1 : page.kind === "landing" ? 0.7 : 0.8,
+      changeFrequency:
+        page.kind === "pricing"
+          ? ("weekly" as const)
+          : page.kind === "legal"
+            ? ("yearly" as const)
+            : ("monthly" as const),
+      priority: page.kind === "home" ? 1 : page.kind === "legal" ? 0.3 : page.kind === "landing" ? 0.7 : 0.8,
       ...(translated ? { alternates: { languages } } : {}),
     });
     return translated ? [entry(page.paths.en), entry(page.paths.fr)] : [entry(page.paths.en)];

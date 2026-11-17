@@ -2,6 +2,7 @@ export * from "./cities.js";
 export * from "./facts.js";
 export * from "./industries.js";
 export * from "./jsonld.js";
+export * from "./legal.js";
 export * from "./llms.js";
 export * from "./pages.js";
 export * from "./plans.js";
