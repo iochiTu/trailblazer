@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ConsoleShell, type SubNavGroup } from "@/components/app/SideNav";
 import { AddonsTab } from "@/components/bot/AddonsTab";
+import { AgentTab } from "@/components/bot/AgentTab";
 import { AppearanceTab } from "@/components/bot/AppearanceTab";
 import { ConversationsTab } from "@/components/bot/ConversationsTab";
 import { GeneralTab } from "@/components/bot/GeneralTab";
@@ -21,6 +22,7 @@ import { ApiError, api, type BotDetail } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 type Tab =
+  | "agent"
   | "knowledge"
   | "page"
   | "insights"
@@ -34,6 +36,7 @@ type Tab =
   | "requests"
   | "conversations";
 const TABS: Tab[] = [
+  "agent",
   "knowledge",
   "page",
   "insights",
@@ -50,7 +53,7 @@ const TABS: Tab[] = [
 const isTab = (value: string | null): value is Tab => TABS.includes(value as Tab);
 /** The same tabs as the sidebar shows them on a wide screen: in groups, by what they are for. */
 const GROUPS: { id: "train" | "channels" | "activity" | "settings"; tabs: Tab[] }[] = [
-  { id: "train", tabs: ["knowledge", "workflows", "addons", "test"] },
+  { id: "train", tabs: ["agent", "knowledge", "workflows", "addons", "test"] },
   { id: "channels", tabs: ["page", "share", "phone"] },
   { id: "activity", tabs: ["requests", "conversations", "insights"] },
   { id: "settings", tabs: ["general", "appearance"] },
@@ -195,6 +198,7 @@ export default function BotPage() {
               />
             </div>
           )}
+          {tab === "agent" && <AgentTab base={base} onChange={load} />}
           {tab === "page" && <PageTab detail={detail} base={base} onChange={load} />}
           {tab === "insights" && <InsightsTab base={base} onOpenKnowledge={() => setTab("knowledge")} />}
           {tab === "workflows" && <WorkflowsTab detail={detail} base={base} onChange={load} />}

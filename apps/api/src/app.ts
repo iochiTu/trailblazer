@@ -12,6 +12,7 @@ import { PlatformConfig } from "./lib/platform.js";
 import { auditSupportChanges, loadUser } from "./plugins/auth.js";
 import { addonRoutes } from "./routes/addons.js";
 import { agencyRoutes } from "./routes/agencies.js";
+import { agentRoutes } from "./routes/agent.js";
 import { assetRoutes } from "./routes/assets.js";
 import { authRoutes } from "./routes/auth.js";
 import { billingRoutes } from "./routes/billing.js";
@@ -138,6 +139,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
   await app.register(async (scope) => gapRoutes(scope, ctx));
   await app.register(async (scope) => setupRoutes(scope, ctx));
   await app.register(async (scope) => interviewRoutes(scope, ctx));
+  await app.register(async (scope) => agentRoutes(scope, ctx));
   await app.register(async (scope) => assetRoutes(scope, ctx));
   await app.register(async (scope) => usageRoutes(scope, ctx));
   await app.register(async (scope) => billingRoutes(scope, ctx));
