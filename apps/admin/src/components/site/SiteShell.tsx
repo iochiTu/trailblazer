@@ -1,7 +1,8 @@
-import { formatAddress, type Lang, paths, type SiteConfig, UI } from "@traiblazer/marketing";
+import { formatAddress, type Lang, LEGAL_UI, paths, type SiteConfig, UI } from "@traiblazer/marketing";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { CookieSettingsLink } from "@/components/CookieConsent";
 
 /**
  * Header and footer of the public marketing pages. Rendered on the server with plain links, so the
@@ -76,6 +77,9 @@ export function SiteShell({
             <Link href={paths.cities(lang)}>{ui.nav.cities}</Link>
             <Link href={paths.pricing(lang)}>{ui.nav.pricing}</Link>
             <a href={paths.llms()}>{ui.forAi}</a>
+            <Link href={paths.cookies(lang)}>{LEGAL_UI[lang].cookies}</Link>
+            <Link href={paths.aiUse(lang)}>{LEGAL_UI[lang].ai}</Link>
+            <CookieSettingsLink label={LEGAL_UI[lang].settings} />
           </nav>
         </div>
         <p className="muted">{contact}</p>

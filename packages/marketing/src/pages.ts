@@ -18,6 +18,8 @@ export const paths = {
   cities: (lang: Lang) => `/${lang}/local`,
   city: (lang: Lang, city: string) => `/${lang}/local/${city}`,
   landing: (lang: Lang, city: string, industry: string) => `/${lang}/local/${city}/${industry}`,
+  cookies: (lang: Lang) => `/${lang}/cookies`,
+  aiUse: (lang: Lang) => `/${lang}/ai-use`,
   llms: () => "/llms.txt",
   llmsFull: () => "/llms-full.txt",
 };
@@ -292,7 +294,7 @@ export function buildCityPage(lang: Lang, city: City): CityPage {
 export interface SitePage {
   /** Path in each language; a page without translations has the same path in both. */
   paths: Record<Lang, string>;
-  kind: "home" | "pricing" | "cities" | "city" | "landing";
+  kind: "home" | "pricing" | "cities" | "city" | "landing" | "legal";
 }
 
 /** Every public marketing page, for the sitemap and llms.txt. */
@@ -301,6 +303,8 @@ export function allPages(): SitePage[] {
     { kind: "home", paths: { en: paths.home(), fr: paths.home() } },
     { kind: "pricing", paths: alternates(paths.pricing) },
     { kind: "cities", paths: alternates(paths.cities) },
+    { kind: "legal", paths: alternates(paths.cookies) },
+    { kind: "legal", paths: alternates(paths.aiUse) },
     ...cities.map((c): SitePage => ({ kind: "city", paths: alternates((l) => paths.city(l, c.slug)) })),
     ...cities.flatMap((c) =>
       industries.map(

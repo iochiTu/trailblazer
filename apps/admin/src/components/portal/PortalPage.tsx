@@ -5,6 +5,7 @@ import { enOrFr } from "@traiblazer/i18n";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { CookieSettingsLink } from "@/components/CookieConsent";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { api, type Language, type PublicPlan } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -194,6 +195,9 @@ export function PortalPage({ signedIn }: { signedIn: boolean }) {
           <Link href={`/${siteLang}/local`}>{t("portal.footer.cities")}</Link>
           <Link href={`/${siteLang}/pricing`}>{t("portal.footer.pricing")}</Link>
           <a href="/llms.txt">{t("portal.footer.forAi")}</a>
+          <Link href={`/${siteLang}/cookies`}>{t("portal.footer.cookies")}</Link>
+          <Link href={`/${siteLang}/ai-use`}>{t("portal.footer.aiUse")}</Link>
+          <CookieSettingsLink label={t("consent.settings")} />
         </nav>
         <LanguageSwitcher />
       </footer>

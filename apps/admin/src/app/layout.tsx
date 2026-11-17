@@ -4,6 +4,8 @@ import { Google_Sans_Flex } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import type { ReactNode } from "react";
 import { AppRuntime } from "@/components/app/AppRuntime";
+import { CookieConsent } from "@/components/CookieConsent";
+import { CONSENT_COOKIE, parseConsent } from "@/lib/consent";
 import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
@@ -32,7 +34,9 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const cookieLang = (await cookies()).get("tb_lang")?.value;
+  const cookieStore = await cookies();
+  const cookieLang = cookieStore.get("tb_lang")?.value;
+  const consent = parseConsent(cookieStore.get(CONSENT_COOKIE)?.value);
   const requestHeaders = await headers();
   // Marketing pages (/en/…, /fr/…) carry their language in the address; see src/proxy.ts.
   const pathLang = requestHeaders.get("x-tb-lang");
@@ -45,6 +49,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <I18nProvider language={language}>
           <AppRuntime />
           {children}
+          <CookieConsent initial={consent} />
         </I18nProvider>
       </body>
     </html>
