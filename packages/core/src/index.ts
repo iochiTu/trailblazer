@@ -1,4 +1,5 @@
 export { type AddonEffectPayload, type EffectDeps, type Mailer, runAddonEffect } from "./addons/effects.js";
+export * from "./agent/index.js";
 export * from "./business.js";
 export * from "./chat/engine.js";
 export { recordGap } from "./chat/gaps.js";

@@ -27,6 +27,41 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/**
+ * POSTs and yields the server-sent events of the answer as they arrive (each `data:` line is JSON).
+ * A refusal before the stream starts throws an ApiError, like `api`.
+ */
+export async function* apiStream<E>(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<E> {
+  const res = await fetch(`/api${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "text/event-stream" },
+    body: JSON.stringify(body),
+    credentials: "same-origin",
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, data.error ?? "error", data.message ?? res.statusText, data.issues ?? []);
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    for (let end = buffer.indexOf("\n\n"); end !== -1; end = buffer.indexOf("\n\n")) {
+      const frame = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      const data = frame
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (data) yield JSON.parse(data) as E;
+    }
+  }
+}
+
 export interface Me {
   /** platformRole is set only for Traiblazer staff accounts (never for business users). */
   user: {

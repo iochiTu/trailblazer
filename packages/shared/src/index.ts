@@ -318,6 +318,27 @@ export const onboardingIndustrySchema = z.object({
   description: z.string().trim().min(1).max(300),
 });
 
+/**
+ * The owner's agent chat (portal, "Update by chat"): the conversation so far, kept in the browser
+ * and sent with each message. The last message is the person's.
+ */
+export const AGENT_CHAT_LIMITS = { messages: 30, messageLength: 4000 } as const;
+export const agentChatSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        text: z.string().trim().min(1).max(AGENT_CHAT_LIMITS.messageLength),
+      }),
+    )
+    .min(1)
+    .max(AGENT_CHAT_LIMITS.messages)
+    .refine((messages) => messages.at(-1)?.role === "user", { message: "The last message must be yours" }),
+  /** The portal's language, for the agent's tool output (it replies in the language the person writes). */
+  language: languageCode.optional(),
+});
+export type AgentChatInput = z.infer<typeof agentChatSchema>;
+
 export const updateTextSourceSchema = z
   .object({
     title: z.string().trim().min(1).max(200),

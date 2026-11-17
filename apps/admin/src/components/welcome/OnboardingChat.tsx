@@ -3,8 +3,9 @@
 import { getIndustry } from "@traiblazer/marketing";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { type ChatBubble, type ChatChip, ChatThread } from "@/components/chat/ChatThread";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ApiError, api, type Interview, type InterviewQuestion, type Me, type Pack } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -31,14 +32,7 @@ type Step =
   | "finishing"
   | "done";
 
-interface Message {
-  from: "bot" | "me";
-  text: string;
-  /** Smaller text under a bot message (a question's hint). */
-  note?: string;
-  /** A skipped question. */
-  skipped?: boolean;
-}
+type Message = ChatBubble;
 
 interface Draft {
   step: Step;
@@ -109,8 +103,6 @@ export function OnboardingChat() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
   const started = useRef(false);
 
   // ---- Loading and saving progress ---------------------------------------------------------
@@ -168,13 +160,6 @@ export function OnboardingChat() {
     },
     [me],
   );
-
-  // Each new message: show it, and give the answer box the focus back.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a message is added
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-    if (!busy) inputRef.current?.focus();
-  }, [draft.messages.length, busy]);
 
   // ---- Words ---------------------------------------------------------------------------------
 
@@ -385,8 +370,7 @@ export function OnboardingChat() {
   const question = draft.step === "question" ? draft.questions?.[draft.index] : undefined;
   const long = question?.kind === "long";
 
-  function onSubmit(event?: FormEvent) {
-    event?.preventDefault();
+  function onSubmit() {
     const value = text.trim();
     if (busy || !value) return;
     if (draft.step === "question") return answer(value);
@@ -396,12 +380,7 @@ export function OnboardingChat() {
     else if (draft.step === "website") giveWebsite(value);
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // In a long answer Enter starts a new line; Ctrl/Cmd+Enter sends.
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onSubmit();
-  }
-
-  const chips: { label: string; onClick: () => void }[] = (() => {
+  const chips: ChatChip[] = (() => {
     switch (draft.step) {
       case "industry":
         return packs.map((p) => ({
@@ -525,128 +504,49 @@ export function OnboardingChat() {
       </header>
       <p className="muted text-sm">{t("welcome.intro")}</p>
 
-      <section className="card flex flex-1 flex-col gap-4 p-4 sm:p-6">
-        <div
-          role="log"
-          aria-live="polite"
-          aria-label={t("welcome.chatLabel")}
-          className="flex flex-col gap-3"
-        >
-          {draft.messages.map((message, i) =>
-            message.from === "bot" ? (
-              // biome-ignore lint/suspicious/noArrayIndexKey: messages are only ever appended
-              <div key={i} className="flex items-start gap-2">
-                <span className="mt-1 shrink-0" aria-hidden="true">
-                  <BrandMark size={24} />
-                </span>
-                <div className="panel max-w-[85%] px-4 py-3 text-sm">
-                  <p className="whitespace-pre-line">{message.text}</p>
-                  {message.note && <p className="muted mt-1 text-xs">{message.note}</p>}
-                </div>
+      <section className="card flex flex-1 flex-col p-4 sm:p-6">
+        <ChatThread
+          label={t("welcome.chatLabel")}
+          messages={draft.messages}
+          busy={busy}
+          busyText={draft.step === "finishing" ? t("welcome.saving") : t("welcome.thinking")}
+          problem={problem}
+          chips={chips}
+          composer={
+            typing
+              ? {
+                  id: "welcome-answer",
+                  value: text,
+                  onChange: setText,
+                  onSubmit,
+                  label: t("welcome.answer"),
+                  sendLabel: t("welcome.send"),
+                  placeholder: long ? undefined : placeholder,
+                  long,
+                  maxLength:
+                    long || draft.step === "question" ? MAX_ANSWER : draft.step === "name" ? 120 : 300,
+                  autoComplete:
+                    draft.step === "name" ? "organization" : draft.step === "website" ? "url" : "off",
+                  inputMode: draft.step === "website" ? "url" : undefined,
+                  above: question && (
+                    <span className="muted text-xs">
+                      {t("welcome.progress", { current: draft.index + 1, total: draft.questions!.length })}
+                    </span>
+                  ),
+                  below: long && <span className="muted text-xs">{t("welcome.longNote")}</span>,
+                }
+              : null
+          }
+          footer={
+            draft.step === "done" ? (
+              <div>
+                <Link className="btn" href={`/t/${draft.tenantId}/bots/${draft.botId}?tab=knowledge`}>
+                  {t("welcome.open")}
+                </Link>
               </div>
-            ) : (
-              // biome-ignore lint/suspicious/noArrayIndexKey: messages are only ever appended
-              <div key={i} className="flex justify-end">
-                <p
-                  dir="auto"
-                  className={`max-w-[85%] whitespace-pre-line rounded-[18px] px-4 py-3 text-sm ${
-                    message.skipped
-                      ? "muted border border-[var(--border)] italic"
-                      : "bg-[var(--accent)] text-[var(--accent-text)]"
-                  }`}
-                >
-                  {message.text}
-                </p>
-              </div>
-            ),
-          )}
-          {busy && (
-            <p className="muted ms-8 text-sm" role="status">
-              {draft.step === "finishing" ? t("welcome.saving") : t("welcome.thinking")}
-            </p>
-          )}
-          <div ref={endRef} />
-        </div>
-
-        {problem && (
-          <p className="error text-sm" role="alert">
-            {problem}
-          </p>
-        )}
-
-        {draft.step === "done" ? (
-          <div>
-            <Link className="btn" href={`/t/${draft.tenantId}/bots/${draft.botId}?tab=knowledge`}>
-              {t("welcome.open")}
-            </Link>
-          </div>
-        ) : (
-          <div className="mt-auto flex flex-col gap-3">
-            {chips.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {chips.map((chip) => (
-                  <button
-                    key={chip.label}
-                    type="button"
-                    className="chip"
-                    disabled={busy}
-                    onClick={chip.onClick}
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {typing && (
-              <form className="flex flex-col gap-1" onSubmit={onSubmit}>
-                {question && (
-                  <span className="muted text-xs">
-                    {t("welcome.progress", { current: draft.index + 1, total: draft.questions!.length })}
-                  </span>
-                )}
-                <div className="flex items-end gap-2">
-                  <label className="sr-only" htmlFor="welcome-answer">
-                    {t("welcome.answer")}
-                  </label>
-                  {long ? (
-                    <textarea
-                      id="welcome-answer"
-                      ref={inputRef}
-                      className="input flex-1"
-                      rows={5}
-                      dir="auto"
-                      maxLength={MAX_ANSWER}
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      onKeyDown={onKeyDown}
-                      disabled={busy}
-                    />
-                  ) : (
-                    <input
-                      id="welcome-answer"
-                      ref={inputRef}
-                      className="input flex-1"
-                      dir="auto"
-                      maxLength={draft.step === "name" ? 120 : draft.step === "question" ? MAX_ANSWER : 300}
-                      value={text}
-                      placeholder={placeholder}
-                      autoComplete={
-                        draft.step === "name" ? "organization" : draft.step === "website" ? "url" : "off"
-                      }
-                      inputMode={draft.step === "website" ? "url" : undefined}
-                      onChange={(e) => setText(e.target.value)}
-                      disabled={busy}
-                    />
-                  )}
-                  <button className="btn" type="submit" disabled={busy || !text.trim()}>
-                    {t("welcome.send")}
-                  </button>
-                </div>
-                {long && <span className="muted text-xs">{t("welcome.longNote")}</span>}
-              </form>
-            )}
-          </div>
-        )}
+            ) : undefined
+          }
+        />
       </section>
     </div>
   );
