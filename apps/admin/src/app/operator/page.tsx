@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ConsoleShell, type SubNavGroup } from "@/components/app/SideNav";
 import { ActivityTab } from "@/components/operator/ActivityTab";
+import { AgenciesTab } from "@/components/operator/AgenciesTab";
 import { BusinessesTab } from "@/components/operator/BusinessesTab";
 import { DemosTab } from "@/components/operator/DemosTab";
 import { OnboardingQuestionsTab } from "@/components/operator/OnboardingQuestionsTab";
@@ -19,6 +20,7 @@ import { ApiError, api, type Me } from "@/lib/api";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "businesses", label: "Businesses" },
+  { id: "agencies", label: "Agencies" },
   { id: "demos", label: "Demos" },
   { id: "onboarding", label: "Onboarding" },
   { id: "questions", label: "Onboarding questions" },
@@ -32,7 +34,7 @@ const tabsOf = (...ids: Tab[]) => TABS.filter((item) => ids.includes(item.id));
 /** The same tabs as the sidebar shows them on a wide screen, in groups. */
 const GROUPS: SubNavGroup<Tab>[] = [
   { id: "home", items: tabsOf("overview") },
-  { id: "customers", label: "Customers", items: tabsOf("businesses", "users", "demos") },
+  { id: "customers", label: "Customers", items: tabsOf("businesses", "agencies", "users", "demos") },
   { id: "onboarding", label: "Onboarding", items: tabsOf("onboarding", "questions") },
   { id: "platform", label: "Platform", items: tabsOf("plans", "policies", "activity") },
 ];
@@ -124,6 +126,14 @@ export default function OperatorPage() {
         <section role="tabpanel">
           {tab === "overview" && <OverviewTab />}
           {tab === "businesses" && <BusinessesTab selected={business} onSelect={setBusiness} />}
+          {tab === "agencies" && (
+            <AgenciesTab
+              onOpenBusiness={(id) => {
+                setBusiness(id);
+                setTab("businesses");
+              }}
+            />
+          )}
           {tab === "demos" && <DemosTab />}
           {tab === "onboarding" && <OnboardingTab />}
           {tab === "questions" && <OnboardingQuestionsTab />}

@@ -48,6 +48,9 @@ export interface OperatorTenant {
   slug: string;
   plan: string;
   status: "active" | "suspended";
+  /** The agency (reseller) that manages it, if any. */
+  agency: { id: string; name: string } | null;
+  billingMode: "client_pays" | "agency_pays" | null;
   owners: string[];
   createdAt: string;
   assistants: number;
@@ -81,6 +84,25 @@ export interface Policies {
   chatIpPerMinute: number;
   releasedPackPhase: number;
   maxBusinessesPerAccount: number;
+  agencySharePercent: number;
+}
+
+export interface OperatorAgency {
+  id: string;
+  name: string;
+  status: "applied" | "active" | "suspended" | "declined";
+  website: string | null;
+  country: string | null;
+  currency: string;
+  applicationNote: string | null;
+  sharePercent: number | null;
+  billingModes: ("client_pays" | "agency_pays")[];
+  trialClientCap: number;
+  payoutsHeld: boolean;
+  owners: string[];
+  clients: number;
+  createdAt: string;
+  approvedAt: string | null;
 }
 
 export interface AuditEntry {

@@ -3,20 +3,46 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+
+interface TenantAccess {
+  name: string;
+  support: boolean;
+  via?: "member" | "support" | "agency";
+  agency?: { id: string; name: string } | null;
+}
 
 /**
- * Shown on a business's pages only when Traiblazer staff open them through support access
- * (business users never see it). Staff UI, so English only.
+ * Shown on a business's pages only to people who don't belong to it: Traiblazer staff helping
+ * through support access (staff UI, English only), or the users of the agency that manages it
+ * (docs/AGENCY.md §4). The business's own team never sees it.
  */
 export function SupportBanner({ tenantId }: { tenantId: string }) {
-  const [tenant, setTenant] = useState<{ name: string; support: boolean } | null>(null);
+  const { t } = useI18n();
+  const [tenant, setTenant] = useState<TenantAccess | null>(null);
 
   useEffect(() => {
-    api<{ tenant: { name: string; support: boolean } }>(`/v1/tenants/${tenantId}`)
+    api<{ tenant: TenantAccess }>(`/v1/tenants/${tenantId}`)
       .then((res) => setTenant(res.tenant))
       .catch(() => setTenant(null));
   }, [tenantId]);
 
+  if (tenant?.via === "agency" && tenant.agency) {
+    return (
+      <div
+        role="note"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-2)] px-5 py-3 text-sm"
+      >
+        <span>
+          <strong>{t("agency.banner.title", { business: tenant.name })}</strong>{" "}
+          {t("agency.banner.body", { agency: tenant.agency.name })}
+        </span>
+        <Link href="/agency" className="underline">
+          {t("agency.banner.back")}
+        </Link>
+      </div>
+    );
+  }
   if (!tenant?.support) return null;
   return (
     <div

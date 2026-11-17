@@ -48,6 +48,7 @@ const en = {
   privacy:
     "Messages you send the assistant are shared with {business} so they can help you. Please don't share sensitive personal information.",
   poweredBy: "Powered by Traiblazer",
+  poweredByAgency: "Powered by {name}",
   defaultDescription:
     "{business}: services, prices, hours and contact details. Ask the assistant any question.",
 };
@@ -98,6 +99,7 @@ const fr: PageStrings = {
   privacy:
     "Les messages envoyés à l'assistant sont transmis à {business} pour qu'on puisse vous aider. Veuillez ne pas partager de renseignements personnels sensibles.",
   poweredBy: "Propulsé par Traiblazer",
+  poweredByAgency: "Propulsé par {name}",
   defaultDescription:
     "{business} : services, prix, heures d'ouverture et coordonnées. Posez vos questions à l'assistant.",
 };

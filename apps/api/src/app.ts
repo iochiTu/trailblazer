@@ -11,6 +11,7 @@ import { MemoryLimiter } from "./lib/limiter.js";
 import { PlatformConfig } from "./lib/platform.js";
 import { auditSupportChanges, loadUser } from "./plugins/auth.js";
 import { addonRoutes } from "./routes/addons.js";
+import { agencyRoutes } from "./routes/agencies.js";
 import { assetRoutes } from "./routes/assets.js";
 import { authRoutes } from "./routes/auth.js";
 import { billingRoutes } from "./routes/billing.js";
@@ -123,6 +124,7 @@ export async function buildApp(input: AppContext): Promise<FastifyInstance> {
 
   await app.register(async (scope) => authRoutes(scope, ctx));
   await app.register(async (scope) => tenantRoutes(scope, ctx));
+  await app.register(async (scope) => agencyRoutes(scope, ctx));
   await app.register(async (scope) => botRoutes(scope, ctx));
   await app.register(async (scope) => addonRoutes(scope, ctx));
   await app.register(async (scope) => integrationRoutes(scope, ctx));

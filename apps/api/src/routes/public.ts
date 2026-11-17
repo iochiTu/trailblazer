@@ -25,6 +25,7 @@ import {
   runningNotices,
 } from "@traiblazer/core";
 import {
+  agencies,
   type BotSettings,
   bots,
   businessProfiles,
@@ -61,7 +62,7 @@ import { HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
 import { prepareChatImage } from "../lib/images.js";
 import { countPageEvent, fromPerson } from "../lib/page-stats.js";
-import { renderBusinessPage, renderChatOnly, schemaTypeFor } from "../page/render.js";
+import { type PoweredBy, renderBusinessPage, renderChatOnly, schemaTypeFor } from "../page/render.js";
 import { pageLanguage } from "../page/strings.js";
 import { publicAssetUrl } from "./assets.js";
 
@@ -86,6 +87,13 @@ const cleanFileName = (name: string) =>
     .slice(0, 120) || "image";
 
 const KEY_RE = /^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/;
+
+/** A direct customer's pages credit us; an agency's client's credit the agency or no one. */
+function poweredByOf(agency: typeof agencies.$inferSelect | null): PoweredBy {
+  if (!agency) return { kind: "platform" };
+  if (agency.branding.poweredBy !== "agency") return null;
+  return { kind: "agency", name: agency.name, url: agency.branding.website ?? agency.website ?? null };
+}
 
 /** Resolves stored settings into what the chat page and widget need (defaults applied). */
 export function toPublicAppearance(
@@ -148,8 +156,9 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!resolved) return null;
     // A business suspended by operators is invisible to visitors (page, widget and chat).
     const [tenant] = await db
-      .select({ status: tenants.status, kind: tenants.kind })
+      .select({ status: tenants.status, kind: tenants.kind, agency: agencies })
       .from(tenants)
+      .leftJoin(agencies, eq(agencies.id, tenants.agencyId))
       .where(eq(tenants.id, resolved.tenantId))
       .limit(1);
     if (tenant?.status !== "active") return null;
@@ -163,7 +172,14 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         .limit(1);
       const addons = await installedAddons(tx, bot.id);
       // A prospect demo: its page says so and is never listed.
-      return { ...resolved, bot, profile: profile ?? null, addons, demo: tenant.kind === "demo" };
+      return {
+        ...resolved,
+        bot,
+        profile: profile ?? null,
+        addons,
+        demo: tenant.kind === "demo",
+        poweredBy: poweredByOf(tenant.agency),
+      };
     });
   }
 
@@ -333,7 +349,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       notices: content.notices,
       offers: content.offers,
       links: links.map(({ url, label, icon }) => ({ url, label, icon })),
-      poweredBy: true,
+      poweredBy: found.poweredBy,
       now,
     });
   }
@@ -444,7 +460,12 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           },
           (msg, data) => request.log.warn(data, msg),
         ).map(({ id, url, label, icon }) => ({ id, url, label, icon })),
-        poweredBy: true,
+        // Ours, or (for an agency's client) the agency's credit, or none (docs/AGENCY.md §5).
+        poweredBy: found.poweredBy?.kind === "platform",
+        poweredByAgency:
+          found.poweredBy?.kind === "agency"
+            ? { name: found.poweredBy.name, url: found.poweredBy.url }
+            : null,
       },
     };
   });

@@ -46,7 +46,65 @@ export interface Me {
     role: string;
     /** What the business's plan includes (premium features). */
     features: { insights: boolean };
+    /** "agency": the user reaches it through the agency that manages it, not as a member. */
+    via: "member" | "agency";
+    /** The agency that manages it (its brand replaces ours), or null for a direct customer. */
+    agency: TenantAgency | null;
   }[];
+  /** The agencies (resellers) the user works for. */
+  agencies: { id: string; name: string; status: AgencyStatus; role: AgencyRole }[];
+}
+
+export type AgencyStatus = "applied" | "active" | "suspended" | "declined";
+export type AgencyRole = "owner" | "admin" | "member";
+export type AgencyBillingMode = "client_pays" | "agency_pays";
+
+export interface TenantAgency {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  color: string | null;
+  supportEmail: string | null;
+  website: string | null;
+}
+
+/** An agency as its own users see it in the agency panel. */
+export interface Agency {
+  id: string;
+  name: string;
+  slug: string;
+  status: AgencyStatus;
+  website: string | null;
+  country: string | null;
+  currency: string;
+  billingModes: AgencyBillingMode[];
+  trialClientCap: number;
+  branding: {
+    logoUrl?: string;
+    color?: string;
+    supportEmail?: string;
+    website?: string;
+    poweredBy?: "none" | "agency";
+  };
+  createdAt: string;
+  approvedAt: string | null;
+  role: AgencyRole;
+}
+
+export interface AgencyClient {
+  id: string;
+  name: string;
+  plan: string;
+  planName: { en: string; fr: string } | null;
+  status: "active" | "suspended";
+  suspendedBy: "operator" | "agency" | null;
+  billingMode: AgencyBillingMode;
+  owners: string[];
+  createdAt: string;
+  assistants: number;
+  activeAssistants: number;
+  questions: number;
+  monthlyLimit: number;
 }
 
 /** A playbook the assistant follows when a visitor's request matches `when`. */

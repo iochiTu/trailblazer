@@ -1,6 +1,7 @@
 # Agency panel (resellers): design
 
-Status: planned (November 2026), nothing built. Related: PLAN §2.2 (go-to-market), §7.4 (client
+Status: phase 1 in progress (November 2026): agencies, access, clients, team, branding and the
+operator tab are built (see "Phase 1, part 1 as built" in §10); agency billing is next. Related: PLAN §2.2 (go-to-market), §7.4 (client
 admin portal), §7.5 (operator console, support access, demo generator), §10 (data model), §16
 (business model: "Agency / white-label" row), §18.4 (rules to respect while building). Stripe
 behaviour below is marked *(verify)* where it must be confirmed before it is relied on.
@@ -360,6 +361,20 @@ extension, wholesale grace days.
    payers or none; a payout run twice pays once; held and below-minimum balances carry forward; RLS
    test for the new path. Run the first payouts in Stripe's test mode, then pay the first agency by
    hand-checked runs before turning the job on.
+   **Phase 1, part 1 as built:** `agencies`, `agency_members`, `agency_audit_logs` and the agency
+   columns on `tenants` (migration 0055; the staff-account guard covers agency members). The agency
+   path in `requireTenantRole` (`via: "agency"`, role admin, only while the agency is active), audited
+   in the client's log and the agency's. Partner application (`POST /v1/agencies`), operator Agencies
+   tab (approve, decline, suspend, currency, our percentage with a platform default, billing modes,
+   trial cap, payout hold). Agency panel at `/agency`: Overview, Clients (create with a billing mode,
+   open, suspend / reactivate, add an existing account as owner), Team (owner adds admins and
+   members), Branding, Activity. Clients start on the trial plan, capped per agency. An agency can't
+   lift a suspension made by operators (`tenants.suspended_by`). Agency-pays clients see "managed by
+   <agency>" on Billing and can't check out; client-pays clients use today's Billing page and prices
+   until agency prices land. Page and chat credit the agency or no one, never us. The portal shows the
+   agency's name and logo for its clients, and an agency banner to its users.
+   **Not built yet:** agency prices and minimums, ledger and payouts, wholesale subscription, mode
+   switching, release, email sender name, the phone top bar's brand.
 2. **Running many clients.** Templates, member role with assigned clients, alerts, margin report,
    release / transfer flows, branded login link, demo generator for agencies, fraud signals in the
    console.

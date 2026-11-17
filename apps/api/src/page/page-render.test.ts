@@ -83,7 +83,7 @@ const data = (overrides: Partial<PageData> = {}): PageData => ({
   notices: ["Closed Monday for the holiday"],
   offers: [],
   links: [],
-  poweredBy: true,
+  poweredBy: { kind: "platform" },
   now: TUESDAY_MORNING,
   ...overrides,
 });

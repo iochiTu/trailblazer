@@ -723,6 +723,14 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
         <footer class="tb-footer">
           <span>{ui(lang, "disclaimer")}</span>
           {config.poweredBy && <span>{ui(lang, "poweredBy")}</span>}
+          {config.poweredByAgency &&
+            (config.poweredByAgency.url ? (
+              <a href={config.poweredByAgency.url} target="_blank" rel="noopener noreferrer">
+                {ui(lang, "poweredByAgency", { name: config.poweredByAgency.name })}
+              </a>
+            ) : (
+              <span>{ui(lang, "poweredByAgency", { name: config.poweredByAgency.name })}</span>
+            ))}
         </footer>
       </div>
     </div>

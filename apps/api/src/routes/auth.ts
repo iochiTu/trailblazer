@@ -1,11 +1,11 @@
-import { planFeatures } from "@traiblazer/core";
-import { demos, memberships, plans, tenants, users } from "@traiblazer/db";
+import { demos, tenants, users } from "@traiblazer/db";
 import { demoSignInSchema, loginSchema, signupSchema } from "@traiblazer/shared";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "../auth/password.js";
 import { createSession, deleteSession, SESSION_COOKIE } from "../auth/sessions.js";
 import type { AppContext } from "../context.js";
+import { userAgencies, userTenants } from "../lib/agencies.js";
 import { hashDemoCode } from "../lib/demo-access.js";
 import { conflict, HttpError } from "../lib/errors.js";
 import { requireUser } from "../plugins/auth.js";
@@ -115,26 +115,7 @@ export async function authRoutes(app: FastifyInstance, { db, config, limiter }: 
   app.get("/v1/auth/me", { preHandler: requireUser }, async (request) => {
     // The session id stays on the server (push devices are tied to it).
     const { sessionId: _, ...user } = request.user!;
-    const myTenants = await db
-      .select({
-        id: tenants.id,
-        name: tenants.name,
-        slug: tenants.slug,
-        plan: tenants.plan,
-        role: memberships.role,
-        insights: plans.insights,
-      })
-      .from(memberships)
-      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
-      .leftJoin(plans, eq(plans.id, tenants.plan))
-      .where(eq(memberships.userId, user.id))
-      .orderBy(tenants.name);
-    return {
-      user,
-      tenants: myTenants.map(({ insights, ...t }) => ({
-        ...t,
-        features: planFeatures({ insights: insights ?? false }),
-      })),
-    };
+    const [myTenants, myAgencies] = await Promise.all([userTenants(db, user.id), userAgencies(db, user.id)]);
+    return { user, tenants: myTenants, agencies: myAgencies };
   });
 }

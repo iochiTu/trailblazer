@@ -110,6 +110,8 @@ export interface PlatformPolicies {
    * allowance, so this stops one account from collecting unlimited free quota.
    */
   maxBusinessesPerAccount: number;
+  /** Our share of each payment from an agency's client-pays clients, in percent (docs/AGENCY.md §3.4). */
+  agencySharePercent: number;
 }
 
 export const DEFAULT_POLICIES: PlatformPolicies = {
@@ -119,6 +121,7 @@ export const DEFAULT_POLICIES: PlatformPolicies = {
   chatIpPerMinute: 20,
   releasedPackPhase: 1,
   maxBusinessesPerAccount: 3,
+  agencySharePercent: 30,
 };
 
 /** Database keys (snake_case) for each policy. */
@@ -129,6 +132,7 @@ export const POLICY_KEYS: Record<keyof PlatformPolicies, string> = {
   chatIpPerMinute: "chat_ip_per_minute",
   releasedPackPhase: "released_pack_phase",
   maxBusinessesPerAccount: "max_businesses_per_account",
+  agencySharePercent: "agency_share_percent",
 };
 
 export const updatePoliciesSchema = z
@@ -139,6 +143,7 @@ export const updatePoliciesSchema = z
     chatIpPerMinute: z.number().int().min(1).max(600),
     releasedPackPhase: z.number().int().min(1).max(4),
     maxBusinessesPerAccount: z.number().int().min(1).max(100),
+    agencySharePercent: z.number().int().min(0).max(100),
   })
   .partial();
 

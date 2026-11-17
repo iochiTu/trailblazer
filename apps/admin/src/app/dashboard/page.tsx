@@ -25,6 +25,17 @@ export default function DashboardPage() {
         router.replace("/operator");
         return;
       }
+      // An agency's user without a business of their own starts in the agency panel, unless they
+      // just opened one of its clients from there.
+      const remembered = lastTenant();
+      if (
+        data.agencies.length > 0 &&
+        !data.tenants.some((item) => item.via === "member") &&
+        !data.tenants.some((item) => item.id === remembered)
+      ) {
+        router.replace("/agency");
+        return;
+      }
       // No business yet: the onboarding chat sets the first one up.
       if (!data.user.demo && data.tenants.length === 0) {
         router.replace("/welcome");
@@ -32,7 +43,6 @@ export default function DashboardPage() {
       }
       setMe(data);
       // Open on the business used last (the sidebar's links follow the same one).
-      const remembered = lastTenant();
       setTenantId(
         (current) =>
           current ??

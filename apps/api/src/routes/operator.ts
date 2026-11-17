@@ -1,4 +1,6 @@
 import {
+  agencies,
+  agencyMembers,
   billingAccounts,
   bots,
   conversations,
@@ -14,6 +16,7 @@ import {
 import {
   createPlanSchema,
   effectiveMonthlyLimit,
+  operatorAgencyUpdateSchema,
   operatorTenantUpdateSchema,
   type PlatformPolicies,
   POLICY_KEYS,
@@ -21,10 +24,11 @@ import {
   updatePlanSchema,
   updatePoliciesSchema,
 } from "@traiblazer/shared";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { isPaying } from "../billing/sync.js";
 import type { AppContext } from "../context.js";
+import { logAgency } from "../lib/agencies.js";
 import { periodKey } from "../lib/chat-guard.js";
 import { badRequest, conflict, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
@@ -103,7 +107,7 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
 
   app.get<{ Querystring: { q?: string } }>("/v1/operator/tenants", guard, async (request) => {
     const q = (request.query.q ?? "").trim().toLowerCase();
-    const [tenantRows, owners, rows] = await Promise.all([
+    const [tenantRows, owners, rows, agencyRows] = await Promise.all([
       // Prospect demos have their own tab.
       db.select().from(tenants).where(eq(tenants.kind, "business")).orderBy(desc(tenants.createdAt)),
       db
@@ -112,7 +116,9 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
         .innerJoin(users, eq(users.id, memberships.userId))
         .where(eq(memberships.role, "owner")),
       stats(),
+      db.select({ id: agencies.id, name: agencies.name }).from(agencies),
     ]);
+    const agencyNames = new Map(agencyRows.map((a) => [a.id, a.name]));
     const statsById = new Map(rows.map((r) => [r.tenant_id, r]));
     const ownersById = new Map<string, string[]>();
     for (const o of owners) ownersById.set(o.tenantId, [...(ownersById.get(o.tenantId) ?? []), o.email]);
@@ -129,6 +135,8 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
             slug: t.slug,
             plan: t.plan,
             status: t.status,
+            agency: t.agencyId ? { id: t.agencyId, name: agencyNames.get(t.agencyId) ?? "" } : null,
+            billingMode: t.agencyBillingMode,
             owners: ownersById.get(t.id) ?? [],
             createdAt: t.createdAt,
             assistants: s?.bots ?? 0,
@@ -144,7 +152,8 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
             !q ||
             t.name.toLowerCase().includes(q) ||
             t.slug.includes(q) ||
-            t.owners.some((email) => email.includes(q)),
+            t.owners.some((email) => email.includes(q)) ||
+            !!t.agency?.name.toLowerCase().includes(q),
         ),
     };
   });
@@ -236,12 +245,131 @@ export async function operatorRoutes(app: FastifyInstance, { db, platform }: App
       if (isPaying(account?.status))
         throw conflict("This business pays by subscription. The owner changes the plan from Billing.");
     }
-    const [updated] = await db.update(tenants).set(input).where(eq(tenants.id, id)).returning();
+    const suspendedBy =
+      input.status === undefined ? undefined : input.status === "suspended" ? ("operator" as const) : null;
+    const [updated] = await db
+      .update(tenants)
+      .set({ ...input, ...(suspendedBy !== undefined ? { suspendedBy } : {}) })
+      .where(eq(tenants.id, id))
+      .returning();
     await log(request, "tenant.updated", "tenant", id, {
       from: { plan: before.plan, status: before.status },
       to: input,
     });
     return { tenant: { id: updated!.id, plan: updated!.plan, status: updated!.status } };
+  });
+
+  // ---- Agencies (resellers, docs/AGENCY.md §8) ----------------------------------------------
+
+  app.get("/v1/operator/agencies", guard, async () => {
+    const [agencyRows, owners, clients] = await Promise.all([
+      db.select().from(agencies).orderBy(desc(agencies.createdAt)),
+      db
+        .select({ agencyId: agencyMembers.agencyId, email: users.email })
+        .from(agencyMembers)
+        .innerJoin(users, eq(users.id, agencyMembers.userId))
+        .where(eq(agencyMembers.role, "owner")),
+      db
+        .select({ agencyId: tenants.agencyId, count: sql<number>`count(*)::int` })
+        .from(tenants)
+        .where(sql`${tenants.agencyId} is not null`)
+        .groupBy(tenants.agencyId),
+    ]);
+    const ownersBy = new Map<string, string[]>();
+    for (const o of owners) ownersBy.set(o.agencyId, [...(ownersBy.get(o.agencyId) ?? []), o.email]);
+    const clientsBy = new Map(clients.map((c) => [c.agencyId, c.count]));
+    const policies = await platform!.policies();
+    return {
+      defaultSharePercent: policies.agencySharePercent,
+      agencies: agencyRows.map((a) => ({
+        id: a.id,
+        name: a.name,
+        status: a.status,
+        website: a.website,
+        country: a.country,
+        currency: a.currency,
+        applicationNote: a.applicationNote,
+        sharePercent: a.sharePercent,
+        billingModes: a.billingModes,
+        trialClientCap: a.trialClientCap,
+        payoutsHeld: a.payoutsHeld,
+        owners: ownersBy.get(a.id) ?? [],
+        clients: clientsBy.get(a.id) ?? 0,
+        createdAt: a.createdAt,
+        approvedAt: a.approvedAt,
+      })),
+    };
+  });
+
+  app.get<IdParams>("/v1/operator/agencies/:id", guard, async (request) => {
+    const { id } = request.params;
+    if (!isUuid(id)) throw notFound("Agency");
+    const [agency] = await db.select().from(agencies).where(eq(agencies.id, id)).limit(1);
+    if (!agency) throw notFound("Agency");
+    const [members, clients] = await Promise.all([
+      db
+        .select({ userId: users.id, name: users.name, email: users.email, role: agencyMembers.role })
+        .from(agencyMembers)
+        .innerJoin(users, eq(users.id, agencyMembers.userId))
+        .where(eq(agencyMembers.agencyId, id))
+        .orderBy(users.email),
+      db
+        .select({
+          id: tenants.id,
+          name: tenants.name,
+          plan: tenants.plan,
+          status: tenants.status,
+          billingMode: tenants.agencyBillingMode,
+          createdAt: tenants.createdAt,
+        })
+        .from(tenants)
+        .where(eq(tenants.agencyId, id))
+        .orderBy(tenants.name),
+    ]);
+    return { agency, members, clients };
+  });
+
+  app.patch<IdParams>("/v1/operator/agencies/:id", guard, async (request) => {
+    const { id } = request.params;
+    if (!isUuid(id)) throw notFound("Agency");
+    const input = operatorAgencyUpdateSchema.parse(request.body);
+    const [before] = await db.select().from(agencies).where(eq(agencies.id, id)).limit(1);
+    if (!before) throw notFound("Agency");
+    if (input.currency && input.currency !== before.currency) {
+      // Every price, invoice and payout of an agency is in one currency.
+      const [client] = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.agencyId, id))
+        .limit(1);
+      if (client) throw conflict("This agency has clients; its currency can't change.");
+    }
+    if (input.billingModes) {
+      const [stranded] = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(and(eq(tenants.agencyId, id), notInArray(tenants.agencyBillingMode, input.billingModes)))
+        .limit(1);
+      if (stranded) throw conflict("Some of this agency's clients use a billing mode you're turning off.");
+    }
+    const approving = input.status === "active" && !before.approvedAt;
+    const [updated] = await db
+      .update(agencies)
+      .set({ ...input, ...(approving ? { approvedAt: new Date() } : {}) })
+      .where(eq(agencies.id, id))
+      .returning();
+    const changed = Object.fromEntries(
+      Object.entries(input).map(([k, v]) => [k, { from: before[k as keyof typeof before], to: v }]),
+    );
+    await log(request, "agency.updated", "agency", id, changed);
+    await logAgency(db, {
+      agencyId: id,
+      actorUserId: null,
+      action:
+        input.status && input.status !== before.status ? `agency.${input.status}` : "agency.terms_updated",
+      metadata: changed,
+    });
+    return { agency: updated };
   });
 
   // ---- Users ----------------------------------------------------------------------------------

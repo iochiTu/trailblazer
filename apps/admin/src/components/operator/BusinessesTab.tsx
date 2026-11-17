@@ -62,7 +62,7 @@ export function BusinessesTab({
           <input
             className="input max-w-xs"
             type="search"
-            placeholder="Search name or owner email"
+            placeholder="Search name, owner email or agency"
             aria-label="Search businesses"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -105,6 +105,12 @@ export function BusinessesTab({
                           {t.name}
                         </button>
                         <div className="muted text-xs">{t.owners.join(", ") || "No owner"}</div>
+                        {t.agency && (
+                          <div className="text-xs">
+                            Agency: {t.agency.name} ·{" "}
+                            {t.billingMode === "agency_pays" ? "agency pays" : "client pays"}
+                          </div>
+                        )}
                         <div className="muted text-xs">
                           Joined {new Date(t.createdAt).toLocaleDateString("en-CA", { dateStyle: "medium" })}
                         </div>
