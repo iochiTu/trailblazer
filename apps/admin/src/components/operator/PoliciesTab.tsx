@@ -57,6 +57,7 @@ export function PoliciesTab() {
       chatIpPerMinute: Number(data.get("chatIpPerMinute")),
       releasedPackPhase: Number(data.get("releasedPackPhase")),
       maxBusinessesPerAccount: Number(data.get("maxBusinessesPerAccount")),
+      agencySharePercent: Number(data.get("agencySharePercent")),
     };
     const changed = Object.fromEntries(
       Object.entries(next).filter(([k, v]) => policies[k as keyof Policies] !== v),
@@ -136,6 +137,22 @@ export function PoliciesTab() {
           <span className="muted text-xs">
             How many businesses one account can own. Each new business starts on the default plan, so this
             stops one account from collecting free allowances. Shown on the public portal.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Our share of agency client payments (%)
+          <input
+            className="input max-w-[10rem]"
+            type="number"
+            name="agencySharePercent"
+            required
+            min={0}
+            max={100}
+            defaultValue={policies.agencySharePercent}
+          />
+          <span className="muted text-xs">
+            Default percentage we keep from each payment by an agency's client-pays clients. An agency can
+            have its own percentage in the Agencies tab.
           </span>
         </label>
       </fieldset>

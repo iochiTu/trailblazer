@@ -1,4 +1,4 @@
-import { billingAccounts, billingEvents, plans, tenants } from "@traiblazer/db";
+import { agencies, billingAccounts, billingEvents, plans, tenants } from "@traiblazer/db";
 import { enOrFr } from "@traiblazer/i18n";
 import { billingPlanSchema } from "@traiblazer/shared";
 import { eq } from "drizzle-orm";
@@ -11,6 +11,10 @@ import type { PlanRow } from "../lib/platform.js";
 import { requireTenantRole } from "../plugins/auth.js";
 
 type TenantParams = { Params: { tenantId: string } };
+
+/** An agency-pays client's plan is paid by its agency (docs/AGENCY.md §3.5), never by the client. */
+const managedByAgency = () =>
+  new HttpError(403, "managed_by_agency", "Your agency manages and pays for this business's plan.");
 
 const unavailable = () =>
   new HttpError(
@@ -92,8 +96,17 @@ export async function billingRoutes(app: FastifyInstance, ctx: AppContext) {
     async (request) => {
       const { tenant, account } = await loadTenant(request.tenant!.id);
       const allPlans = await platform.plans();
+      const [agency] = tenant.agencyId
+        ? await db
+            .select({ name: agencies.name })
+            .from(agencies)
+            .where(eq(agencies.id, tenant.agencyId))
+            .limit(1)
+        : [];
       return {
         enabled: !!billing,
+        /** Set when the business's agency pays for its plan: the page shows who to talk to. */
+        managedBy: tenant.agencyBillingMode === "agency_pays" ? (agency?.name ?? null) : null,
         plan: tenant.plan,
         planName: (await platform.plan(tenant.plan)).name,
         demo: tenant.kind === "demo" || !!request.user!.demo,
@@ -128,9 +141,10 @@ export async function billingRoutes(app: FastifyInstance, ctx: AppContext) {
     "/v1/tenants/:tenantId/billing/checkout",
     { preHandler: requireTenantRole(db, "owner") },
     async (request) => {
+      const { tenant, account } = await loadTenant(request.tenant!.id);
+      if (tenant.agencyBillingMode === "agency_pays") throw managedByAgency();
       const provider = payer(request);
       const { plan: planId } = billingPlanSchema.parse(request.body);
-      const { tenant, account } = await loadTenant(request.tenant!.id);
       if (tenant.kind === "demo")
         throw new HttpError(403, "demo_business", "A demo business can't be bought for.");
       if (isPaying(account?.status))
@@ -189,9 +203,10 @@ export async function billingRoutes(app: FastifyInstance, ctx: AppContext) {
     "/v1/tenants/:tenantId/billing/plan",
     { preHandler: requireTenantRole(db, "owner") },
     async (request) => {
+      const { tenant, account } = await loadTenant(request.tenant!.id);
+      if (tenant.agencyBillingMode === "agency_pays") throw managedByAgency();
       const provider = payer(request);
       const { plan: planId } = billingPlanSchema.parse(request.body);
-      const { account } = await loadTenant(request.tenant!.id);
       if (!account?.stripeSubscriptionId || !isPaying(account.status))
         throw new HttpError(409, "no_subscription", "This business doesn't pay for a plan yet.");
       if (account.plan === planId) return { plan: planId };

@@ -11,7 +11,7 @@ import { forgetPushDevice } from "@/lib/push";
 import { lastTenant, rememberTenant, useMe } from "./useMe";
 
 /** The first level of the menu: the places a business owner goes. */
-export type Section = "bots" | "inbox" | "contacts" | "usage" | "billing" | "alerts";
+export type Section = "bots" | "inbox" | "contacts" | "usage" | "billing" | "alerts" | "agency";
 
 export interface SubNavItem<T extends string = string> {
   id: T;
@@ -75,6 +75,12 @@ const ICONS: Record<Section, ReactNode> = {
     </>
   ),
   alerts: <path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9ZM10 19a2 2 0 0 0 4 0" />,
+  agency: (
+    <>
+      <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+      <path d="M9 21v-5h6v5M9 10h.01M15 10h.01M12 10h.01" />
+    </>
+  ),
 };
 
 function Icon({ children, size = 20 }: { children: ReactNode; size?: number }) {
@@ -158,7 +164,12 @@ export function SideNav<T extends string = string>({
   const remembered = me ? lastTenant() : null;
   const current =
     tenantId ?? (tenants.some((item) => item.id === remembered) ? remembered : (tenants[0]?.id ?? null));
-  const role = tenants.find((item) => item.id === current)?.role;
+  const currentTenant = tenants.find((item) => item.id === current);
+  const role = currentTenant?.role;
+  // An agency's client sees the agency's name and logo in place of ours (docs/AGENCY.md §5).
+  const brand = !staff && currentTenant?.agency ? currentTenant.agency : null;
+  const ownTenants = tenants.filter((item) => item.via !== "agency");
+  const agencyTenants = tenants.filter((item) => item.via === "agency");
 
   const links: { id: Section; href: string; label: string }[] = [
     { id: "bots", href: "/dashboard", label: t("nav.bots") },
@@ -177,6 +188,9 @@ export function SideNav<T extends string = string>({
       href: current ? `/settings/notifications?t=${current}` : "/settings/notifications",
       label: t("nav.alerts"),
     },
+    ...((me?.agencies.length ?? 0) > 0
+      ? [{ id: "agency" as const, href: "/agency", label: t("nav.agency") }]
+      : []),
   ];
 
   function switchTenant(id: string) {
@@ -233,8 +247,21 @@ export function SideNav<T extends string = string>({
       <aside className="sidenav" data-open={open} aria-label={menuLabel} lang={staff ? "en" : undefined}>
         <div className="sidenav-brand">
           <Link href={staff ? "/operator" : "/dashboard"} className="flex min-w-0 items-center gap-2.5">
-            <BrandMark size={30} />
-            <span className="truncate text-base font-semibold text-white">{t("app.name")}</span>
+            {brand?.logoUrl ? (
+              // biome-ignore lint/performance/noImgElement: the agency's logo is on its own site
+              <img
+                src={brand.logoUrl}
+                alt=""
+                width={30}
+                height={30}
+                className="h-[30px] w-[30px] rounded-md object-contain"
+              />
+            ) : (
+              !brand && <BrandMark size={30} />
+            )}
+            <span className="truncate text-base font-semibold text-white">
+              {brand ? brand.name : t("app.name")}
+            </span>
           </Link>
           {staff && <span className="badge badge-accent">Staff only</span>}
           <button type="button" className="sidenav-close" aria-label={closeLabel} onClick={onClose}>
@@ -252,11 +279,20 @@ export function SideNav<T extends string = string>({
               onChange={(event) => switchTenant(event.target.value)}
               aria-label={t("tenants.title")}
             >
-              {tenants.map((item) => (
+              {ownTenants.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
               ))}
+              {agencyTenants.length > 0 && (
+                <optgroup label={t("agency.clientsGroup")}>
+                  {agencyTenants.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
         )}

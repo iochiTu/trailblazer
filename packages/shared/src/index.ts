@@ -58,6 +58,12 @@ export const createTenantSchema = z.object({
 });
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;
 
+/** A business an agency creates for a client (docs/AGENCY.md §3.2). */
+export const agencyClientSchema = createTenantSchema.extend({
+  billingMode: z.enum(["client_pays", "agency_pays"]),
+});
+export type AgencyClientInput = z.infer<typeof agencyClientSchema>;
+
 const languagesList = z
   .array(languageCode)
   .min(1)
@@ -749,5 +755,6 @@ export const updateOnboardingSchema = z
   })
   .refine((input) => Object.values(input).some((value) => value !== undefined), "Nothing to change");
 
+export * from "./agencies.js";
 export * from "./locale.js";
 export * from "./plans.js";

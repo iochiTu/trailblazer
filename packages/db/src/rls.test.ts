@@ -299,7 +299,16 @@ describe("row-level security", () => {
     // Platform tables: read and written by the platform or by staff only, never a business's own data.
     // billing_accounts: the payment webhook finds the business from the provider's customer id, before
     // any tenant is known; it holds provider ids and status only, no customer content.
-    const platformTables = new Set(["memberships", "jobs", "demos", "onboardings", "billing_accounts"]);
+    // agency_audit_logs: an agency's own log (docs/AGENCY.md), read through agency-scoped routes; its
+    // tenant_id only names the client an entry was about.
+    const platformTables = new Set([
+      "memberships",
+      "jobs",
+      "demos",
+      "onboardings",
+      "billing_accounts",
+      "agency_audit_logs",
+    ]);
     for (const row of rows) {
       if (platformTables.has(row.relname)) continue;
       expect(row.rls, row.relname).toBe(true);

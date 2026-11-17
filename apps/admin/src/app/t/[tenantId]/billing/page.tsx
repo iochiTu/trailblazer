@@ -21,6 +21,8 @@ interface BillingPlan {
 
 interface BillingReport {
   enabled: boolean;
+  /** The agency that pays for this business's plan (docs/AGENCY.md §3.5), if any. */
+  managedBy: string | null;
   plan: string;
   planName: Record<"en" | "fr", string>;
   demo: boolean;
@@ -148,7 +150,7 @@ function Billing() {
 
   const sub = report.subscription;
   const paying = PAYING.includes(sub?.status ?? "");
-  const canBuy = report.enabled && report.canManage && !report.demo;
+  const canBuy = report.enabled && report.canManage && !report.demo && !report.managedBy;
   const statusLabel = (s: string) =>
     s === "active" || s === "trialing" || s === "past_due"
       ? t(`billing.status.${s}`)
@@ -223,62 +225,69 @@ function Billing() {
             </div>
           )}
           {report.demo && <p className="muted text-sm">{t("billing.demo")}</p>}
-          {!report.demo && !report.canManage && (
+          {report.managedBy && (
+            <p className="text-sm">{t("billing.managedByAgency", { agency: report.managedBy })}</p>
+          )}
+          {!report.demo && !report.managedBy && !report.canManage && (
             <p className="muted text-sm">
               {tenant.support ? t("billing.supportOnly") : t("billing.ownerOnly")}
             </p>
           )}
-          {!report.enabled && !report.demo && <p className="muted text-sm">{t("billing.unavailable")}</p>}
+          {!report.enabled && !report.demo && !report.managedBy && (
+            <p className="muted text-sm">{t("billing.unavailable")}</p>
+          )}
         </section>
 
-        <section className="flex flex-col gap-3" aria-labelledby="billing-plans">
-          <h2 id="billing-plans" className="font-medium">
-            {t("billing.plans")}
-          </h2>
-          {report.plans.length === 0 ? (
-            <p className="muted text-sm">{t("billing.noPlans")}</p>
-          ) : (
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {report.plans.map((plan) => {
-                const isCurrent = paying && sub?.plan === plan.id;
-                const fee = !report.setupFeePaid && !paying && plan.setupFeeCents ? plan.setupFeeCents : 0;
-                return (
-                  <li key={plan.id} className="card flex flex-col gap-2 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="font-medium">{planName(plan)}</h3>
-                      {isCurrent && <span className="badge badge-accent">{t("billing.currentBadge")}</span>}
-                    </div>
-                    <p className="text-2xl font-semibold tabular-nums">
-                      {t("billing.price", { price: money(plan.priceMonthlyCents) })}
-                    </p>
-                    {fee > 0 && (
-                      <p className="muted text-sm">{t("billing.setupFee", { price: money(fee) })}</p>
-                    )}
-                    <ul className="muted flex flex-col gap-1 text-sm">
-                      <li>{t("billing.questions", { count: plan.monthlyQuestions })}</li>
-                      <li>{t("billing.photos", { count: plan.knowledgeImages })}</li>
-                      {plan.insights && <li>{t("billing.insights")}</li>}
-                    </ul>
-                    {canBuy && !isCurrent && (
-                      <button
-                        type="button"
-                        className="btn mt-auto"
-                        disabled={busy !== null}
-                        aria-busy={busy === plan.id || busy === "checkout"}
-                        onClick={() => (paying ? switchTo(plan) : go("checkout", { plan: plan.id }))}
-                      >
-                        {paying
-                          ? t("billing.switch", { plan: planName(plan) })
-                          : t("billing.choose", { plan: planName(plan) })}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p className="muted text-xs">{t("billing.taxes")}</p>
-        </section>
+        {!report.managedBy && (
+          <section className="flex flex-col gap-3" aria-labelledby="billing-plans">
+            <h2 id="billing-plans" className="font-medium">
+              {t("billing.plans")}
+            </h2>
+            {report.plans.length === 0 ? (
+              <p className="muted text-sm">{t("billing.noPlans")}</p>
+            ) : (
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {report.plans.map((plan) => {
+                  const isCurrent = paying && sub?.plan === plan.id;
+                  const fee = !report.setupFeePaid && !paying && plan.setupFeeCents ? plan.setupFeeCents : 0;
+                  return (
+                    <li key={plan.id} className="card flex flex-col gap-2 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-medium">{planName(plan)}</h3>
+                        {isCurrent && <span className="badge badge-accent">{t("billing.currentBadge")}</span>}
+                      </div>
+                      <p className="text-2xl font-semibold tabular-nums">
+                        {t("billing.price", { price: money(plan.priceMonthlyCents) })}
+                      </p>
+                      {fee > 0 && (
+                        <p className="muted text-sm">{t("billing.setupFee", { price: money(fee) })}</p>
+                      )}
+                      <ul className="muted flex flex-col gap-1 text-sm">
+                        <li>{t("billing.questions", { count: plan.monthlyQuestions })}</li>
+                        <li>{t("billing.photos", { count: plan.knowledgeImages })}</li>
+                        {plan.insights && <li>{t("billing.insights")}</li>}
+                      </ul>
+                      {canBuy && !isCurrent && (
+                        <button
+                          type="button"
+                          className="btn mt-auto"
+                          disabled={busy !== null}
+                          aria-busy={busy === plan.id || busy === "checkout"}
+                          onClick={() => (paying ? switchTo(plan) : go("checkout", { plan: plan.id }))}
+                        >
+                          {paying
+                            ? t("billing.switch", { plan: planName(plan) })
+                            : t("billing.choose", { plan: planName(plan) })}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="muted text-xs">{t("billing.taxes")}</p>
+          </section>
+        )}
       </div>
     </ConsoleShell>
   );

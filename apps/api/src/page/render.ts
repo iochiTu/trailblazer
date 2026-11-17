@@ -77,7 +77,8 @@ export interface PageData {
   /** Promotions running now (docs/SELL_AND_PROMOTE.md §3.2). */
   offers: PageOffer[];
   links: PageLink[];
-  poweredBy: boolean;
+  /** The footer's credit: ours, the client's agency (docs/AGENCY.md §5), or none. */
+  poweredBy: PoweredBy;
   now: Date;
 }
 
@@ -398,9 +399,23 @@ function footerHtml(data: PageData): string {
     `<p class="tbp-footer-name" dir="auto">${esc(data.businessName)}</p>`,
     rows.length ? `<dl class="tbp-facts">${rows.join("")}</dl>` : "",
     `<p class="tbp-privacy">${esc(t("privacy", { business: data.businessName }))}</p>`,
-    data.poweredBy ? `<p class="tbp-powered">${esc(t("poweredBy"))}</p>` : "",
+    poweredByLine(data.poweredBy, t),
     `</footer>`,
   ].join("");
+}
+
+export type PoweredBy = { kind: "platform" } | { kind: "agency"; name: string; url: string | null } | null;
+
+function poweredByLine(
+  poweredBy: PoweredBy,
+  t: (key: PageStringKey, vars?: Record<string, string>) => string,
+): string {
+  if (!poweredBy) return "";
+  if (poweredBy.kind === "platform") return `<p class="tbp-powered">${esc(t("poweredBy"))}</p>`;
+  const text = esc(t("poweredByAgency", { name: poweredBy.name }));
+  return poweredBy.url
+    ? `<p class="tbp-powered"><a href="${esc(poweredBy.url)}" rel="noopener">${text}</a></p>`
+    : `<p class="tbp-powered">${text}</p>`;
 }
 
 /** The page body: everything visible, with the chat app's mount point (#app) in the chat panel. */

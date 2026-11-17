@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   customType,
@@ -103,27 +104,135 @@ export type TenantStatus = (typeof tenantStatuses)[number];
 export const tenantKinds = ["business", "demo"] as const;
 export type TenantKind = (typeof tenantKinds)[number];
 
-export const tenants = pgTable("tenants", {
+export const tenants = pgTable(
+  "tenants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    kind: text("kind").$type<TenantKind>().notNull().default("business"),
+    plan: text("plan")
+      .notNull()
+      .default("trial")
+      .references(() => plans.id, { onUpdate: "cascade", onDelete: "restrict" }),
+    /** "suspended" turns the business's assistants off for visitors (set by operators or its agency). */
+    status: text("status").$type<TenantStatus>().notNull().default("active"),
+    /** Who suspended it: an agency can lift only its own suspensions, never the operators'. */
+    suspendedBy: text("suspended_by").$type<"operator" | "agency">(),
+    /** Language the business owner reads (inbox translations go into this language). */
+    ownerLanguage: text("owner_language").notNull().default("en"),
+    /** "default" or "canada" (data residency, Phase 3). */
+    dataRegion: text("data_region").notNull().default("default"),
+    /** Owner's own monthly question cap (cost control); never above the plan's allowance. Null = plan limit. */
+    monthlyQuestionLimit: integer("monthly_question_limit"),
+    /** Max questions one visitor may ask per day across this business's assistants. Null = default. */
+    visitorDailyLimit: integer("visitor_daily_limit"),
+    /**
+     * The agency (reseller) that manages this business (docs/AGENCY.md); null for direct customers.
+     * The agency's users reach it through their agency, not through memberships.
+     */
+    agencyId: uuid("agency_id").references((): AnyPgColumn => agencies.id, { onDelete: "restrict" }),
+    /** Who pays us for an agency client: the client itself or the agency. Null without an agency. */
+    agencyBillingMode: text("agency_billing_mode").$type<AgencyBillingMode>(),
+    /** When the business came under its agency (the agency earns from invoices paid after it). */
+    agencyJoinedAt: timestamp("agency_joined_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [index("tenants_agency_idx").on(t.agencyId)],
+);
+
+// ---- Agencies (resellers, docs/AGENCY.md) ----------------------------------------------------
+
+export const agencyStatuses = ["applied", "active", "suspended", "declined"] as const;
+export type AgencyStatus = (typeof agencyStatuses)[number];
+
+export const agencyRoles = ["owner", "admin", "member"] as const;
+export type AgencyRole = (typeof agencyRoles)[number];
+
+/** client_pays: the client subscribes at the agency's price; agency_pays: wholesale, the agency pays. */
+export const agencyBillingModes = ["client_pays", "agency_pays"] as const;
+export type AgencyBillingMode = (typeof agencyBillingModes)[number];
+
+/** What the agency's clients see in place of our name (docs/AGENCY.md §5). */
+export interface AgencyBranding {
+  /** Public https address of the agency's logo. */
+  logoUrl?: string;
+  /** Brand color, e.g. "#1f6f5c". */
+  color?: string;
+  supportEmail?: string;
+  website?: string;
+  /** Footer of its clients' pages and chats: nothing, or "Powered by <agency>". */
+  poweredBy?: "none" | "agency";
+}
+
+/**
+ * An agency that resells the product to its own clients. Applied for by a signed-in user (who
+ * becomes its owner) and approved by operators, who set its currency, our percentage and the
+ * billing modes it may use.
+ */
+export const agencies = pgTable("agencies", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  kind: text("kind").$type<TenantKind>().notNull().default("business"),
-  plan: text("plan")
+  status: text("status").$type<AgencyStatus>().notNull().default("applied"),
+  website: text("website"),
+  country: text("country"),
+  /** ISO 4217, lower-case (Stripe's form). All its prices, invoices and payouts are in it. */
+  currency: text("currency").notNull().default("cad"),
+  /** What the applicant told us (expected clients, who they serve). */
+  applicationNote: text("application_note"),
+  /** Our share of each client-pays payment, in percent. Null = platform default. */
+  sharePercent: integer("share_percent"),
+  billingModes: text("billing_modes")
+    .array()
+    .$type<AgencyBillingMode[]>()
     .notNull()
-    .default("trial")
-    .references(() => plans.id, { onUpdate: "cascade", onDelete: "restrict" }),
-  /** "suspended" turns the business's assistants off for visitors (set by operators). */
-  status: text("status").$type<TenantStatus>().notNull().default("active"),
-  /** Language the business owner reads (inbox translations go into this language). */
-  ownerLanguage: text("owner_language").notNull().default("en"),
-  /** "default" or "canada" (data residency, Phase 3). */
-  dataRegion: text("data_region").notNull().default("default"),
-  /** Owner's own monthly question cap (cost control); never above the plan's allowance. Null = plan limit. */
-  monthlyQuestionLimit: integer("monthly_question_limit"),
-  /** Max questions one visitor may ask per day across this business's assistants. Null = default. */
-  visitorDailyLimit: integer("visitor_daily_limit"),
+    .default(sql`'{client_pays,agency_pays}'::text[]`),
+  /** Clients on the trial plan at once. */
+  trialClientCap: integer("trial_client_cap").notNull().default(10),
+  /** Operators hold an agency's payouts (fraud, disputes, unpaid wholesale invoices). */
+  payoutsHeld: boolean("payouts_held").notNull().default(false),
+  branding: jsonb("branding").$type<AgencyBranding>().notNull().default({}),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
   ...timestamps,
 });
+
+/** The agency's own team. Staff accounts can't join (same database rule as for memberships). */
+export const agencyMembers = pgTable(
+  "agency_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id")
+      .notNull()
+      .references(() => agencies.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<AgencyRole>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("agency_members_agency_user_uq").on(t.agencyId, t.userId),
+    index("agency_members_user_idx").on(t.userId),
+  ],
+);
+
+/** What the agency's users did: in the panel and inside its clients. */
+export const agencyAuditLogs = pgTable(
+  "agency_audit_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: uuid("agency_id")
+      .notNull()
+      .references(() => agencies.id, { onDelete: "cascade" }),
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("agency_audit_logs_agency_idx").on(t.agencyId, t.createdAt)],
+);
 
 export const platformRoles = ["super_admin"] as const;
 export type PlatformRole = (typeof platformRoles)[number];

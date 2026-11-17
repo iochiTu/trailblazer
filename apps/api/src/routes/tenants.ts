@@ -1,9 +1,9 @@
-import { planFeatures } from "@traiblazer/core";
-import { auditLogs, memberships, plans, tenants, users, withTenant } from "@traiblazer/db";
+import { agencies, auditLogs, memberships, tenants, users, withTenant } from "@traiblazer/db";
 import { createTenantSchema } from "@traiblazer/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
+import { userTenants } from "../lib/agencies.js";
 import { audit } from "../lib/audit.js";
 import { HttpError, notFound } from "../lib/errors.js";
 import { slugify } from "../lib/ids.js";
@@ -12,28 +12,9 @@ import { isSuperAdmin, requireTenantRole, requireUser } from "../plugins/auth.js
 type TenantParams = { Params: { tenantId: string } };
 
 export async function tenantRoutes(app: FastifyInstance, { db, platform }: AppContext) {
-  app.get("/v1/tenants", { preHandler: requireUser }, async (request) => {
-    const rows = await db
-      .select({
-        id: tenants.id,
-        name: tenants.name,
-        slug: tenants.slug,
-        plan: tenants.plan,
-        role: memberships.role,
-        insights: plans.insights,
-      })
-      .from(memberships)
-      .innerJoin(tenants, eq(tenants.id, memberships.tenantId))
-      .leftJoin(plans, eq(plans.id, tenants.plan))
-      .where(eq(memberships.userId, request.user!.id))
-      .orderBy(tenants.name);
-    return {
-      tenants: rows.map(({ insights, ...t }) => ({
-        ...t,
-        features: planFeatures({ insights: insights ?? false }),
-      })),
-    };
-  });
+  app.get("/v1/tenants", { preHandler: requireUser }, async (request) => ({
+    tenants: await userTenants(db, request.user!.id),
+  }));
 
   app.post("/v1/tenants", { preHandler: requireUser }, async (request, reply) => {
     const user = request.user!;
@@ -98,7 +79,24 @@ export async function tenantRoutes(app: FastifyInstance, { db, platform }: AppCo
     async (request) => {
       const [tenant] = await db.select().from(tenants).where(eq(tenants.id, request.tenant!.id)).limit(1);
       if (!tenant) throw notFound("Business");
-      return { tenant: { ...tenant, role: request.tenant!.role, support: request.tenant!.support } };
+      const [agency] = tenant.agencyId
+        ? await db
+            .select({ id: agencies.id, name: agencies.name, branding: agencies.branding })
+            .from(agencies)
+            .where(eq(agencies.id, tenant.agencyId))
+            .limit(1)
+        : [];
+      return {
+        tenant: {
+          ...tenant,
+          role: request.tenant!.role,
+          support: request.tenant!.support,
+          via: request.tenant!.via,
+          agency: agency
+            ? { id: agency.id, name: agency.name, logoUrl: agency.branding.logoUrl ?? null }
+            : null,
+        },
+      };
     },
   );
 

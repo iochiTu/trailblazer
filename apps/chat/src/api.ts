@@ -19,6 +19,8 @@ export interface PublicBotConfig {
   /** Buttons from the business's add-ons (e.g. its online shop). Missing on older API versions. */
   links?: ChatLink[];
   poweredBy: boolean;
+  /** For an agency's client: the agency's credit instead of ours (missing on older API versions). */
+  poweredByAgency?: { name: string; url: string | null } | null;
   contact: { phone: string | null; email: string | null };
 }
 
