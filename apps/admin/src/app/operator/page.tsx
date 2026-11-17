@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BrandMark } from "@/components/BrandMark";
+import { ConsoleShell, type SubNavGroup } from "@/components/app/SideNav";
 import { ActivityTab } from "@/components/operator/ActivityTab";
 import { BusinessesTab } from "@/components/operator/BusinessesTab";
 import { DemosTab } from "@/components/operator/DemosTab";
@@ -28,6 +28,14 @@ const TABS = [
   { id: "activity", label: "Activity" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
+const tabsOf = (...ids: Tab[]) => TABS.filter((item) => ids.includes(item.id));
+/** The same tabs as the sidebar shows them on a wide screen, in groups. */
+const GROUPS: SubNavGroup<Tab>[] = [
+  { id: "home", items: tabsOf("overview") },
+  { id: "customers", label: "Customers", items: tabsOf("businesses", "users", "demos") },
+  { id: "onboarding", label: "Onboarding", items: tabsOf("onboarding", "questions") },
+  { id: "platform", label: "Platform", items: tabsOf("plans", "policies", "activity") },
+];
 
 /**
  * Operator console for Traiblazer staff (super admins): businesses, users, plans, platform
@@ -49,11 +57,6 @@ export default function OperatorPage() {
       setTab("businesses");
     }
   }, []);
-
-  async function signOut() {
-    await api("/v1/auth/logout", { method: "POST" });
-    router.replace("/login");
-  }
 
   useEffect(() => {
     api<Me>("/v1/auth/me")
@@ -80,56 +83,63 @@ export default function OperatorPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:py-10" lang="en">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="flex flex-wrap items-center gap-3 text-xl font-semibold">
-            <BrandMark />
-            Operator console
-            <span className="badge badge-accent">Staff only</span>
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="muted text-sm">Signed in as {me?.user.email}</span>
-          <button className="btn btn-ghost" type="button" onClick={signOut}>
-            Sign out
-          </button>
-        </div>
-      </header>
+    <ConsoleShell
+      staff
+      sub={{
+        label: "Operator console",
+        title: "Operator console",
+        note: me?.user.email,
+        groups: GROUPS,
+        selected: tab,
+        onSelect: setTab,
+      }}
+    >
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8" lang="en">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="eyebrow">Operator console</p>
+            <h1 className="mt-1 text-2xl font-semibold">{TABS.find((item) => item.id === tab)?.label}</h1>
+          </div>
+          <span className="badge badge-accent">Staff only</span>
+        </header>
 
-      <ScrollTabs selectedKey={tab} label="Operator console">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            role="tab"
-            type="button"
-            aria-selected={tab === id}
-            className="tab"
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </ScrollTabs>
+        {/* Phone: the tabs in a row. A wide screen has them in the sidebar instead. */}
+        <div className="lg:hidden">
+          <ScrollTabs selectedKey={tab} label="Operator console">
+            {TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                role="tab"
+                type="button"
+                aria-selected={tab === id}
+                className="tab"
+                onClick={() => setTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </ScrollTabs>
+        </div>
 
-      <section role="tabpanel">
-        {tab === "overview" && <OverviewTab />}
-        {tab === "businesses" && <BusinessesTab selected={business} onSelect={setBusiness} />}
-        {tab === "demos" && <DemosTab />}
-        {tab === "onboarding" && <OnboardingTab />}
-        {tab === "questions" && <OnboardingQuestionsTab />}
-        {tab === "users" && (
-          <UsersTab
-            onOpenBusiness={(id) => {
-              setBusiness(id);
-              setTab("businesses");
-            }}
-          />
-        )}
-        {tab === "plans" && <PlansTab />}
-        {tab === "policies" && <PoliciesTab />}
-        {tab === "activity" && <ActivityTab />}
-      </section>
-    </div>
+        <section role="tabpanel">
+          {tab === "overview" && <OverviewTab />}
+          {tab === "businesses" && <BusinessesTab selected={business} onSelect={setBusiness} />}
+          {tab === "demos" && <DemosTab />}
+          {tab === "onboarding" && <OnboardingTab />}
+          {tab === "questions" && <OnboardingQuestionsTab />}
+          {tab === "users" && (
+            <UsersTab
+              onOpenBusiness={(id) => {
+                setBusiness(id);
+                setTab("businesses");
+              }}
+            />
+          )}
+          {tab === "plans" && <PlansTab />}
+          {tab === "policies" && <PoliciesTab />}
+          {tab === "activity" && <ActivityTab />}
+        </section>
+      </div>
+    </ConsoleShell>
   );
 }

@@ -42,6 +42,14 @@
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
+  /* The console's sidebar: dark in both themes, a step apart from the page. */
+  --nav-bg: #101828;
+  --nav-text: #d0d5dd;
+  --nav-muted: #98a2b3;
+  --nav-hover: rgb(255 255 255 / 0.06);
+  --nav-active: rgb(255 255 255 / 0.11);
+  --nav-line: rgb(255 255 255 / 0.1);
+  --nav-width: 16.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -72,6 +80,7 @@
     --shadow-2: 0 4px 16px rgb(0 0 0 / 0.35);
     --chart: #199e70;
     --grid: #2a2d35;
+    --nav-bg: #0b0d12;
   }
 }
 
@@ -559,6 +568,275 @@
   header .input {
     box-shadow: var(--shadow-1);
   }
+
+  /* ---------- Console (signed-in pages): sidebar + page ---------- */
+
+  /* Tighter, squarer surfaces than the public site: a working tool, not a landing page. */
+  .console {
+    --radius-card: 14px;
+    --radius-field: 10px;
+    min-height: 100dvh;
+    background: var(--bg);
+  }
+
+  .console .card {
+    border-color: var(--border);
+  }
+
+  .console .panel,
+  .console textarea.input {
+    border-radius: 12px;
+  }
+
+  .console .btn,
+  .console .btn:focus-visible {
+    border-radius: 10px;
+  }
+
+  .console .btn:not(.btn-ghost) {
+    background: var(--accent);
+    color: var(--accent-text);
+    box-shadow: 0 1px 2px rgb(16 24 40 / 0.12);
+  }
+
+  .console .btn:not(.btn-ghost):hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 88%, var(--text));
+    box-shadow: 0 2px 8px rgb(16 24 40 / 0.16);
+  }
+
+  .console .btn-text {
+    border-radius: 8px;
+  }
+
+  .console .list-tile {
+    border-radius: 10px;
+  }
+
+  /* Phone: a slim bar with the menu button. Hidden on a wide screen, where the sidebar is fixed. */
+  .console-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 3.25rem;
+    padding: env(safe-area-inset-top) 0.75rem 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .console-menu {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin-inline-start: -0.375rem;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .console-menu:hover {
+    background: var(--surface-2);
+  }
+
+  /*
+   * The sidebar keeps its own dark palette in both themes, so the shared classes used inside it
+   * (.input, .badge, focus rings) read these tokens instead of the page's.
+   */
+  .sidenav {
+    color-scheme: dark;
+    --text: #f2f4f7;
+    --muted: var(--nav-muted);
+    --surface: #1d2939;
+    --surface-2: #1d2939;
+    --surface-3: #2a3649;
+    --border: var(--nav-line);
+    --accent: #a8b9ff;
+    --accent-soft: #2f3b73;
+    --accent-soft-text: #e0e6ff;
+    --ring: rgb(168 185 255 / 0.4);
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    z-index: 40;
+    display: none;
+    flex-direction: column;
+    width: var(--nav-width);
+    max-width: 86vw;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--nav-bg);
+    color: var(--nav-text);
+  }
+
+  .sidenav[data-open="true"] {
+    display: flex;
+    box-shadow: 0 0 48px rgb(0 0 0 / 0.4);
+  }
+
+  .sidenav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgb(16 24 40 / 0.55);
+  }
+
+  .sidenav-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 4rem;
+    padding: 0 0.875rem;
+  }
+
+  .sidenav-close {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-inline-end: -0.375rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .sidenav-close:hover {
+    background: var(--nav-hover);
+  }
+
+  .sidenav-business {
+    margin: 0 0.75rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .sidenav-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.25rem 0.75rem 1rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-3) transparent;
+  }
+
+  .sidenav-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-top: 1px solid var(--nav-line);
+  }
+
+  .sidenav-note {
+    color: var(--nav-muted);
+    font-size: 0.8125rem;
+  }
+
+  /* One row of the menu: a first-level link, or a tab of the second level. */
+  .sidenav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.4375rem 0.75rem;
+    border-radius: 8px;
+    color: var(--nav-text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .sidenav-item:hover {
+    background: var(--nav-hover);
+    color: #fff;
+  }
+
+  .sidenav-item[aria-current="page"],
+  .sidenav-item[aria-selected="true"] {
+    background: var(--nav-active);
+    color: #fff;
+  }
+
+  .sidenav-item[aria-current="page"] svg {
+    color: var(--accent);
+  }
+
+  .sidenav-back {
+    color: var(--nav-muted);
+    gap: 0.375rem;
+  }
+
+  /* A group's heading on the second level: opens and folds the tabs under it. */
+  .sidenav-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.25rem;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 8px;
+    color: var(--nav-muted);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .sidenav-heading:hover {
+    color: #fff;
+  }
+
+  /* The tabs under a heading hang off a guide line, one step in. */
+  .sidenav-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin-inline-start: 1.125rem;
+    padding-inline-start: 0.5rem;
+    border-inline-start: 1px solid var(--nav-line);
+  }
+
+  .sidenav-tree .sidenav-item {
+    min-height: 2.25rem;
+    font-weight: 400;
+  }
+
+  .sidenav-tree .sidenav-item[aria-selected="true"] {
+    font-weight: 500;
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  [dir="rtl"] .sidenav-tree .sidenav-item[aria-selected="true"] {
+    box-shadow: inset -2px 0 0 var(--accent);
+  }
+
+  @media (min-width: 64rem) {
+    .sidenav {
+      display: flex;
+      box-shadow: none;
+    }
+
+    .sidenav-scrim,
+    .sidenav-close,
+    .console-topbar {
+      display: none;
+    }
+
+    .console-main {
+      padding-inline-start: var(--nav-width);
+    }
+  }
+
   /* ---------- Portal (public landing page) ---------- */
 
   html:has(.portal) {

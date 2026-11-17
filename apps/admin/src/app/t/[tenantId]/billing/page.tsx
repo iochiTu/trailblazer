@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ConsoleShell } from "@/components/app/SideNav";
 import { SupportBanner } from "@/components/SupportBanner";
 import { ApiError, api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -155,128 +155,131 @@ function Billing() {
       : t("billing.status.other");
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6">
-      <SupportBanner tenantId={tenantId} />
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <Link href="/dashboard" className="muted text-sm underline-offset-4 hover:underline">
-            ← {t("tenants.title")}
-          </Link>
-          <h1 className="text-xl font-semibold">
-            {t("billing.title")} · {tenant.name}
-          </h1>
-        </div>
-        <LanguageSwitcher />
-      </header>
-
-      {checkout === "done" && (
-        <p className="panel px-4 py-3 text-sm" role="status">
-          {t("billing.checkoutDone")}
-        </p>
-      )}
-      {checkout === "cancelled" && (
-        <p className="panel px-4 py-3 text-sm" role="status">
-          {t("billing.checkoutCancelled")}
-        </p>
-      )}
-      {message && (
-        <p
-          className={message.kind === "error" ? "error text-sm" : "text-sm"}
-          role={message.kind === "error" ? "alert" : "status"}
-        >
-          {message.text}
-        </p>
-      )}
-
-      <section className="card flex flex-col gap-3 p-5" aria-labelledby="billing-current">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 id="billing-current" className="font-medium">
-            {t("billing.current", { plan: language === "fr" ? report.planName.fr : report.planName.en })}
-          </h2>
-          {sub && <span className="badge">{statusLabel(sub.status)}</span>}
-        </div>
-        {sub && paying && sub.priceMonthlyCents != null && (
-          <p className="text-sm">{t("billing.price", { price: money(sub.priceMonthlyCents) })}</p>
-        )}
-        {sub?.status === "past_due" && (
-          <p className="text-sm" role="alert">
-            ⚠️ {t("billing.pastDue")}
-          </p>
-        )}
-        {paying && sub?.cancelAt && (
-          <p className="text-sm">{t("billing.ends", { date: new Date(sub.cancelAt) })}</p>
-        )}
-        {paying && !sub?.cancelAt && sub?.currentPeriodEnd && (
-          <p className="muted text-sm">{t("billing.renews", { date: new Date(sub.currentPeriodEnd) })}</p>
-        )}
-        {sub && !paying && sub.status !== "incomplete" && <p className="text-sm">{t("billing.ended")}</p>}
-        {canBuy && report.hasCustomer && (
+    <ConsoleShell tenantId={tenantId} active="billing">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
+        <SupportBanner tenantId={tenantId} />
+        <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={busy !== null}
-              onClick={() => go("portal")}
-            >
-              {t("billing.manage")}
-            </button>
+            <Link href="/dashboard" className="muted text-sm underline-offset-4 hover:underline lg:hidden">
+              ← {t("tenants.title")}
+            </Link>
+            <h1 className="text-xl font-semibold">
+              {t("billing.title")} · {tenant.name}
+            </h1>
           </div>
-        )}
-        {report.demo && <p className="muted text-sm">{t("billing.demo")}</p>}
-        {!report.demo && !report.canManage && (
-          <p className="muted text-sm">
-            {tenant.support ? t("billing.supportOnly") : t("billing.ownerOnly")}
+        </header>
+
+        {checkout === "done" && (
+          <p className="panel px-4 py-3 text-sm" role="status">
+            {t("billing.checkoutDone")}
           </p>
         )}
-        {!report.enabled && !report.demo && <p className="muted text-sm">{t("billing.unavailable")}</p>}
-      </section>
-
-      <section className="flex flex-col gap-3" aria-labelledby="billing-plans">
-        <h2 id="billing-plans" className="font-medium">
-          {t("billing.plans")}
-        </h2>
-        {report.plans.length === 0 ? (
-          <p className="muted text-sm">{t("billing.noPlans")}</p>
-        ) : (
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {report.plans.map((plan) => {
-              const isCurrent = paying && sub?.plan === plan.id;
-              const fee = !report.setupFeePaid && !paying && plan.setupFeeCents ? plan.setupFeeCents : 0;
-              return (
-                <li key={plan.id} className="card flex flex-col gap-2 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-medium">{planName(plan)}</h3>
-                    {isCurrent && <span className="badge badge-accent">{t("billing.currentBadge")}</span>}
-                  </div>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {t("billing.price", { price: money(plan.priceMonthlyCents) })}
-                  </p>
-                  {fee > 0 && <p className="muted text-sm">{t("billing.setupFee", { price: money(fee) })}</p>}
-                  <ul className="muted flex flex-col gap-1 text-sm">
-                    <li>{t("billing.questions", { count: plan.monthlyQuestions })}</li>
-                    <li>{t("billing.photos", { count: plan.knowledgeImages })}</li>
-                    {plan.insights && <li>{t("billing.insights")}</li>}
-                  </ul>
-                  {canBuy && !isCurrent && (
-                    <button
-                      type="button"
-                      className="btn mt-auto"
-                      disabled={busy !== null}
-                      aria-busy={busy === plan.id || busy === "checkout"}
-                      onClick={() => (paying ? switchTo(plan) : go("checkout", { plan: plan.id }))}
-                    >
-                      {paying
-                        ? t("billing.switch", { plan: planName(plan) })
-                        : t("billing.choose", { plan: planName(plan) })}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+        {checkout === "cancelled" && (
+          <p className="panel px-4 py-3 text-sm" role="status">
+            {t("billing.checkoutCancelled")}
+          </p>
         )}
-        <p className="muted text-xs">{t("billing.taxes")}</p>
-      </section>
-    </div>
+        {message && (
+          <p
+            className={message.kind === "error" ? "error text-sm" : "text-sm"}
+            role={message.kind === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </p>
+        )}
+
+        <section className="card flex flex-col gap-3 p-5" aria-labelledby="billing-current">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 id="billing-current" className="font-medium">
+              {t("billing.current", { plan: language === "fr" ? report.planName.fr : report.planName.en })}
+            </h2>
+            {sub && <span className="badge">{statusLabel(sub.status)}</span>}
+          </div>
+          {sub && paying && sub.priceMonthlyCents != null && (
+            <p className="text-sm">{t("billing.price", { price: money(sub.priceMonthlyCents) })}</p>
+          )}
+          {sub?.status === "past_due" && (
+            <p className="text-sm" role="alert">
+              ⚠️ {t("billing.pastDue")}
+            </p>
+          )}
+          {paying && sub?.cancelAt && (
+            <p className="text-sm">{t("billing.ends", { date: new Date(sub.cancelAt) })}</p>
+          )}
+          {paying && !sub?.cancelAt && sub?.currentPeriodEnd && (
+            <p className="muted text-sm">{t("billing.renews", { date: new Date(sub.currentPeriodEnd) })}</p>
+          )}
+          {sub && !paying && sub.status !== "incomplete" && <p className="text-sm">{t("billing.ended")}</p>}
+          {canBuy && report.hasCustomer && (
+            <div>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={busy !== null}
+                onClick={() => go("portal")}
+              >
+                {t("billing.manage")}
+              </button>
+            </div>
+          )}
+          {report.demo && <p className="muted text-sm">{t("billing.demo")}</p>}
+          {!report.demo && !report.canManage && (
+            <p className="muted text-sm">
+              {tenant.support ? t("billing.supportOnly") : t("billing.ownerOnly")}
+            </p>
+          )}
+          {!report.enabled && !report.demo && <p className="muted text-sm">{t("billing.unavailable")}</p>}
+        </section>
+
+        <section className="flex flex-col gap-3" aria-labelledby="billing-plans">
+          <h2 id="billing-plans" className="font-medium">
+            {t("billing.plans")}
+          </h2>
+          {report.plans.length === 0 ? (
+            <p className="muted text-sm">{t("billing.noPlans")}</p>
+          ) : (
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {report.plans.map((plan) => {
+                const isCurrent = paying && sub?.plan === plan.id;
+                const fee = !report.setupFeePaid && !paying && plan.setupFeeCents ? plan.setupFeeCents : 0;
+                return (
+                  <li key={plan.id} className="card flex flex-col gap-2 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-medium">{planName(plan)}</h3>
+                      {isCurrent && <span className="badge badge-accent">{t("billing.currentBadge")}</span>}
+                    </div>
+                    <p className="text-2xl font-semibold tabular-nums">
+                      {t("billing.price", { price: money(plan.priceMonthlyCents) })}
+                    </p>
+                    {fee > 0 && (
+                      <p className="muted text-sm">{t("billing.setupFee", { price: money(fee) })}</p>
+                    )}
+                    <ul className="muted flex flex-col gap-1 text-sm">
+                      <li>{t("billing.questions", { count: plan.monthlyQuestions })}</li>
+                      <li>{t("billing.photos", { count: plan.knowledgeImages })}</li>
+                      {plan.insights && <li>{t("billing.insights")}</li>}
+                    </ul>
+                    {canBuy && !isCurrent && (
+                      <button
+                        type="button"
+                        className="btn mt-auto"
+                        disabled={busy !== null}
+                        aria-busy={busy === plan.id || busy === "checkout"}
+                        onClick={() => (paying ? switchTo(plan) : go("checkout", { plan: plan.id }))}
+                      >
+                        {paying
+                          ? t("billing.switch", { plan: planName(plan) })
+                          : t("billing.choose", { plan: planName(plan) })}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="muted text-xs">{t("billing.taxes")}</p>
+        </section>
+      </div>
+    </ConsoleShell>
   );
 }

@@ -5,11 +5,10 @@ import { paths } from "@traiblazer/marketing";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { BrandMark } from "@/components/BrandMark";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ConsoleShell } from "@/components/app/SideNav";
+import { lastTenant, rememberTenant } from "@/components/app/useMe";
 import { ApiError, api, type Bot, type Language, type Me, type Pack, type PublicPlan } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { forgetPushDevice } from "@/lib/push";
 
 export default function DashboardPage() {
   const { t } = useI18n();
@@ -32,7 +31,13 @@ export default function DashboardPage() {
         return;
       }
       setMe(data);
-      setTenantId((current) => current ?? data.tenants[0]?.id ?? null);
+      // Open on the business used last (the sidebar's links follow the same one).
+      const remembered = lastTenant();
+      setTenantId(
+        (current) =>
+          current ??
+          (data.tenants.some((item) => item.id === remembered) ? remembered : (data.tenants[0]?.id ?? null)),
+      );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) router.replace("/login");
       else setError(t("common.error"));
@@ -43,11 +48,9 @@ export default function DashboardPage() {
     void loadMe();
   }, [loadMe]);
 
-  async function signOut() {
-    // The server forgets this device's push registration with the session.
-    forgetPushDevice();
-    await api("/v1/auth/logout", { method: "POST" });
-    router.replace("/login");
+  function pickTenant(id: string) {
+    rememberTenant(id);
+    setTenantId(id);
   }
 
   if (error) return <p className="error p-8">{error}</p>;
@@ -55,81 +58,59 @@ export default function DashboardPage() {
   const tenant = me.tenants.find((item) => item.id === tenantId);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:py-10">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="flex items-center gap-3 text-xl font-semibold">
-          <BrandMark />
-          {t("app.name")}
-        </h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="muted text-sm">{me.user.name}</span>
-          <LanguageSwitcher />
-          <button className="btn btn-ghost" type="button" onClick={signOut}>
-            {t("nav.signOut")}
-          </button>
-        </div>
-      </header>
+    <ConsoleShell tenantId={tenantId} active="bots" onTenantChange={pickTenant}>
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-8">
+        <header>
+          {tenant && <p className="eyebrow">{tenant.name}</p>}
+          <h1 className="mt-1 text-2xl font-semibold">{t("nav.bots")}</h1>
+        </header>
 
-      {me.user.demo && (
-        <p className="panel px-4 py-3 text-sm" role="note">
-          {t("demo.banner")}
-        </p>
-      )}
+        {me.user.demo && (
+          <p className="panel px-4 py-3 text-sm" role="note">
+            {t("demo.banner")}
+          </p>
+        )}
 
-      <section className="card flex flex-col gap-5 p-5 sm:p-7">
-        <h2 className="text-lg font-semibold">{t("tenants.title")}</h2>
-        {me.tenants.length === 0 ? (
-          <p className="muted text-sm">{t("tenants.empty")}</p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              className="input max-w-sm"
-              value={tenantId ?? ""}
-              onChange={(e) => setTenantId(e.target.value)}
-              aria-label={t("tenants.title")}
-            >
-              {me.tenants.map((tenant) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </select>
-            {tenantId && (
-              <Link href={`/t/${tenantId}/inbox`} className="btn">
-                {t("inbox.title")}
-              </Link>
-            )}
-            {tenantId && (
-              <Link href={`/t/${tenantId}/usage`} className="btn btn-ghost">
-                {t("nav.usage")}
-              </Link>
-            )}
-            {tenant && (tenant.role === "owner" || tenant.role === "admin") && (
-              <Link href={`/t/${tenant.id}/billing`} className="btn btn-ghost">
-                {t("nav.billing")}
-              </Link>
-            )}
-          </div>
-        )}
-        {tenant && <PlanSummary planId={tenant.plan} />}
-        {/* A demo account tries its demo business only. */}
-        {!me.user.demo && (
-          <Link href="/welcome" className="self-start underline underline-offset-4 text-sm">
-            {t("tenants.guided")}
-          </Link>
-        )}
-        {!me.user.demo && (
-          <CreateTenantForm
-            onCreated={async (id) => {
-              setTenantId(id);
-              await loadMe();
-            }}
-          />
-        )}
-      </section>
+        <section className="card flex flex-col gap-5 p-5 sm:p-7">
+          <h2 className="text-lg font-semibold">{t("tenants.title")}</h2>
+          {me.tenants.length === 0 ? (
+            <p className="muted text-sm">{t("tenants.empty")}</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="input max-w-sm"
+                value={tenantId ?? ""}
+                onChange={(e) => pickTenant(e.target.value)}
+                aria-label={t("tenants.title")}
+              >
+                {me.tenants.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {tenant && <PlanSummary planId={tenant.plan} />}
+          {/* A demo account tries its demo business only. */}
+          {!me.user.demo && (
+            <Link href="/welcome" className="self-start underline underline-offset-4 text-sm">
+              {t("tenants.guided")}
+            </Link>
+          )}
+          {!me.user.demo && (
+            <CreateTenantForm
+              onCreated={async (id) => {
+                pickTenant(id);
+                await loadMe();
+              }}
+            />
+          )}
+        </section>
 
-      {tenantId && <BotsSection key={tenantId} tenantId={tenantId} />}
-    </div>
+        {tenantId && <BotsSection key={tenantId} tenantId={tenantId} />}
+      </div>
+    </ConsoleShell>
   );
 }
 

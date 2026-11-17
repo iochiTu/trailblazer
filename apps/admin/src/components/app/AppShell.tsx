@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/BrandMark";
 import { useI18n } from "@/lib/i18n";
+import { SideNav } from "./SideNav";
 import { SwitchBar } from "./SwitchBar";
 
 type Tab = "inbox" | "contacts" | "bots" | "alerts";
@@ -11,7 +12,7 @@ type Tab = "inbox" | "contacts" | "bots" | "alerts";
 /**
  * The owner app's frame (PLAN §20.3), phone first: a top bar (title, back link, an action) and a
  * bottom tab bar within thumb reach, clear of the iPhone's notch and home indicator. On a wide
- * screen it stays a centered column.
+ * screen the console's sidebar replaces the tab bar and the page stays a centered column.
  */
 export function AppShell({
   title,
@@ -73,7 +74,8 @@ export function AppShell({
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+    <div className="console console-main flex min-h-dvh flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+      <SideNav tenantId={tenantId} active={tab} />
       <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_85%,transparent)] pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 max-w-2xl items-center gap-2 px-4">
           {back ? (
@@ -111,7 +113,7 @@ export function AppShell({
 
       <nav
         aria-label={t("app.name")}
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)]"
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--border)] bg-[var(--surface)] pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         <ul className="mx-auto grid max-w-2xl auto-cols-fr grid-flow-col">
           {tabs.map((item) => (
