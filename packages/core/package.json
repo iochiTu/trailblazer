@@ -27,6 +27,7 @@
     "@traiblazer/telephony": "workspace:*",
     "cheerio": "1.2.0",
     "drizzle-orm": "0.45.4",
+    "ioredis": "6.0.0",
     "mammoth": "1.13.0",
     "robots-parser": "3.0.1",
     "undici": "7.30.1",

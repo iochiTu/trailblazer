@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { errorMessage } from "@traiblazer/core";
+import { createLimiterStore, errorMessage } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
 import { loadIntegrationsConfig } from "@traiblazer/integrations";
 import {
@@ -9,11 +9,9 @@ import {
   QueryEmbedder,
 } from "@traiblazer/llm";
 import { createTelephonyFromEnv } from "@traiblazer/telephony";
-import { Redis } from "ioredis";
 import { buildApp } from "./app.js";
 import { createBillingFromEnv } from "./billing/stripe.js";
 import { loadConfig } from "./config.js";
-import { MemoryLimiter, RedisLimiter } from "./lib/limiter.js";
 import { RedisVectorCache } from "./lib/vector-cache.js";
 
 const config = loadConfig();
@@ -23,8 +21,7 @@ const embeddingProvider = createEmbeddingsFromEnv();
 const chatDistDir = process.env.CHAT_DIST_DIR ?? fileURLToPath(new URL("../../chat/dist", import.meta.url));
 
 // Redis makes rate limits and per-business limits shared by every API server.
-const redis = config.REDIS_URL ? new Redis(config.REDIS_URL, { maxRetriesPerRequest: 2 }) : null;
-const limiter = redis ? new RedisLimiter(redis) : new MemoryLimiter();
+const { redis, limiter } = createLimiterStore(config.REDIS_URL);
 
 // Search by meaning: question vectors cached in this process and in Redis (docs/EMBEDDINGS.md).
 const embeddings = embeddingProvider

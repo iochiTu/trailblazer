@@ -366,6 +366,17 @@ export const billingAccounts = pgTable("billing_accounts", {
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
   /** When the owner cancelled: the date the subscription stops (it runs until then). */
   cancelAt: timestamp("cancel_at", { withTimezone: true }),
+  checkoutAttempt: jsonb("checkout_attempt").$type<{
+    id: string;
+    plan: string;
+    productId: string;
+    monthlyCents: number;
+    setupFeeCents: number;
+    language: "en" | "fr";
+    returnUrl: string;
+    expiresAt: number;
+    sessionId?: string;
+  }>(),
   setupFeePaidAt: timestamp("setup_fee_paid_at", { withTimezone: true }),
   ...timestamps,
 });
@@ -2055,6 +2066,36 @@ export const outboundMessages = pgTable(
   ],
 );
 
+/** A signed inbound SMS receipt. The message content is cleared when processing commits. */
+export const inboundSms = pgTable(
+  "inbound_sms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    botId: uuid("bot_id").notNull(),
+    provider: text("provider").notNull(),
+    providerId: text("provider_id").notNull(),
+    message: jsonb("message").$type<{
+      admitted?: boolean;
+      from: string;
+      to: string;
+      text: string;
+      media: { url: string; contentType: string }[];
+    }>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("inbound_sms_provider_message").on(t.provider, t.providerId),
+    foreignKey({
+      name: "inbound_sms_bot_tenant_fk",
+      columns: [t.botId, t.tenantId],
+      foreignColumns: [bots.id, bots.tenantId],
+    }).onDelete("cascade"),
+  ],
+);
+
 /** Numbers that texted STOP to an assistant: nothing more is sent to them until they text START. */
 export const smsOptOuts = pgTable(
   "sms_opt_outs",
@@ -2145,6 +2186,7 @@ export const rlsTables = [
   "phone_numbers",
   "outbound_messages",
   "sms_opt_outs",
+  "inbound_sms",
   "lead_comments",
   "notifications",
   "contacts",

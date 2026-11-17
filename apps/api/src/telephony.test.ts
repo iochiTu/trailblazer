@@ -1,24 +1,43 @@
+import { MemoryLimiter, PlatformConfig, processInboundSms } from "@traiblazer/core";
 import {
   auditLogs,
+  bots,
   conversations,
   createDb,
   type DbHandle,
+  inboundSms,
   messageAttachments,
   outboundMessages,
   phoneNumbers,
   runMigrations,
   smsOptOuts,
   tenants,
+  usageCounters,
   users,
+  withTenant,
 } from "@traiblazer/db";
 import { createGatewayFromEnv } from "@traiblazer/llm";
 import { FakeTelephony } from "@traiblazer/telephony";
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { telephonyIdle } from "./routes/telephony.js";
+
+import { processSmsJobs, queuedSmsJobs } from "./test-helpers.js";
+
+const gateway = createGatewayFromEnv({}).gateway;
+const limiter = new MemoryLimiter();
+const workerDeps = () => ({
+  db: appDb.db,
+  gateway,
+  telephony,
+  limiter,
+  platform: new PlatformConfig(appDb.db),
+});
+const runReceived = (receiptId: string) => processInboundSms(workerDeps(), tenantId, receiptId);
+const receivedJobs = () => queuedSmsJobs(appDb.db, tenantId);
+const processReceived = () => processSmsJobs(workerDeps(), tenantId);
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
@@ -86,7 +105,6 @@ beforeAll(async () => {
     PUBLIC_URL: "http://chat.test.local",
     ADMIN_ORIGIN: "http://admin.test.local",
   } as NodeJS.ProcessEnv);
-  const gateway = createGatewayFromEnv({}).gateway;
   app = await buildApp({ db: appDb.db, config, gateway, telephony });
   plain = await buildApp({ db: appDb.db, config, gateway });
 
@@ -221,17 +239,32 @@ describe("webhooks from the telephony provider", () => {
     expect((await webhook("sms", { from: CUSTOMER, to: OURS, text: "Hi" }, null)).statusCode).toBe(403);
     expect((await webhook("voice", { from: CUSTOMER, to: OURS }, "forged")).statusCode).toBe(403);
     expect((await webhook("status", { id: "x", status: "delivered" }, "forged")).statusCode).toBe(403);
-    await telephonyIdle();
+    await processReceived();
     expect(await sent()).toEqual([]);
   });
 
   it("answers a text once, even when the webhook is delivered twice", async () => {
     const fields = { id: "in-1", from: CUSTOMER, to: OURS, text: "Are you open on Sunday?" };
-    const first = await webhook("sms", fields);
+    const [first, duplicate] = await Promise.all([webhook("sms", fields), webhook("sms", fields)]);
+    expect(duplicate.statusCode).toBe(200);
     expect(first.statusCode).toBe(200);
     expect(first.body).toBe("");
+    expect(await sent()).toHaveLength(0);
+    const pending = await receivedJobs();
+    expect(pending).toHaveLength(1);
+    const receiptId = String(pending[0]!.payload.receiptId);
+    expect(
+      await withTenant(appDb.db, crypto.randomUUID(), (tx) =>
+        tx.select().from(inboundSms).where(eq(inboundSms.id, receiptId)),
+      ),
+    ).toEqual([]);
+    await Promise.all([runReceived(receiptId), runReceived(receiptId)]);
+    await processReceived();
     await webhook("sms", fields);
-    await telephonyIdle();
+    expect(await receivedJobs()).toHaveLength(0);
+    expect(
+      (await ownerDb.db.select().from(inboundSms).where(eq(inboundSms.id, receiptId)))[0]?.message,
+    ).toBeNull();
     const out = await sent();
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ kind: "reply", fromNumber: OURS, status: "queued" });
@@ -256,7 +289,7 @@ describe("webhooks from the telephony provider", () => {
       text: "Here is the cake I'd like copied",
       media: "https://media.test/photo,https://media.test/video,https://media.test/missing",
     });
-    await telephonyIdle();
+    await processReceived();
     expect(await sent(sender)).toHaveLength(1);
     const kept = await ownerDb.db
       .select({ contentType: messageAttachments.contentType })
@@ -266,21 +299,79 @@ describe("webhooks from the telephony provider", () => {
     expect(kept).toEqual([{ contentType: "image/png" }]);
   });
 
+  it("recovers work interrupted after admission without charging another question or sending two replies", async () => {
+    const sender = "+18075550166";
+    const questions = async () =>
+      (await ownerDb.db.select().from(usageCounters).where(eq(usageCounters.tenantId, tenantId)))[0]
+        ?.questions ?? 0;
+    const before = await questions();
+    await webhook("sms", {
+      id: "worker-retry",
+      from: sender,
+      to: OURS,
+      text: "What are your hours?",
+      media: "https://media.test/interrupted",
+    });
+    const [job] = await receivedJobs();
+    const receiptId = String(job!.payload.receiptId);
+    const media = vi.spyOn(telephony, "fetchMedia").mockRejectedValueOnce(new Error("interrupted"));
+    try {
+      await expect(runReceived(receiptId)).rejects.toThrow("interrupted");
+    } finally {
+      media.mockRestore();
+    }
+    expect(await sent(sender)).toHaveLength(0);
+    expect(await questions()).toBe(before + 1);
+    await processReceived();
+    await runReceived(receiptId);
+    expect(await sent(sender)).toHaveLength(1);
+    expect(await questions()).toBe(before + 1);
+  });
+
   it("ignores texts to an unknown number, and when texting is turned off", async () => {
     await webhook("sms", { id: "in-2", from: CUSTOMER, to: "+18075550000", text: "Hello" });
     await api("PATCH", phoneUrl(), ownerCookie, { smsEnabled: false });
     await webhook("sms", { id: "in-3", from: CUSTOMER, to: OURS, text: "Hello" });
-    await telephonyIdle();
+    await processReceived();
     expect(await sent()).toHaveLength(1);
     await api("PATCH", phoneUrl(), ownerCookie, { smsEnabled: true });
   });
 
   it("records STOP without answering", async () => {
     await webhook("sms", { id: "in-4", from: "+18075550188", to: OURS, text: "STOP" });
-    await telephonyIdle();
+    await processReceived();
     expect(await sent("+18075550188")).toEqual([]);
     const stopped = await ownerDb.db.select().from(smsOptOuts).where(eq(smsOptOuts.botId, botId));
     expect(stopped.map((s) => s.number)).toEqual(["+18075550188"]);
+  });
+
+  it("applies keywords synchronously while paused and over quota, once per signed delivery", async () => {
+    const sender = "+18075550180";
+    const counts = () => ownerDb.db.select().from(usageCounters).where(eq(usageCounters.tenantId, tenantId));
+    const before = await counts();
+    const [bot] = await ownerDb.db.select().from(bots).where(eq(bots.id, botId));
+    await ownerDb.db.update(tenants).set({ monthlyQuestionLimit: 1 }).where(eq(tenants.id, tenantId));
+    await ownerDb.db.update(bots).set({ status: "paused" }).where(eq(bots.id, botId));
+    try {
+      expect(before[0]!.questions).toBeGreaterThanOrEqual(1);
+      const post = (id: string, text: string) => webhook("sms", { id, from: sender, to: OURS, text });
+      const opted = () =>
+        ownerDb.db
+          .select()
+          .from(smsOptOuts)
+          .where(and(eq(smsOptOuts.botId, botId), eq(smsOptOuts.number, sender)));
+      await post("control-stop", "ARRÊT");
+      expect(await opted()).toHaveLength(1);
+      await post("control-start", "START");
+      await post("control-stop", "ARRÊT");
+      expect(await opted()).toHaveLength(0);
+      await post("control-help", "AIDE");
+      expect(await sent(sender)).toHaveLength(2);
+      expect(await counts()).toEqual(before);
+    } finally {
+      await ownerDb.db.update(bots).set({ status: bot!.status }).where(eq(bots.id, botId));
+      await ownerDb.db.update(tenants).set({ monthlyQuestionLimit: null }).where(eq(tenants.id, tenantId));
+    }
   });
 
   it("answers a call with one sentence and texts the caller", async () => {
@@ -317,7 +408,7 @@ describe("webhooks from the telephony provider", () => {
     expect((await api("DELETE", phoneUrl(), staffCookie)).statusCode).toBe(204);
     expect(await ownerDb.db.select().from(phoneNumbers).where(eq(phoneNumbers.botId, botId))).toEqual([]);
     await webhook("sms", { id: "in-9", from: CUSTOMER, to: OURS, text: "Hello again" });
-    await telephonyIdle();
+    await processReceived();
     expect(await sent()).toHaveLength(1);
   });
 });

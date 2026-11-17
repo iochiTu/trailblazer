@@ -4,6 +4,7 @@ import type {
   BillingPlan,
   BillingProvider,
   CheckoutInput,
+  CheckoutSession,
   SubscriptionSnapshot,
 } from "./provider.js";
 
@@ -21,6 +22,14 @@ export interface StripeBillingOptions {
 const date = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000) : null);
 const idOf = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : (value?.id ?? null);
+
+function checkoutSnapshot(session: Stripe.Checkout.Session): CheckoutSession {
+  for (const status of ["open", "expired", "complete"] as const) {
+    if (session.status === status)
+      return { id: session.id, url: session.url, status, subscriptionId: idOf(session.subscription) };
+  }
+  throw new Error("Checkout session has an unknown status");
+}
 
 export function snapshot(sub: Stripe.Subscription): SubscriptionSnapshot {
   const item = sub.items.data[0];
@@ -92,23 +101,53 @@ export class StripeBilling implements BillingProvider {
         },
       });
     }
-    const session = await this.stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: input.customerId,
-      line_items: lineItems,
-      locale: input.language,
-      client_reference_id: input.tenantId,
-      metadata: { ...metadata, setup_fee: input.setupFeeCents > 0 ? "1" : "0" },
-      subscription_data: { metadata },
-      success_url: input.successUrl,
-      cancel_url: input.cancelUrl,
-      billing_address_collection: "required",
-      tax_id_collection: { enabled: true },
-      customer_update: { address: "auto", name: "auto" },
-      ...(this.options.automaticTax ? { automatic_tax: { enabled: true } } : {}),
-    });
-    if (!session.url) throw new Error("Stripe returned a checkout session without an address");
-    return session.url;
+    const session = await this.stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        expires_at: input.expiresAt,
+        customer: input.customerId,
+        line_items: lineItems,
+        locale: input.language,
+        client_reference_id: input.tenantId,
+        metadata: {
+          ...metadata,
+          attempt_id: input.attemptId,
+          setup_fee: input.setupFeeCents > 0 ? "1" : "0",
+        },
+        subscription_data: { metadata },
+        success_url: input.successUrl,
+        cancel_url: input.cancelUrl,
+        billing_address_collection: "required",
+        tax_id_collection: { enabled: true },
+        customer_update: { address: "auto", name: "auto" },
+        ...(this.options.automaticTax ? { automatic_tax: { enabled: true } } : {}),
+      },
+      { idempotencyKey: `checkout:${input.attemptId}` },
+    );
+    return checkoutSnapshot(session);
+  }
+
+  async getCheckout(id: string) {
+    return checkoutSnapshot(await this.stripe.checkout.sessions.retrieve(id));
+  }
+
+  async findCheckouts(customerId: string, attemptId: string | null) {
+    const found: CheckoutSession[] = [];
+    for await (const session of this.stripe.checkout.sessions.list({ customer: customerId, limit: 100 })) {
+      if (
+        session.mode === "subscription" &&
+        (session.metadata?.attempt_id ?? null) === attemptId &&
+        (attemptId !== null || session.status !== "expired")
+      ) {
+        found.push(checkoutSnapshot(session));
+        if (attemptId !== null) break;
+      }
+    }
+    return found;
+  }
+
+  async expireCheckout(id: string) {
+    await this.stripe.checkout.sessions.expire(id);
   }
 
   async createPortal(input: { customerId: string; returnUrl: string; language: "en" | "fr" }) {

@@ -1,8 +1,12 @@
 export { type AddonEffectPayload, type EffectDeps, type Mailer, runAddonEffect } from "./addons/effects.js";
+export * from "./admission/chat-guard.js";
+export * from "./admission/limiter.js";
+export * from "./admission/platform.js";
 export * from "./agent/index.js";
 export * from "./business.js";
 export * from "./chat/engine.js";
 export { recordGap } from "./chat/gaps.js";
+export * from "./chat/images.js";
 export { guessLanguage } from "./chat/language.js";
 export { MarkerFilter } from "./chat/markers.js";
 export { buildSystemBlocks, formatHours, PLATFORM_RULES } from "./chat/prompt.js";
@@ -113,6 +117,7 @@ export {
   selectPages,
 } from "./setup/setup.js";
 export { type PhoneBudget, phoneBudget, phoneSpendMicros, runCapAlert } from "./sms/alerts.js";
+export * from "./sms/inbound.js";
 export {
   applyMessageStatus,
   handleInboundText,

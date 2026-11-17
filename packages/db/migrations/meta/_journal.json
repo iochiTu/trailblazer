@@ -393,6 +393,13 @@
       "when": 1794945307934,
       "tag": "0055_agencies",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1794951624569,
+      "tag": "0056_delivery_and_checkout",
+      "breakpoints": true
     }
   ]
 }

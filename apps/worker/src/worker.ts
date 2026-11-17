@@ -7,18 +7,24 @@ import { hostname } from "node:os";
 import {
   analyzeConversation,
   buildDemo,
+  type ClaimedJob,
   claimNextJob,
   completeJob,
+  createLimiterStore,
   DEMO_RETRY_MS,
   embedChunks,
   enqueueEmbedding,
   enqueueJob,
   errorMessage,
   failJob,
+  JOB_LEASE_MS,
   JOB_TYPES,
   type JobPayloads,
   type JobRow,
   type JobType,
+  PlatformConfig,
+  processInboundSms,
+  renewJobLease,
   runAddonEffect,
   runCapAlert,
   runContactEmail,
@@ -30,9 +36,10 @@ import {
 } from "@traiblazer/core";
 import { createDb } from "@traiblazer/db";
 import { loadIntegrationsConfig } from "@traiblazer/integrations";
-import { createEmbeddingsFromEnv, createGatewayFromEnv } from "@traiblazer/llm";
+import { createEmbeddingsFromEnv, createGatewayFromEnv, QueryEmbedder } from "@traiblazer/llm";
 import { createPushFromEnv } from "@traiblazer/push";
 import { createTelephonyFromEnv } from "@traiblazer/telephony";
+import { withLeaseRenewal } from "./heartbeat.js";
 import { createMailerFromEnv } from "./mailer.js";
 
 const url =
@@ -49,6 +56,9 @@ const statusCallbackUrl = webhookBase.startsWith("https://")
 /** What one message part costs us, in millionths of a dollar (default 0.83 cents). */
 const segmentCostMicros = Number(process.env.SMS_SEGMENT_COST_MICROS) || 8300;
 const { gateway } = createGatewayFromEnv();
+const { redis, limiter } = createLimiterStore(process.env.REDIS_URL);
+const platform = new PlatformConfig(db);
+const queryEmbeddings = embeddings ? new QueryEmbedder(embeddings) : null;
 const workerId = `${hostname()}:${process.pid}`;
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
 
@@ -68,6 +78,25 @@ const integrations = loadIntegrationsConfig(process.env);
 const handlers: { [T in JobType]: (job: JobRow, payload: JobPayloads[T]) => Promise<void> } = {
   [JOB_TYPES.sourceSync]: async (job, { sourceId }) => {
     await syncSource({ db, embeddings, gateway }, job.tenantId, sourceId);
+  },
+  [JOB_TYPES.messageReceive]: async (job, { receiptId }) => {
+    if (!telephony) throw new Error("Inbound SMS is queued but no telephony provider is configured");
+    await processInboundSms(
+      {
+        db,
+        gateway,
+        telephony,
+        embeddings: queryEmbeddings,
+        embeddingWaitMs: Number(process.env.EMBEDDINGS_QUERY_WAIT_MS ?? 250),
+        platform,
+        limiter,
+        adminUrl,
+        integrations,
+        log,
+      },
+      job.tenantId,
+      receiptId,
+    );
   },
   [JOB_TYPES.messageSend]: async (job, { messageId }) => {
     if (!telephony) throw new Error("A text is queued but no telephony provider is configured");
@@ -146,6 +175,29 @@ async function run(job: JobRow): Promise<void> {
   await handler(job, job.payload as never);
 }
 
+async function runClaim(job: ClaimedJob): Promise<void> {
+  const started = Date.now();
+  try {
+    await withLeaseRenewal(
+      () => run(job),
+      () => renewJobLease(db, job),
+      JOB_LEASE_MS / 3,
+      (error) => log("job renewal failed", { id: job.id, error: errorMessage(error) }),
+    );
+  } catch (error) {
+    const outcome = await failJob(db, job, error);
+    log(outcome === "lost" ? "job lease lost" : "job failed", {
+      id: job.id,
+      type: job.type,
+      outcome,
+      error: errorMessage(error),
+    });
+    return;
+  }
+  const completed = await completeJob(db, job);
+  log(completed ? "job done" : "job lease lost", { id: job.id, type: job.type, ms: Date.now() - started });
+}
+
 let stopping = false;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -162,7 +214,7 @@ log("worker started", {
   push: push.platforms,
 });
 while (!stopping) {
-  let job: JobRow | null = null;
+  let job: ClaimedJob | null = null;
   try {
     job = await claimNextJob(db, workerId);
   } catch (error) {
@@ -172,14 +224,11 @@ while (!stopping) {
     await new Promise((r) => setTimeout(r, POLL_MS));
     continue;
   }
-  const started = Date.now();
   try {
-    await run(job);
-    await completeJob(db, job.id);
-    log("job done", { id: job.id, type: job.type, ms: Date.now() - started });
+    await runClaim(job);
   } catch (error) {
-    const outcome = await failJob(db, job, error);
-    log("job failed", { id: job.id, type: job.type, outcome, error: errorMessage(error) });
+    log("job status update failed", { id: job.id, error: errorMessage(error) });
   }
 }
+redis?.disconnect();
 await close();

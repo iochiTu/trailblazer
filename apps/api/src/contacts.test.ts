@@ -1,4 +1,4 @@
-import { contactFor, runContactEmail } from "@traiblazer/core";
+import { contactFor, MemoryLimiter, PlatformConfig, runContactEmail } from "@traiblazer/core";
 import {
   auditLogs,
   contactMessages,
@@ -22,12 +22,13 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { telephonyIdle } from "./routes/telephony.js";
-import { newTenant } from "./test-helpers.js";
+import { newTenant, processSmsJobs } from "./test-helpers.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
 
+const gateway = createGatewayFromEnv({}).gateway;
+const telephony = new FakeTelephony();
 let app: FastifyInstance;
 /** The same API on a deployment without a telephony provider. */
 let plain: FastifyInstance;
@@ -98,8 +99,7 @@ beforeAll(async () => {
     PUBLIC_URL: "http://chat.test.local",
     ADMIN_ORIGIN: "http://admin.test.local",
   } as NodeJS.ProcessEnv);
-  const gateway = createGatewayFromEnv({}).gateway;
-  app = await buildApp({ db: appDb.db, config, gateway, telephony: new FakeTelephony() });
+  app = await buildApp({ db: appDb.db, config, gateway, telephony });
   plain = await buildApp({ db: appDb.db, config, gateway });
 
   const owner = await signup("contacts-owner");
@@ -145,7 +145,16 @@ describe("contacts", () => {
       }).toString(),
     });
     expect(res.statusCode).toBe(200);
-    await telephonyIdle();
+    await processSmsJobs(
+      {
+        db: appDb.db,
+        gateway,
+        telephony,
+        limiter: new MemoryLimiter(),
+        platform: new PlatformConfig(appDb.db),
+      },
+      tenantId,
+    );
 
     const contacts = await list();
     expect(contacts).toHaveLength(1);
