@@ -14,6 +14,7 @@ import {
   AGENT_LIMITS,
   type AgentContext,
   AgentRegistry,
+  type AgentStep,
   defineAgentTool,
   runAgent,
   type Toolkit,
@@ -258,11 +259,38 @@ describe("runAgent", () => {
       })
       .addAgent({ ...ownerAgent, toolkits: ["nothing"], delegates: ["hours_agent"] });
 
+    const steps: AgentStep[] = [];
     const result = await runAgent(
       { gateway: gatewayFor(provider), registry },
-      { agent: "owner", messages: [{ role: "user", content: "Mondays 8 to 4" }], ctx },
+      {
+        agent: "owner",
+        messages: [{ role: "user", content: "Mondays 8 to 4" }],
+        ctx,
+        onStep: (step) => {
+          steps.push(step);
+          // A listener that fails doesn't stop the agent.
+          throw new Error("listener broke");
+        },
+      },
     );
 
+    // Each step as it starts, the asked agent's included (with its own id and depth).
+    expect(steps).toEqual([
+      { type: "thinking", agent: "owner", depth: 0, round: 0 },
+      {
+        type: "tool",
+        agent: "owner",
+        depth: 0,
+        tool: "ask_hours_agent",
+        toolkit: null,
+        effect: "write",
+        delegate: "hours_agent",
+      },
+      { type: "thinking", agent: "hours_agent", depth: 1, round: 0 },
+      { type: "tool", agent: "hours_agent", depth: 1, tool: "set_hours", toolkit: "hours", effect: "write" },
+      { type: "thinking", agent: "hours_agent", depth: 1, round: 1 },
+      { type: "thinking", agent: "owner", depth: 0, round: 1 },
+    ]);
     expect(provider.requests[0]!.tools!.map((t) => t.name)).toEqual(["ask_hours_agent"]);
     expect(provider.requests[0]!.system[0]!.text).toContain("ask_hours_agent: Changes opening hours.");
     expect(store.hours.mon).toBe("8-4");

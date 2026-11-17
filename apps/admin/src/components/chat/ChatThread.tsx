@@ -129,9 +129,22 @@ export function ChatThread({
           ),
         )}
         {busy && (
-          <p className="muted ms-8 text-sm" role="status">
-            {busyText}
-          </p>
+          <div className="flex items-start gap-2" role="status">
+            <span className="mt-1 shrink-0" aria-hidden="true">
+              <BrandMark size={24} />
+            </span>
+            <p className="flex items-center gap-3 px-1 py-3 text-sm">
+              <span className="chat-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              {/* A new key for each new status, so it slides in again. */}
+              <span key={busyText} className="chat-status">
+                {busyText}
+              </span>
+            </p>
+          </div>
         )}
         <div ref={endRef} />
       </div>

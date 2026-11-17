@@ -3,8 +3,9 @@
 import type { MessageKey } from "@traiblazer/i18n";
 import { useEffect, useState } from "react";
 import { type ChatBubble, ChatThread } from "@/components/chat/ChatThread";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, apiStream } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { type AgentStep, useAgentStatus } from "./agentStatus";
 
 /**
  * "Update by chat": the onboarding chat's look, with an agent behind it. The owner says what
@@ -21,6 +22,12 @@ interface AgentReply {
   reply: string;
   changes: { area: Area | string; summary: string }[];
 }
+
+/** The answer, streamed: what the agent is doing as it starts each step, then the reply. */
+type AgentStreamEvent =
+  | { type: "step"; step: AgentStep }
+  | ({ type: "done" } & AgentReply)
+  | { type: "error"; code: string; message: string };
 
 interface Turn extends ChatBubble {
   /** The greeting and errors aren't part of what the agent reads. */
@@ -71,6 +78,7 @@ export function AgentTab({ base, onChange }: { base: string; onChange: () => voi
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const status = useAgentStatus();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per assistant
   useEffect(() => {
@@ -98,10 +106,18 @@ export function AgentTab({ base, onChange }: { base: string; onChange: () => voi
           role: turn.from === "me" ? "user" : "assistant",
           text: turn.text.slice(0, MAX_MESSAGE),
         }));
-      const result = await api<AgentReply>(`${base}/agent`, {
-        method: "POST",
-        body: { messages: history, language },
-      });
+      status.start();
+      let result: AgentReply | null = null;
+      for await (const event of apiStream<AgentStreamEvent>(`${base}/agent`, {
+        messages: history,
+        language,
+      })) {
+        if (event.type === "step") status.step(event.step);
+        else if (event.type === "done") result = event;
+        else throw new ApiError(503, event.code, event.message);
+      }
+      // The connection closed before the answer.
+      if (!result) throw new ApiError(503, "failed", "No answer");
       const areas = [...new Set(result.changes.map((c) => c.area))];
       save([
         ...asked,
@@ -124,6 +140,7 @@ export function AgentTab({ base, onChange }: { base: string; onChange: () => voi
             : t("agent.error"),
       );
     } finally {
+      status.stop();
       setBusy(false);
     }
   }
@@ -153,7 +170,7 @@ export function AgentTab({ base, onChange }: { base: string; onChange: () => voi
           label={t("agent.chatLabel")}
           messages={turns}
           busy={busy}
-          busyText={t("agent.working")}
+          busyText={t(status.line)}
           problem={problem}
           chips={fresh ? SUGGESTIONS.map((key) => ({ label: t(key), onClick: () => void send(t(key)) })) : []}
           composer={{

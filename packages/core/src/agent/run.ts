@@ -35,7 +35,26 @@ export interface AgentTurnInput {
   context?: string;
   /** How many agents asked before this one (0: the person asked). */
   depth?: number;
+  /** Told about each step as it starts, to show the person what the agent is doing. */
+  onStep?: (step: AgentStep) => void;
 }
+
+/**
+ * What an agent is doing now. "thinking": a model call (`round` 0 is reading the person's message);
+ * "tool": running a tool (`toolkit` is null for an `ask_` tool, whose `delegate` is the agent asked).
+ * Steps of an agent that was asked come with its own `agent` id and a `depth` above 0.
+ */
+export type AgentStep =
+  | { type: "thinking"; agent: string; depth: number; round: number }
+  | {
+      type: "tool";
+      agent: string;
+      depth: number;
+      tool: string;
+      toolkit: string | null;
+      effect: "read" | "write";
+      delegate?: string;
+    };
 
 export interface AgentUsage {
   modelCalls: number;
@@ -151,6 +170,7 @@ export async function runAgent(deps: AgentDeps, input: AgentTurnInput): Promise<
           ctx,
           context: input.context,
           depth: depth + 1,
+          onStep: input.onStep,
         });
         addUsage(result.usage);
         changes.push(...result.changes);
@@ -159,8 +179,18 @@ export async function runAgent(deps: AgentDeps, input: AgentTurnInput): Promise<
     }),
   );
 
-  const tools = [...registry.toolsOf(spec).map((t) => t.tool), ...delegateTools];
+  const own = registry.toolsOf(spec);
+  const tools = [...own.map((t) => t.tool), ...delegateTools];
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
+  const toolkitOf = new Map(own.map(({ tool, toolkit }) => [tool.name, toolkit.id]));
+  /** A listener that fails never stops the agent. */
+  const report = (step: AgentStep) => {
+    try {
+      input.onStep?.(step);
+    } catch {
+      // Showing progress is never worth failing the turn.
+    }
+  };
   const definitions = tools.map(agentToolDefinition);
   const system = [
     { text: agentInstructions(registry, spec, input.context, delegates), cacheBreakpoint: true },
@@ -184,6 +214,16 @@ export async function runAgent(deps: AgentDeps, input: AgentTurnInput): Promise<
         }),
       };
     }
+    const delegate = tool.name.startsWith("ask_") ? tool.name.slice(4) : undefined;
+    report({
+      type: "tool",
+      agent: spec.id,
+      depth,
+      tool: tool.name,
+      toolkit: toolkitOf.get(tool.name) ?? null,
+      effect: tool.effect,
+      ...(delegate ? { delegate } : {}),
+    });
     try {
       const outcome = await tool.run(parsed.data, ctx);
       if (!outcome.isError && !toolsUsed.includes(tool.name)) toolsUsed.push(tool.name);
@@ -200,6 +240,7 @@ export async function runAgent(deps: AgentDeps, input: AgentTurnInput): Promise<
   let reply = "";
   // Up to maxRounds rounds of tools, then the model answers (the last round's results say so).
   for (let round = 0; ; round++) {
+    report({ type: "thinking", agent: spec.id, depth, round });
     const result = await gateway.complete("agent", {
       system,
       messages: turn,

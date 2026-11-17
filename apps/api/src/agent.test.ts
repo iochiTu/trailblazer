@@ -192,6 +192,76 @@ describe("owner agent", () => {
     });
   });
 
+  it("streams each step, then the answer, when asked for events", async () => {
+    play(provider, [
+      () => ({ calls: [{ name: "get_business_details", input: {} }] }),
+      () => ({ calls: [{ name: "set_opening_hours", input: { days: { sun: [] } } }] }),
+      () => ({ text: "Sundays are closed." }),
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: `${base()}/agent`,
+      headers: { cookie, accept: "text/event-stream" },
+      payload: { messages: [{ role: "user", text: "We're closed Sundays" }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/event-stream");
+    const events = res.body
+      .split("\n\n")
+      .filter((frame) => frame.startsWith("data: "))
+      .map((frame) => JSON.parse(frame.slice(6)));
+    expect(events).toEqual([
+      { type: "step", step: { type: "thinking", agent: "owner", depth: 0, round: 0 } },
+      {
+        type: "step",
+        step: {
+          type: "tool",
+          agent: "owner",
+          depth: 0,
+          tool: "get_business_details",
+          toolkit: "business",
+          effect: "read",
+        },
+      },
+      { type: "step", step: { type: "thinking", agent: "owner", depth: 0, round: 1 } },
+      {
+        type: "step",
+        step: {
+          type: "tool",
+          agent: "owner",
+          depth: 0,
+          tool: "set_opening_hours",
+          toolkit: "business",
+          effect: "write",
+        },
+      },
+      { type: "step", step: { type: "thinking", agent: "owner", depth: 0, round: 2 } },
+      {
+        type: "done",
+        reply: "Sundays are closed.",
+        changes: [{ area: "business", summary: "Opening hours updated: Sunday" }],
+      },
+    ]);
+  });
+
+  it("streams an error when the model fails", async () => {
+    provider.requests = [];
+    provider.script = () => {
+      throw new Error("model down");
+    };
+    const res = await app.inject({
+      method: "POST",
+      url: `${base()}/agent`,
+      headers: { cookie, accept: "text/event-stream" },
+      payload: { messages: [{ role: "user", text: "Hello" }] },
+    });
+    const events = res.body
+      .split("\n\n")
+      .filter((frame) => frame.startsWith("data: "))
+      .map((frame) => JSON.parse(frame.slice(6)));
+    expect(events.at(-1)).toMatchObject({ type: "error", code: "agent_unavailable" });
+  });
+
   it("updates one interview answer and keeps the others", async () => {
     const interview = (await call("GET", `${base()}/interview`)).json();
     const [first, second] = interview.questions as { key: string }[];

@@ -78,9 +78,20 @@ registry
 Outside tools (an MCP server, a CRM) fit the same shape: a toolkit whose tools call the outside service.
 A small adapter that lists an MCP server's tools and wraps each as an `AgentTool` is the planned way in.
 
+## What the person sees while it works
+
+`runAgent` reports each step as it starts (`onStep`: a model call, or a tool with its toolkit and
+effect; an asked agent's steps come with its id and depth). Asked for `text/event-stream`, the route
+streams them, then the answer. The portal turns them into lines like "Checking your opening hours…"
+(`apps/admin/src/components/bot/agentStatus.ts`), each shown for at least a moment with typing
+dots and a slide-in (`.chat-dots`, `.chat-status` in `globals.css`, still under reduced motion).
+
+A new tool needs nothing there to work: it gets the general line for looking or saving. To give it
+its own line, add `agent.status.<tool>` in `packages/i18n` and the tool to `TOOL_STATUS`.
+
 ## Not done yet
 
-- Replies arrive whole (no streaming); the portal shows "Working on it…" meanwhile.
+- The reply's text arrives whole at the end (the steps stream; the words don't).
 - The conversation lives in the browser only. Nothing of it is stored on the server, so another device
   starts fresh.
 - If the model fails partway through a turn, changes already saved stay saved, but the reply is an error.

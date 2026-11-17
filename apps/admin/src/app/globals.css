@@ -935,3 +935,99 @@
     scroll-behavior: auto;
   }
 }
+
+/* ---------- Chat: what the assistant is doing ---------- */
+
+/* Three dots that rise one after the other, like someone typing. */
+.chat-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 1em;
+}
+
+.chat-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: chat-dot 1.2s ease-in-out infinite;
+}
+
+.chat-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Each new status slides in, and a soft light sweeps across it while it lasts. */
+.chat-status {
+  display: inline-block;
+  background:
+    linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      var(--muted) 40%,
+      var(--text) 50%,
+      var(--muted) 60%,
+      var(--muted) 100%
+    )
+    0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation:
+    chat-status-in 320ms var(--ease) both,
+    chat-shimmer 2.4s linear infinite;
+}
+
+@keyframes chat-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes chat-status-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chat-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-dots span,
+  .chat-status {
+    animation: none;
+  }
+
+  .chat-dots span {
+    opacity: 0.6;
+  }
+
+  .chat-status {
+    color: var(--muted);
+    background: none;
+  }
+}
