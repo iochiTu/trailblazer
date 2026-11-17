@@ -22,6 +22,7 @@ import {
   messages,
   type ReplyAction,
   type ReplyImage,
+  type ReplyItem,
   type ReplyOffer,
   tenants,
   usageEvents,
@@ -119,12 +120,16 @@ export type ChatStreamEvent =
   | { type: "action"; action: ReplyAction }
   /** A promotion shown as a card under the reply (sent after the text). */
   | { type: "offer"; offer: ReplyOffer }
+  /** A service or product shown as a card under the reply (sent after the text, in order). */
+  | { type: "item"; item: ReplyItem }
   | { type: "done"; messageId: string; citations: Citation[]; flags: MessageFlags }
   | { type: "error"; code: "unavailable" | "failed"; message: string };
 
 const HISTORY_TURNS = 10;
 /** Most business photos shown in one reply. */
 export const MAX_PHOTOS_PER_REPLY = 2;
+/** Most service or product cards shown in one reply. */
+export const MAX_ITEMS_PER_REPLY = 6;
 export const MAX_MESSAGE_LENGTH = 2000;
 /** Most images sent to the model per answer (the newest; older ones become a text placeholder). */
 export const MAX_IMAGES_IN_CONTEXT = 4;
@@ -569,6 +574,31 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     if (item && (item.action === "quote" || item.action === "book")) addAction(`${item.action}:${item.ref}`);
   };
 
+  /**
+   * Services and products the reply asked to show as cards (photo, name, price), in the order the
+   * model named them, in the owner's own words. A text message can't show a card.
+   */
+  const shownItems: ReplyItem[] = [];
+  const addItem = (ref: string) => {
+    const item = catalog.find((c) => c.ref === ref);
+    if (!item) {
+      deps.log?.("card dropped", { botId: bot.id, ref });
+      return;
+    }
+    if (input.channel === "sms" || shownItems.length >= MAX_ITEMS_PER_REPLY) return;
+    if (shownItems.some((i) => i.id === item.id)) return;
+    shownItems.push({
+      id: item.id,
+      kind: item.kind,
+      name: item.name,
+      description: item.description,
+      priceText: item.priceText,
+      assetId: item.assetId,
+      action: item.action,
+      ...(item.action === "book" && bookingUrl ? { href: bookingUrl } : {}),
+    });
+  };
+
   // Images reach the model only when a chat route can see them; otherwise they become placeholders
   // and the visitor is told, politely, that images can't be looked at right now.
   const canSee = deps.gateway.supportsImages("chat");
@@ -774,6 +804,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         shownPhotos.length = 0;
         shownActions.length = 0;
         shownOffers.length = 0;
+        shownItems.length = 0;
         yield { type: "reset" };
         if (notice) {
           yield { type: "text", text: notice };
@@ -800,7 +831,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
           if (withheld) {
             if (event.type !== "text" && event.type !== "reset") meta = event;
           } else if (event.type === "text") {
-            const { text, ids, gaps, actions, offers } = markers.push(event.text);
+            const { text, ids, gaps, actions, offers, items } = markers.push(event.text);
             if (wroteEarlier && text.trim()) {
               yield* retract();
               wroteEarlier = false;
@@ -808,6 +839,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
             choose(ids);
             for (const action of actions) addAction(action);
             for (const offer of offers) addOffer(offer);
+            for (const item of items) addItem(item);
             gapTopic ??= gaps[0] ?? null;
             if (text) {
               yield write(text);
@@ -874,8 +906,12 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       // The assistant marked this reply: the business's information didn't have the answer.
       if (gapTopic !== null) flags.unanswered = true;
 
-      if (chatMeta?.stopReason === "refusal" || (!answer.trim() && !shownPhotos.length)) {
+      if (
+        chatMeta?.stopReason === "refusal" ||
+        (!answer.trim() && !shownPhotos.length && !shownItems.length)
+      ) {
         shownPhotos.length = 0;
+        shownItems.length = 0;
         flags.unanswered = undefined;
         flags.refused = chatMeta?.stopReason === "refusal" || undefined;
         const fallback = FALLBACK_TEXT[lang2]!;
@@ -895,6 +931,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       answer = answer || text;
       citations = [];
       shownPhotos.length = 0;
+      shownItems.length = 0;
     }
   }
   // The auxiliary model's triage that ran alongside the answer.
@@ -919,12 +956,21 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
   // The same goes for promotions.
   if (urgency || advice || flags.error || flags.busy) shownOffers.length = 0;
   if (shownOffers.length) flags.offers = [...shownOffers];
+  // And for service and product cards.
+  if (urgency || advice || flags.error || flags.busy) shownItems.length = 0;
+  if (shownItems.length) flags.items = [...shownItems];
+  // A card already carries its item's button: no second one under the reply.
+  for (let i = shownActions.length - 1; i >= 0; i--) {
+    const itemId = shownActions[i]!.item?.id;
+    if (itemId && shownItems.some((card) => card.id === itemId)) shownActions.splice(i, 1);
+  }
   if (flags.error || flags.busy) shownActions.length = 0;
   if (shownActions.length) flags.actions = [...shownActions];
 
   if (notice) answer = answer ? `${notice}\n\n${answer}` : notice;
   answer = answer.replace(/\n{3,}/g, "\n\n").trim();
   for (const image of shownPhotos) yield { type: "image", image };
+  for (const item of shownItems) yield { type: "item", item };
   for (const offer of shownOffers) yield { type: "offer", offer };
   for (const action of shownActions) yield { type: "action", action };
 
@@ -1052,14 +1098,18 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     if (queued.length) await tx.insert(jobs).values(queued);
     // Insights (premium): this conversation is tagged once it goes quiet.
     await queueInsights(tx, { tenantId: input.tenantId, conversationId, channel: input.channel });
-    // Statistics: a service's button went out under this answer (docs/SELL_AND_PROMOTE.md §3.3).
+    // Statistics: a service's button or card went out under this answer (docs/SELL_AND_PROMOTE.md §3.3).
     const surface = itemStatSurface(input.channel);
-    for (const action of shownActions) {
-      if (surface && action.item) {
+    const shownItemIds = new Set([
+      ...shownActions.flatMap((action) => (action.item ? [action.item.id] : [])),
+      ...shownItems.map((item) => item.id),
+    ]);
+    if (surface) {
+      for (const itemId of shownItemIds) {
         await countItemEvent(tx, {
           tenantId: input.tenantId,
           botId: bot.id,
-          itemId: action.item.id,
+          itemId,
           surface,
           event: "shown",
         });

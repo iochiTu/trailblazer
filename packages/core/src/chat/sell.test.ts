@@ -323,6 +323,87 @@ describe("offers", () => {
   });
 });
 
+describe("cards for services and products", () => {
+  const cardsOf = (events: ChatStreamEvent[]) => events.flatMap((e) => (e.type === "item" ? [e.item] : []));
+
+  it("shows the items the reply names as cards, in order, in the owner's words", async () => {
+    const { events, actions, done, reply } = await chat(
+      saying("c1", "Here are two that fit.\n[[item:s2]]\n[[item:s1]]\n[[action:quote:s2]]"),
+      "v-cards",
+      "What can you do for my basement?",
+    );
+    const cards = cardsOf(events);
+    expect(cards).toEqual([
+      {
+        id: items["Water heater installation"],
+        kind: "service",
+        name: "Water heater installation",
+        description: null,
+        priceText: null,
+        assetId: null,
+        action: "quote",
+      },
+      {
+        id: items["Drain cleaning"],
+        kind: "service",
+        name: "Drain cleaning",
+        description: null,
+        priceText: "from $120",
+        assetId: null,
+        action: "book",
+      },
+    ]);
+    expect(done.flags.items).toEqual(cards);
+    // The card carries the item's button: no second one under the reply.
+    expect(actions).toEqual([]);
+    expect(reply.trim()).toBe("Here are two that fit.");
+  });
+
+  it("drops unknown items and repeats, and counts each card shown", async () => {
+    const [before] = await owner.db
+      .select()
+      .from(itemStats)
+      .where(eq(itemStats.itemId, items["Leak repair"]!));
+    const { events } = await chat(
+      saying("c2", "Sure.\n[[item:s9]]\n[[item:s3]]\n[[item:s3]]"),
+      "v-cards2",
+      "Do you fix leaks?",
+    );
+    expect(cardsOf(events).map((c) => c.name)).toEqual(["Leak repair"]);
+    const [after] = await owner.db
+      .select()
+      .from(itemStats)
+      .where(eq(itemStats.itemId, items["Leak repair"]!));
+    expect(after!.shown).toBe((before?.shown ?? 0) + 1);
+  });
+
+  it("shows none on an urgent problem, or in a text message", async () => {
+    const urgent = await chat(
+      saying("c3", "Call us now.\n[[item:s2]]"),
+      "v-cards3",
+      "My water heater burst and the basement is flooding!",
+    );
+    expect(cardsOf(urgent.events)).toEqual([]);
+    expect(urgent.done.flags.items).toBeUndefined();
+
+    const events: ChatStreamEvent[] = [];
+    for await (const e of runChat(
+      { db: app.db, gateway: gatewayWith(saying("c4", "We do.\n[[item:s2]]")) },
+      {
+        tenantId,
+        botId,
+        visitorId: "+15195550199",
+        channel: "sms",
+        message: "Do you install water heaters?",
+      },
+    )) {
+      events.push(e);
+    }
+    expect(cardsOf(events)).toEqual([]);
+    expect(events.map((e) => (e.type === "text" ? e.text : "")).join("")).not.toContain("[[item");
+  });
+});
+
 describe("statistics per service", () => {
   const counts = async (name: string) => {
     const rows = await owner.db.select().from(itemStats).where(eq(itemStats.itemId, items[name]!));

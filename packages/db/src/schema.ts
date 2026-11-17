@@ -1094,6 +1094,24 @@ export interface ReplyOffer {
   endsAt: string | null;
 }
 
+/**
+ * A service or product shown as a card under an assistant reply (photo, name, price), like a
+ * product carousel. Everything comes from the owner's list: the model only chooses which items.
+ */
+export interface ReplyItem {
+  id: string;
+  kind: CatalogKind;
+  name: string;
+  description: string | null;
+  priceText: string | null;
+  /** Photo (asset kind "catalog_image"), or null. */
+  assetId: string | null;
+  /** The button the owner chose for the item's card. */
+  action: CatalogAction;
+  /** For a "book" item: the business's booking link, when it has one. */
+  href?: string;
+}
+
 export interface MessageFlags {
   /**
    * The assistant couldn't answer from the business's information and said so (it marked the reply
@@ -1124,6 +1142,8 @@ export interface MessageFlags {
   actions?: ReplyAction[];
   /** Promotions shown as cards under the reply. */
   offers?: ReplyOffer[];
+  /** Services and products shown as cards under the reply. */
+  items?: ReplyItem[];
   /** Tools the assistant used for this answer (e.g. "search_knowledge"). */
   tools?: string[];
   /** Written by a member of the business's team from Contacts, not by the assistant. */

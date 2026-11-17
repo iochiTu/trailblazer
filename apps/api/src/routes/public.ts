@@ -35,6 +35,7 @@ import {
   messages,
   notices,
   type ReplyImage,
+  type ReplyItem,
   resolveBotKey,
   resolvePageSlug,
   tenants,
@@ -453,6 +454,12 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     alt: image.title,
   });
 
+  /** A service or product card for the chat, with its photo as a public URL. */
+  const toPublicItem = ({ assetId, ...item }: ReplyItem) => ({
+    ...item,
+    photoUrl: assetId ? publicAssetUrl(config.PUBLIC_URL, assetId) : null,
+  });
+
   const assertSameOrigin = (origin: string | undefined) => {
     // The chat page and this API share an origin; browsers always send Origin on POST.
     if (origin && origin !== publicOrigin)
@@ -571,7 +578,12 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         )) {
           if (controller.signal.aborted) break;
           // Business photos go to the chat as public URLs with the owner's title as alt text.
-          const out = event.type === "image" ? { type: "image", image: toPublicImage(event.image) } : event;
+          const out =
+            event.type === "image"
+              ? { type: "image", image: toPublicImage(event.image) }
+              : event.type === "item"
+                ? { type: "item", item: toPublicItem(event.item) }
+                : event;
           res.write(`data: ${JSON.stringify(out)}\n\n`);
         }
       } catch (error) {
@@ -692,6 +704,7 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           // Buttons shown under the reply (links from the business profile when it was written).
           actions: flags.actions ?? [],
           offers: flags.offers ?? [],
+          items: (flags.items ?? []).map(toPublicItem),
         })),
       };
     },

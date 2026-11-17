@@ -529,6 +529,201 @@ body {
   background: var(--tb-bubble);
 }
 
+/* Services and products under a reply: a row of cards to scroll through, like a product carousel. */
+.tb-cards {
+  position: relative;
+  margin-top: 14px;
+  /* The row runs to the edge of the reply column so a cut-off card hints there is more. */
+  margin-inline-end: -4px;
+}
+
+/* Prefixed so the reply's own list styles (.tb-msg ul, li + li) don't reach the row. */
+.tb-cards .tb-cards-track {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 2px 4px 6px 2px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  scrollbar-width: none;
+}
+
+.tb-cards-track::-webkit-scrollbar {
+  display: none;
+}
+
+.tb-cards .tb-card {
+  margin: 0;
+  flex: 0 0 min(200px, 72%);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--tb-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--tb-surface);
+  line-height: 1.4;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.tb-cards .tb-card:hover {
+  border-color: color-mix(in srgb, var(--tb-text) 22%, transparent);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.07);
+}
+
+/* One card: a little wider, it has the row to itself. */
+.tb-cards[data-single] .tb-card.tb-card {
+  flex-basis: min(260px, 100%);
+}
+
+.tb-card-photo {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  background: var(--tb-bubble);
+  color: color-mix(in srgb, var(--tb-accent) 70%, var(--tb-muted));
+}
+
+.tb-card-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tb-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 4px;
+  min-width: 0;
+}
+
+.tb-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.tb-card-price {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tb-text);
+}
+
+.tb-card-text {
+  font-size: 13px;
+  color: var(--tb-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.tb-card-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 10px;
+}
+
+.tb-card-button,
+.tb-msg a.tb-card-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tb-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.tb-card-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tb-text) 7%, transparent);
+}
+
+.tb-card-button[data-main],
+.tb-msg a.tb-card-button[data-main] {
+  background: var(--tb-brand);
+  color: var(--tb-on-brand);
+}
+
+.tb-card-button[data-main]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tb-brand) 86%, #000000);
+}
+
+.tb-card-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tb-card-button:focus-visible,
+.tb-cards-arrow:focus-visible {
+  outline: 2px solid var(--tb-accent);
+  outline-offset: 2px;
+}
+
+/* Arrows over the photos, for mouse users; touch screens swipe. */
+.tb-cards-arrow {
+  position: absolute;
+  /* About the middle of a 200px-wide card's photo. */
+  top: 60px;
+  inset-inline-end: 0;
+  z-index: 1;
+  display: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--tb-border);
+  border-radius: 50%;
+  background: var(--tb-surface);
+  color: var(--tb-text);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  cursor: pointer;
+}
+
+.tb-cards-arrow[data-side="start"] {
+  inset-inline: -6px auto;
+}
+
+.tb-cards-arrow[data-side="start"] .tb-svg,
+[dir="rtl"] .tb-cards-arrow[data-side="end"] .tb-svg {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .tb-cards-arrow[data-side="start"] .tb-svg {
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tb-cards-arrow {
+    display: grid;
+  }
+}
+
 /* Images: a file chip with the name only (never the picture). */
 .tb-file {
   display: inline-flex;
