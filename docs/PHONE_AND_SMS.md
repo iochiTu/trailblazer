@@ -265,8 +265,9 @@ Built (`packages/telephony`, `packages/core/src/sms`, `apps/api/src/routes/telep
   without tenant context through `app_resolve_phone_number`, like page links.
 - **Inbound text:** signature → number → STOP / START / HELP (English and French) → daily limit per
   customer number (40) → the assistant answers on channel `sms` in the customer's thread (a new
-  thread after 24 hours) → the reply is queued. The webhook is acknowledged at once and the answer
-  is written after it. A webhook delivered twice is answered once.
+  thread after 24 hours) → the reply is queued. The webhook commits a unique provider receipt and a `message.receive` job before acknowledgment.
+  Keywords are applied in the receipt transaction, including when the assistant is paused or over quota.
+  The worker writes the reply and clears the receipt payload together.
 - **Reply shape:** an SMS section in the prompt (plain text, short, no button or photo markers, phone
   number and links written out), and `toSmsText` on the way out (Markdown removed, typographic
   punctuation made plain so an English text stays in the cheap 7-bit format, cut at a sentence above
@@ -329,8 +330,7 @@ Not built yet, in this order:
    once voice is built.
 4. **Buying numbers through the provider** (staff enter a number bought in Twilio's console).
 
-Known limits: repeated webhooks are recognised in the memory of one API server (two servers could
-both answer a retry); an answer being written when the API restarts is lost; French texts usually
+Known limits: French texts usually
 contain a character outside the 7-bit alphabet (ê, ç, â), so they are billed in 70-character parts.
 Seen once in the real-model check: the assistant passed the same request on twice when the customer
 added a detail in a later text (the web chat can do the same).

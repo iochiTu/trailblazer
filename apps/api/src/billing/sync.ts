@@ -11,6 +11,8 @@ export const isPaying = (status: string | null | undefined) =>
 /** Statuses after which the business no longer pays: it goes back to the plan new businesses start on. */
 const ENDED = new Set(["canceled", "unpaid", "incomplete_expired", "paused"]);
 
+export const isEnded = (status: string | null) => status !== null && ENDED.has(status);
+
 export type SyncResult = "applied" | "unknown_customer" | "stale";
 
 /**
@@ -45,7 +47,7 @@ export async function applySubscription(
   let plan: string | null = null;
   if (isPaying(sub.status)) {
     plan = allPlans.find((p) => p.id === sub.planId)?.id ?? null;
-  } else if (ENDED.has(sub.status)) {
+  } else if (isEnded(sub.status)) {
     plan = allPlans.find((p) => p.id === policies.defaultPlan && p.active)?.id ?? "trial";
   }
 

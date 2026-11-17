@@ -1,5 +1,5 @@
 import { type Db, jobs } from "@traiblazer/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { AddonEffectPayload } from "./addons/effects.js";
 import type { DemoBuildPayload } from "./demo/build.js";
 import { errorMessage } from "./errors.js";
@@ -24,6 +24,7 @@ export const JOB_TYPES = {
   embedChunks: "embed.chunks",
   /** Sends one queued text message through the telephony provider. */
   messageSend: "message.send",
+  messageReceive: "message.receive",
   /** Sends an email a team member wrote to a contact. */
   contactEmail: "contact.email",
   /** Emails the business that its number's daily spend cap was reached. */
@@ -46,6 +47,7 @@ export interface JobPayloads {
   [JOB_TYPES.urgentAlert]: UrgentAlertPayload;
   [JOB_TYPES.demoBuild]: DemoBuildPayload;
   [JOB_TYPES.embedChunks]: { botId: string };
+  [JOB_TYPES.messageReceive]: { receiptId: string };
   [JOB_TYPES.messageSend]: { messageId: string };
   [JOB_TYPES.contactEmail]: { messageId: string };
   [JOB_TYPES.phoneCapAlert]: { botId: string; spentMicros?: number };
@@ -76,50 +78,82 @@ export async function enqueueJob<T extends JobType>(db: Db, job: NewJob<T>): Pro
   return row!.id;
 }
 
-/**
- * Atomically claims the next runnable job, highest priority first. `SKIP LOCKED` lets several workers poll safely; jobs
- * stuck in "running" for 15 minutes (crashed worker) are picked up again.
- */
-export async function claimNextJob(db: Db, workerId: string): Promise<JobRow | null> {
-  const rows = await db.execute<Record<string, unknown>>(sql`
-    update jobs
-       set status = 'running', attempts = attempts + 1, locked_at = now(), locked_by = ${workerId}, updated_at = now()
-     where id = (
-       select id from jobs
-        where (status = 'queued' and run_at <= now())
-           or (status = 'running' and locked_at < now() - interval '15 minutes')
-        order by priority desc, run_at
-        for update skip locked
-        limit 1)
-    returning id`);
-  const id = rows[0]?.id as string | undefined;
-  if (!id) return null;
-  const [job] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
-  return job ?? null;
-}
+export const JOB_LEASE_MS = 15 * 60_000;
 
-export async function completeJob(db: Db, id: string): Promise<void> {
-  await db.update(jobs).set({ status: "done", lockedAt: null, lastError: null }).where(eq(jobs.id, id));
-}
+/** Each claim increments attempts, including when the same worker reclaims an expired job. */
+export type ClaimedJob = JobRow & { lockedBy: string };
+const leaseCutoff = sql`statement_timestamp() - (${JOB_LEASE_MS}::integer * interval '1 millisecond')`;
 
-/** Retries with exponential backoff (30 s, 60 s, 120 s …) until max attempts, then marks failed. */
-export async function failJob(db: Db, job: JobRow, error: unknown): Promise<"retry" | "failed"> {
-  const message = errorMessage(error);
-  if (job.attempts < job.maxAttempts) {
-    await db
-      .update(jobs)
-      .set({
-        status: "queued",
-        lockedAt: null,
-        lastError: message.slice(0, 2000),
-        runAt: new Date(Date.now() + 30_000 * 2 ** (job.attempts - 1)),
-      })
-      .where(eq(jobs.id, job.id));
-    return "retry";
-  }
-  await db
+/** Pick and return one claim atomically. Concurrent pollers skip rows another worker is claiming. */
+export async function claimNextJob(db: Db, workerId: string): Promise<ClaimedJob | null> {
+  const [job] = await db
     .update(jobs)
-    .set({ status: "failed", lockedAt: null, lastError: message.slice(0, 2000) })
-    .where(eq(jobs.id, job.id));
-  return "failed";
+    .set({
+      status: "running",
+      attempts: sql`${jobs.attempts} + 1`,
+      lockedAt: sql`statement_timestamp()`,
+      lockedBy: workerId,
+    })
+    .where(
+      eq(
+        jobs.id,
+        sql`(
+      select id from jobs
+      where (status = 'queued' and run_at <= statement_timestamp())
+         or (status = 'running' and locked_at <= ${leaseCutoff})
+      order by priority desc, run_at
+      for update skip locked
+      limit 1
+    )`,
+      ),
+    )
+    .returning();
+  return job ? { ...job, lockedBy: workerId } : null;
+}
+
+function currentLease(job: ClaimedJob) {
+  return and(
+    eq(jobs.id, job.id),
+    eq(jobs.status, "running"),
+    eq(jobs.lockedBy, job.lockedBy),
+    eq(jobs.attempts, job.attempts),
+    gt(jobs.lockedAt, leaseCutoff),
+  );
+}
+
+/** False means the claim expired, was replaced, or has already finished. */
+export async function renewJobLease(db: Db, job: ClaimedJob): Promise<boolean> {
+  const rows = await db
+    .update(jobs)
+    .set({ lockedAt: sql`statement_timestamp()` })
+    .where(currentLease(job))
+    .returning({ id: jobs.id });
+  return rows.length === 1;
+}
+
+export async function completeJob(db: Db, job: ClaimedJob): Promise<boolean> {
+  const rows = await db
+    .update(jobs)
+    .set({ status: "done", lockedAt: null, lockedBy: null, lastError: null })
+    .where(currentLease(job))
+    .returning({ id: jobs.id });
+  return rows.length === 1;
+}
+
+/** Retries with exponential backoff (30 s, 60 s, 120 s …) until max attempts. */
+export async function failJob(db: Db, job: ClaimedJob, error: unknown): Promise<"retry" | "failed" | "lost"> {
+  const retry = job.attempts < job.maxAttempts;
+  const rows = await db
+    .update(jobs)
+    .set({
+      status: retry ? "queued" : "failed",
+      lockedAt: null,
+      lockedBy: null,
+      lastError: errorMessage(error).slice(0, 2000),
+      ...(retry ? { runAt: new Date(Date.now() + 30_000 * 2 ** (job.attempts - 1)) } : {}),
+    })
+    .where(currentLease(job))
+    .returning({ id: jobs.id });
+  if (!rows.length) return "lost";
+  return retry ? "retry" : "failed";
 }

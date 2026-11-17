@@ -143,7 +143,7 @@ describe("knowledge management", () => {
     const job = await claimNextJob(appDb.db, "test-worker");
     expect(job?.payload).toEqual({ sourceId });
     await syncSource({ db: appDb.db }, job!.tenantId, sourceId);
-    await completeJob(appDb.db, job!.id);
+    expect(await completeJob(appDb.db, job!)).toBe(true);
 
     const list = await app.inject({
       method: "GET",

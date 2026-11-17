@@ -14,15 +14,24 @@ export interface BillingPlan {
 }
 
 export interface CheckoutInput {
+  attemptId: string;
+  expiresAt: number;
   tenantId: string;
   customerId: string;
   productId: string;
-  plan: BillingPlan;
+  plan: Pick<BillingPlan, "id" | "priceMonthlyCents">;
   /** One-time setup fee added to the first payment (0: none). */
   setupFeeCents: number;
   language: "en" | "fr";
   successUrl: string;
   cancelUrl: string;
+}
+
+export interface CheckoutSession {
+  id: string;
+  url: string | null;
+  status: "open" | "expired" | "complete";
+  subscriptionId: string | null;
 }
 
 /** What we keep of a subscription: everything else stays at the provider. */
@@ -56,8 +65,11 @@ export interface BillingProvider {
   createCustomer(input: { tenantId: string; name: string; email: string | null }): Promise<string>;
   /** Creates the plan's product at the provider; returns its id. */
   createProduct(plan: BillingPlan): Promise<string>;
-  /** A hosted checkout page that starts the subscription; returns its address. */
-  createCheckout(input: CheckoutInput): Promise<string>;
+  /** Create or recover the session for this attempt using the provider idempotency key. */
+  createCheckout(input: CheckoutInput): Promise<CheckoutSession>;
+  getCheckout(id: string): Promise<CheckoutSession>;
+  findCheckouts(customerId: string, attemptId: string | null): Promise<CheckoutSession[]>;
+  expireCheckout(id: string): Promise<void>;
   /** The provider's page where the owner updates the card, sees invoices and cancels. */
   createPortal(input: { customerId: string; returnUrl: string; language: "en" | "fr" }): Promise<string>;
   /** Moves a subscription to another plan, prorated, at that plan's current price. */

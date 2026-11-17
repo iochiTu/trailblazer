@@ -49,12 +49,54 @@ class FakeStripe {
       return { id: this.next("prod") };
     },
   };
+  readonly sessions = new Map<
+    string,
+    {
+      id: string;
+      mode: string;
+      customer: string;
+      url: string;
+      status: string;
+      subscription: string | null;
+      metadata: Stripe.MetadataParam | undefined;
+    }
+  >();
+  readonly checkoutKeys = new Map<string, string>();
+  loseResponse = false;
   checkout = {
     sessions: {
-      create: async (params: Stripe.Checkout.SessionCreateParams) => {
+      create: async (params: Stripe.Checkout.SessionCreateParams, options: Stripe.RequestOptions) => {
+        const key = options.idempotencyKey!;
+        const prior = this.checkoutKeys.get(key);
+        if (prior) return this.sessions.get(prior)!;
         this.record("checkout.sessions.create", params);
-        return { id: this.next("cs"), url: "https://checkout.stripe.test/pay" };
+        const id = this.next("cs");
+        const session = {
+          id,
+          customer: params.customer!,
+          mode: "subscription",
+          url: "https://checkout.stripe.test/pay",
+          status: "open",
+          subscription: null,
+          metadata: params.metadata,
+        };
+        this.sessions.set(id, session);
+        this.checkoutKeys.set(key, id);
+        if (this.loseResponse) {
+          this.loseResponse = false;
+          throw new Error("Lost response");
+        }
+        return session;
       },
+      retrieve: async (id: string) => this.sessions.get(id)!,
+      expire: async (id: string) => {
+        const s = this.sessions.get(id)!;
+        if (s.status !== "open") throw new Error("Already completed");
+        s.status = "expired";
+        return s;
+      },
+      list: ({ customer }: { customer: string }) =>
+        Array.from(this.sessions.values()).filter((s) => s.customer === customer),
     },
   };
   billingPortal = {
@@ -208,6 +250,11 @@ async function pay(tenantId: string, cookie: string, plan = "local", setupFee = 
   const customer = (await account(tenantId))!.stripeCustomerId;
   const amount = plan === "local" ? 4900 : 9900;
   const sub = fake.subscribe(customer, tenantId, plan, amount);
+  const session = Array.from(fake.sessions.values()).find(
+    (s) => s.customer === customer && s.status === "open",
+  )!;
+  session.status = "complete";
+  session.subscription = sub.id;
   const event = fake.event("checkout.session.completed", {
     object: "checkout.session",
     customer,
@@ -349,6 +396,53 @@ describe("billing: checkout", () => {
     expect(
       fake.calls.filter((c) => c.method === "products.create" || c.method === "customers.create"),
     ).toHaveLength(0);
+  });
+
+  it("recovers a lost checkout response, reuses the same attempt and retires it before switching plans", async () => {
+    const { owner, tenantId } = await newBusiness();
+    const checkout = (plan = "local") =>
+      call("POST", `/v1/tenants/${tenantId}/billing/checkout`, owner.cookie, { plan });
+    fake.loseResponse = true;
+    expect((await checkout()).statusCode).toBe(500);
+    const responses = await Promise.all([checkout(), checkout()]);
+    expect(responses.map((r) => r.statusCode)).toEqual([200, 200]);
+    const customer = (await account(tenantId))!.stripeCustomerId;
+    const sessions = () => fake.checkout.sessions.list({ customer });
+    expect(sessions()).toHaveLength(1);
+    const first = sessions()[0]!;
+    expect((await checkout("local_plus")).statusCode).toBe(200);
+    expect(first.status).toBe("expired");
+    const open = sessions().filter((s) => s.status === "open");
+    expect(open).toHaveLength(1);
+    open[0]!.status = "complete";
+    expect((await checkout()).statusCode).toBe(409);
+    expect(sessions()).toHaveLength(2);
+  });
+
+  it("retires a checkout issued before the migration and replaces an expired session", async () => {
+    const { owner, tenantId } = await newBusiness();
+    const checkout = () =>
+      call("POST", `/v1/tenants/${tenantId}/billing/checkout`, owner.cookie, { plan: "local" });
+    const customer = `cus_${crypto.randomUUID()}`;
+    await ownerDb.db.insert(billingAccounts).values({ tenantId, stripeCustomerId: customer });
+    const legacy = {
+      id: `cs_${crypto.randomUUID()}`,
+      mode: "subscription",
+      customer,
+      url: "https://checkout.stripe.test/old",
+      status: "open",
+      subscription: null,
+      metadata: {},
+    };
+    fake.sessions.set(legacy.id, legacy);
+    expect((await checkout()).statusCode).toBe(200);
+    expect(legacy.status).toBe("expired");
+    const previous = (await account(tenantId))!.checkoutAttempt!;
+    fake.sessions.get(previous.sessionId!)!.status = "expired";
+    expect((await checkout()).statusCode).toBe(200);
+    const next = (await account(tenantId))!.checkoutAttempt!;
+    expect(next.id).not.toBe(previous.id);
+    expect(fake.checkout.sessions.list({ customer }).filter((s) => s.status === "open")).toHaveLength(1);
   });
 
   it("refuses plans that can't be bought, staff, other roles and demo businesses", async () => {

@@ -1,3 +1,6 @@
+import { JOB_TYPES, processInboundSms } from "@traiblazer/core";
+import { type Db, jobs } from "@traiblazer/db";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 /** Signs a new user up and returns their session cookie. The email is added to `emails`, for clean-up. */
@@ -29,4 +32,22 @@ export async function newTenant(
   ).json().tenant.id as string;
   tenantIds.push(id);
   return id;
+}
+
+export function queuedSmsJobs(db: Db, tenantId: string) {
+  return db
+    .select()
+    .from(jobs)
+    .where(
+      and(eq(jobs.tenantId, tenantId), eq(jobs.type, JOB_TYPES.messageReceive), eq(jobs.status, "queued")),
+    );
+}
+
+/** Run this test business's durable inbound jobs with its configured test providers. */
+export async function processSmsJobs(deps: Parameters<typeof processInboundSms>[0], tenantId: string) {
+  for (const job of await queuedSmsJobs(deps.db, tenantId)) {
+    await processInboundSms(deps, tenantId, String(job.payload.receiptId));
+    // This helper drains only the test tenant's fixtures, independently of the shared worker queue.
+    await deps.db.delete(jobs).where(and(eq(jobs.id, job.id), eq(jobs.status, "queued")));
+  }
 }

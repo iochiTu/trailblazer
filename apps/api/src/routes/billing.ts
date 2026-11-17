@@ -3,6 +3,7 @@ import { enOrFr } from "@traiblazer/i18n";
 import { billingPlanSchema } from "@traiblazer/shared";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { startCheckout } from "../billing/checkout.js";
 import type { BillingPlan, BillingProvider } from "../billing/provider.js";
 import { applySubscription, isPaying } from "../billing/sync.js";
 import type { AppContext } from "../context.js";
@@ -168,16 +169,13 @@ export async function billingRoutes(app: FastifyInstance, ctx: AppContext) {
           .values({ tenantId: tenant.id, stripeCustomerId: customerId })
           .onConflictDoNothing();
       }
-      const setupFeeCents = account?.setupFeePaidAt ? 0 : (plan.setupFeeCents ?? 0);
-      const url = await provider.createCheckout({
+      const url = await startCheckout(db, provider, {
         tenantId: tenant.id,
-        customerId,
         productId: await productFor(provider, plan),
         plan: toBillingPlan(plan),
-        setupFeeCents,
+        setupFeeCents: plan.setupFeeCents ?? 0,
         language: enOrFr(request.user!.uiLanguage),
-        successUrl: `${portalUrl(tenant.id)}?checkout=done`,
-        cancelUrl: `${portalUrl(tenant.id)}?checkout=cancelled`,
+        returnUrl: portalUrl(tenant.id),
       });
       return { url };
     },

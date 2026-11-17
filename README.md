@@ -105,7 +105,8 @@ hooks: `prompt` (text in the assistant's instructions), `chatLinks` (chat page b
 (chat events → effects). Hooks never do I/O; effects are queued as `addon.effect` jobs and run by the
 worker, which re-checks the add-on is still on. Installations live in `bot_addons` (RLS); settings are
 re-validated on every save and read, and `version`/`migrate` handle setting changes. Emails go through
-`SMTP_URL`/`MAIL_FROM`; without them the worker logs each email instead. The owner's test chat
+`SMTP_URL` and `MAIL_FROM`. Missing SMTP configuration fails the delivery job. For local development,
+`NODE_ENV=development MAIL_SIMULATE=true` simulates delivery and omits message contents from logs. The owner's test chat
 (playground) never triggers notifications.
 
 ## CRM integrations
@@ -580,7 +581,9 @@ payment. Amounts are in CAD, before taxes (Stripe Tax adds them when `STRIPE_AUT
   (`stripe.ts`). Off without `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (see `.env.example`).
 - **Buying:** `POST /v1/tenants/:t/billing/checkout` creates the Stripe customer (once per business)
   and the plan's Stripe product (once per plan, `plans.stripe_product_id`), then sends the owner to
-  Stripe Checkout. The price is sent with each checkout, so no Stripe prices need to be set up; a
+  Stripe Checkout. Reopening checkout reuses the pending session. Changing the plan or price expires the
+  previous session before creating another. A completed payment waits for subscription sync.
+  The price is sent with each checkout, so no Stripe prices need to be set up; a
   business that already pays keeps its price until it changes plan, even if operators change it.
 - **Webhook** (`POST /v1/billing/stripe/webhook`): the signature is checked over the raw body, each
   event is handled once (`billing_events`), and the subscription is read back from Stripe so late or

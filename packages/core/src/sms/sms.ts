@@ -18,6 +18,7 @@ import { DEFAULT_TIME_ZONE } from "@traiblazer/shared";
 import {
   type MessageStatusUpdate,
   PermanentSendError,
+  type SmsKeyword,
   smsKeyword,
   smsReplyWord,
   type TelephonyProvider,
@@ -102,6 +103,39 @@ export type InboundTextOutcome =
   | "unavailable"
   | "failed";
 
+/** Apply a carrier keyword in the same transaction as its delivery receipt. */
+export async function handleSmsKeyword(
+  tx: Tx,
+  number: SmsNumber,
+  from: string,
+  keyword: SmsKeyword,
+  hold = false,
+): Promise<InboundTextOutcome> {
+  if (keyword === "stop") {
+    await tx
+      .insert(smsOptOuts)
+      .values({ tenantId: number.tenantId, botId: number.botId, number: from })
+      .onConflictDoNothing();
+    return "stopped";
+  }
+  const info = await business(tx, number.botId);
+  if (!info) return "unavailable";
+  const t = smsText(info.language);
+  if (keyword === "start") {
+    await tx.delete(smsOptOuts).where(and(eq(smsOptOuts.botId, number.botId), eq(smsOptOuts.number, from)));
+  } else if (await optedOut(tx, number.botId, from)) return "opted_out";
+  await queueText(tx, {
+    tenantId: number.tenantId,
+    botId: number.botId,
+    from: number.e164,
+    to: from,
+    kind: "system",
+    body: keyword === "start" ? t.resumed(info.name) : t.help(info.name, info.phone),
+    hold,
+  });
+  return keyword === "start" ? "resumed" : "help";
+}
+
 /**
  * A text from a customer to an assistant's number: STOP, START and HELP are handled first, then the
  * assistant answers in the customer's thread (channel "sms") and the reply is queued.
@@ -124,6 +158,10 @@ export async function handleInboundText(
   const now = deps.now?.() ?? new Date();
   const scope = { tenantId: number.tenantId, botId: number.botId };
   const keyword = smsKeyword(message.text);
+  if (keyword)
+    return withTenant(deps.db, number.tenantId, (tx) =>
+      handleSmsKeyword(tx, number, message.from, keyword, deps.holdTexts),
+    );
 
   const before = await withTenant(deps.db, number.tenantId, async (tx) => {
     const info = await business(tx, number.botId);
@@ -142,26 +180,7 @@ export async function handleInboundText(
     const language = guessed === "fr" || guessed === "en" ? guessed : info.language;
     const t = smsText(language);
 
-    if (keyword === "stop") {
-      await tx
-        .insert(smsOptOuts)
-        .values({ ...scope, number: message.from })
-        .onConflictDoNothing();
-      // The carrier confirms a STOP itself; anything from us would be one message too many.
-      return { outcome: "stopped" as const };
-    }
-    if (keyword === "start") {
-      await tx
-        .delete(smsOptOuts)
-        .where(and(eq(smsOptOuts.botId, number.botId), eq(smsOptOuts.number, message.from)));
-      await system(smsText(info.language).resumed(info.name));
-      return { outcome: "resumed" as const };
-    }
     if (await optedOut(tx, number.botId, message.from)) return { outcome: "opted_out" as const };
-    if (keyword === "help") {
-      await system(smsText(info.language).help(info.name, info.phone));
-      return { outcome: "help" as const };
-    }
 
     const budget = await phoneBudget(tx, number.botId, now);
     // The owner answering one of our alerts isn't a customer: nothing to answer.
