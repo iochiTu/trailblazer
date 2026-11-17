@@ -84,3 +84,19 @@ describe("gap markers", () => {
     });
   });
 });
+
+describe("item card markers", () => {
+  it("reports each item in order and takes the markers out, also when split across chunks", () => {
+    const filter = new MarkerFilter();
+    const a = filter.push("Here are a few:\n[[item:s2]]\n[[ite");
+    const b = filter.push("m:s5]]\n");
+    expect(a.text + b.text + filter.flush()).toBe("Here are a few:\n");
+    expect([...a.items, ...b.items]).toEqual(["s2", "s5"]);
+  });
+
+  it("leaves look-alikes alone", () => {
+    const out = new MarkerFilter().push("an [[item]] and [[item: s1]] ");
+    expect(out.items).toEqual([]);
+    expect(out.text).toBe("an [[item]] and [[item: s1]] ");
+  });
+});

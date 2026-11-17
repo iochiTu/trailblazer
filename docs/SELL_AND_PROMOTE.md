@@ -228,6 +228,19 @@ Phases 1 and 2 are independent of each other; 3 is more useful after either.
   service's button); per-offer counts (an offer's effect shows in its service's numbers, §phase 3);
   `?offer=` links, QR codes and draft posts (phase 4); editing an offer in place (delete and add).
 
+### Cards in answers (built)
+
+- **Marker:** `[[item:s3]]`, one per line, up to six per reply (`MAX_ITEMS_PER_REPLY`). The engine
+  sends an `item` event per card, in the order the model named them, with the owner's own name,
+  description, price text, photo and card button (`ReplyItem`, stored in `messages.flags.items`).
+  Unknown ids and repeats are dropped; no cards on an urgent problem, an advice request, an error,
+  or by text message.
+- **Chat page:** a row of cards under the reply, scrolled sideways (arrows for mouse users). A
+  product card opens the shop from the Online shop add-on (when its Shop button is on); a `quote`
+  or `book` item gets that button; otherwise "Ask about this" sends a follow-up question. An item
+  shown as a card gets no second button under the reply.
+- **Statistics:** each card counts as `shown`, and a tap on its buttons as `tapped` (surface `chat`).
+
 ## 8. Open decisions
 
 1. **Order.** Recommended: phase 1 first. It needs no new owner input (services are already entered)

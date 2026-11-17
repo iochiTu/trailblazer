@@ -10,10 +10,12 @@ import {
   fetchHistory,
   type PublicBotConfig,
   type ReplyAction,
+  type ReplyItem,
   type ReplyOffer,
   type ReplyPhoto,
   streamChat,
 } from "./api";
+import { Cards } from "./Cards";
 import { Icon } from "./Icon";
 import { ImageError, imageFiles, MAX_IMAGES, type PendingImage, prepareImage } from "./images";
 import { Markdown } from "./markdown";
@@ -33,6 +35,8 @@ interface Message {
   actions?: ReplyAction[];
   /** Promotions shown as cards under the reply. */
   offers?: ReplyOffer[];
+  /** Services and products shown as a row of cards under the reply. */
+  items?: ReplyItem[];
   pending?: boolean;
   error?: boolean;
   /** A limit or "busy" message (not an error). */
@@ -138,6 +142,7 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                 images: m.images,
                 actions: m.actions,
                 offers: m.offers,
+                items: m.items,
               })),
             );
           } else {
@@ -273,6 +278,8 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
           update((m) => ({ ...m, actions: [...(m.actions ?? []), event.action] }));
         } else if (event.type === "offer") {
           update((m) => ({ ...m, offers: [...(m.offers ?? []), event.offer] }));
+        } else if (event.type === "item") {
+          update((m) => ({ ...m, items: [...(m.items ?? []), event.item] }));
         } else if (event.type === "image") {
           update((m) => ({ ...m, images: [...(m.images ?? []), event.image] }));
         } else if (event.type === "done") {
@@ -358,6 +365,8 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
   const quickReplies = config.quickReplies[lang] ?? config.quickReplies[lang === "fr" ? "fr" : "en"] ?? [];
   // Add-on buttons: only plain web links (the API validates them; this is defence in depth).
   const links = (config.links ?? []).filter((l) => /^https?:\/\//i.test(l.url));
+  /** Product cards link to the business's online shop, when it has one. */
+  const shopUrl = links.find((l) => l.icon === "shop")?.url ?? null;
   const palette = paletteFor(appearance.color, appearance.theme);
   const empty = messages.length === 0;
 
@@ -518,6 +527,16 @@ export function App({ publicKey, mode, pageUrl, preview = false, onPage = false 
                       </a>
                     ))}
                   </div>
+                )}
+                {m.items && m.items.length > 0 && (
+                  <Cards
+                    items={m.items}
+                    lang={lang}
+                    shopUrl={shopUrl}
+                    busy={busy}
+                    send={(text) => void send(text)}
+                    tapped={tapped}
+                  />
                 )}
                 {m.offers?.map((offer) => (
                   <div key={offer.id} class="tb-offer">

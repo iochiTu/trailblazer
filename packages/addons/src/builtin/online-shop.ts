@@ -91,6 +91,9 @@ export const onlineShop = defineAddon<OnlineShopConfig>({
       `Online shop${platform ? ` (${platform})` : ""}: ${config.url}`,
       config.note ? `About the shop: ${config.note.replace(/[<>]/g, "")}` : null,
       "When a visitor wants to buy, order or browse products online, share this link.",
+      config.showButton
+        ? "Product cards you show in the chat have a button to this shop, so when you show cards, mention the shop in a few words instead of pasting the link."
+        : null,
     ]
       .filter(Boolean)
       .join("\n");

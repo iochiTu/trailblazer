@@ -65,6 +65,20 @@ export interface ReplyOffer {
   endsAt: string | null;
 }
 
+/** A service or product shown as a card under a reply, in the owner's own words. */
+export interface ReplyItem {
+  id: string;
+  kind: "service" | "product";
+  name: string;
+  description: string | null;
+  priceText: string | null;
+  photoUrl: string | null;
+  /** The button the owner chose for the item: "quote" and "book" are shown on the card. */
+  action: "ask" | "quote" | "book";
+  /** For a "book" item: the business's booking link, when it has one. */
+  href?: string;
+}
+
 export interface StoredMessage {
   role: "user" | "assistant";
   content: string;
@@ -73,6 +87,7 @@ export interface StoredMessage {
   images?: ReplyPhoto[];
   actions?: ReplyAction[];
   offers?: ReplyOffer[];
+  items?: ReplyItem[];
 }
 
 export type StreamEvent =
@@ -85,6 +100,7 @@ export type StreamEvent =
   | { type: "urgent"; level: "urgent" | "danger"; phone: string | null }
   | { type: "action"; action: ReplyAction }
   | { type: "offer"; offer: ReplyOffer }
+  | { type: "item"; item: ReplyItem }
   | { type: "done"; messageId: string; citations: Citation[] }
   | { type: "error"; code: string; message: string };
 
