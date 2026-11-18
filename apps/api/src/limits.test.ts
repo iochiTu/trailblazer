@@ -6,11 +6,12 @@ import { createGatewayFromEnv, LLMGateway, type LLMProvider } from "@traiblazer/
 import { eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { Redis } from "ioredis";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { periodKey } from "./lib/chat-guard.js";
 import { type Limiter, MemoryLimiter, RedisLimiter } from "./lib/limiter.js";
+import { PlatformConfig } from "./lib/platform.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;
@@ -34,10 +35,10 @@ const config = loadConfig({
   PUBLIC_URL: PUBLIC,
 } as NodeJS.ProcessEnv);
 
-async function makeApp(overrides: { limiter?: Limiter; gateway?: LLMGateway } = {}) {
+async function makeApp(overrides: { limiter?: Limiter; gateway?: LLMGateway; config?: typeof config } = {}) {
   return buildApp({
     db: appDb.db,
-    config,
+    config: overrides.config ?? config,
     gateway: overrides.gateway ?? createGatewayFromEnv({}).gateway,
     limiter: overrides.limiter,
     chatDistDir: await mkdtemp(path.join(tmpdir(), "tb-chat-")),
@@ -118,6 +119,19 @@ afterAll(async () => {
 });
 
 describe("limiters", () => {
+  it("shares one policy refresh across a burst and reloads after invalidation", async () => {
+    const platform = new PlatformConfig(appDb.db);
+    const reads = vi.spyOn(appDb.db, "select");
+    try {
+      await Promise.all(Array.from({ length: 50 }, () => platform.plan("business")));
+      expect(reads).toHaveBeenCalledTimes(2); // plans and settings
+      platform.invalidate();
+      await platform.policies();
+      expect(reads).toHaveBeenCalledTimes(4);
+    } finally {
+      reads.mockRestore();
+    }
+  });
   it("memory limiter enforces windows and releases slots", async () => {
     const limiter = new MemoryLimiter();
     expect(await limiter.hit("k", 2, 60)).toBe(true);
@@ -204,6 +218,24 @@ describe("abuse protection", () => {
 });
 
 describe("noisy neighbours", () => {
+  it("returns the slot when the question cannot be counted", async () => {
+    const release = vi.fn(async () => {});
+    const limiter: Limiter = {
+      hit: async () => true,
+      acquire: async () => {
+        vi.spyOn(appDb.db, "transaction").mockRejectedValueOnce(new Error("quota store unavailable"));
+        return release;
+      },
+    };
+    const failing = await makeApp({ limiter });
+    try {
+      expect((await ask(failing, "Hours?", { visitorId: "visitor-transient" })).res.statusCode).toBe(500);
+      expect(release).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.restoreAllMocks();
+      await failing.close();
+    }
+  });
   it("tells visitors to try again when the business is at capacity", async () => {
     const full: Limiter = { hit: async () => true, acquire: async () => null };
     const busyApp = await makeApp({ limiter: full });
@@ -280,4 +312,39 @@ describe("usage report", () => {
     const [row] = await ownerDb.db.select().from(tenants).where(eq(tenants.id, tenantId));
     expect(row!.monthlyQuestionLimit).toBeNull();
   });
+});
+
+it("gives a configured campus address its own bounded allowance while enforcing tenant admission", async () => {
+  const campusIp = "203.0.113.10";
+  const ordinaryIp = "198.51.100.8";
+  const campusApp = await makeApp({
+    config: loadConfig({
+      NODE_ENV: "test",
+      PUBLIC_URL: PUBLIC,
+      TRUST_PROXY: "false",
+      CHAT_RATE_LIMIT_PER_MIN: "1",
+      CHAT_SHARED_IPV4_LIMITS: JSON.stringify({ [campusIp]: 3 }),
+    }),
+  });
+  const send = (remoteAddress: string) =>
+    campusApp.inject({
+      method: "POST",
+      url: "/v1/public/chat",
+      remoteAddress,
+      headers: { origin: PUBLIC, "x-forwarded-for": campusIp },
+      payload: { publicKey, visitorId: crypto.randomUUID(), message: "Opening hours?", channel: "hosted" },
+    });
+  try {
+    expect((await send(ordinaryIp)).statusCode).toBe(200);
+    expect((await send(ordinaryIp)).statusCode).toBe(429);
+    expect((await send(campusIp)).statusCode).toBe(200);
+    expect((await send(campusIp)).statusCode).toBe(200);
+    await setLimits({ monthlyQuestionLimit: 1 });
+    expect((await send(campusIp)).json().error).toBe("quota");
+    await setLimits({ monthlyQuestionLimit: null });
+    expect((await send(campusIp)).statusCode).toBe(429);
+  } finally {
+    await setLimits({ monthlyQuestionLimit: null });
+    await campusApp.close();
+  }
 });

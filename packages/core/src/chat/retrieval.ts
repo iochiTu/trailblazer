@@ -1,4 +1,5 @@
-import type { Citation, Tx } from "@traiblazer/db";
+import { createHash } from "node:crypto";
+import { type Citation, type Db, type Tx, withTenant } from "@traiblazer/db";
 import { sql } from "drizzle-orm";
 
 export interface Passage {
@@ -56,22 +57,64 @@ type Row = Record<string, unknown> & {
   source_type: string;
 };
 
+interface SearchInput {
+  botId: string;
+  queries: string[];
+  embedding?: { vector: number[]; model: string; maxDistance: number } | null;
+  limit?: number;
+}
+
+interface KnowledgeMatches {
+  passages: Passage[];
+  photos: PhotoPassage[];
+}
+
+const pendingByDb = new WeakMap<Db, Map<string, Promise<KnowledgeMatches>>>();
+
+/** Overlapping identical searches share a transaction. The next search sees committed source edits. */
+export function searchBotKnowledge(
+  db: Db,
+  tenantId: string,
+  input: SearchInput,
+  includePhotos: boolean,
+): Promise<KnowledgeMatches> {
+  let pending = pendingByDb.get(db);
+  if (!pending) {
+    pending = new Map();
+    pendingByDb.set(db, pending);
+  }
+  const { botId, queries, limit, embedding } = input;
+  const key = createHash("sha256")
+    .update(
+      JSON.stringify([
+        tenantId,
+        botId,
+        queries,
+        limit ?? 6,
+        includePhotos,
+        embedding?.model,
+        embedding?.maxDistance,
+        embedding?.vector,
+      ]),
+    )
+    .digest("hex");
+  const running = pending.get(key);
+  if (running) return running;
+  const search = withTenant(db, tenantId, async (tx) => ({
+    passages: await retrievePassages(tx, input),
+    photos: includePhotos ? await retrievePhotos(tx, { botId, queries, embedding }) : [],
+  })).finally(() => pending.delete(key));
+  pending.set(key, search);
+  return search;
+}
+
 /**
  * Hybrid retrieval for one bot: full-text (simple + English + French stemming), trigram fuzzy
  * matching, and vector similarity when query embeddings are available; merged with reciprocal-rank
  * fusion. Owner-written Q&A pairs are searched too and ranked first when they match.
  * Must run inside withTenant() (row-level security applies).
  */
-export async function retrievePassages(
-  tx: Tx,
-  input: {
-    botId: string;
-    queries: string[];
-    /** The question's vector; only chunks closer than `maxDistance` (cosine) count. */
-    embedding?: { vector: number[]; model: string; maxDistance: number } | null;
-    limit?: number;
-  },
-): Promise<Passage[]> {
+export async function retrievePassages(tx: Tx, input: SearchInput): Promise<Passage[]> {
   const limit = input.limit ?? 6;
   const orQuery = toOrQuery(input.queries);
   const fuzzyText = input.queries.join(" ").slice(0, 500);

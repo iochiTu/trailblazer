@@ -16,7 +16,10 @@ export type PlanRow = typeof plans.$inferSelect;
  * within the cache time.
  */
 export class PlatformConfig {
-  private cache: { at: number; plans: PlanRow[]; policies: PlatformPolicies } | null = null;
+  private cache: {
+    expiresAt: number;
+    value: Promise<{ plans: PlanRow[]; policies: PlatformPolicies }>;
+  } | null = null;
 
   constructor(
     private readonly db: Db,
@@ -28,7 +31,21 @@ export class PlatformConfig {
   }
 
   private async load() {
-    if (this.cache && Date.now() - this.cache.at < this.ttlMs) return this.cache;
+    if (this.cache && Date.now() < this.cache.expiresAt) return this.cache.value;
+    // Publish the pending read before yielding so a burst after expiry performs one refresh.
+    const entry = { expiresAt: Infinity, value: this.readConfig() };
+    this.cache = entry;
+    try {
+      const result = await entry.value;
+      entry.expiresAt = Date.now() + this.ttlMs;
+      return result;
+    } catch (error) {
+      if (this.cache === entry) this.invalidate();
+      throw error;
+    }
+  }
+
+  private async readConfig() {
     const [planRows, settingRows] = await Promise.all([
       this.db.select().from(plans).orderBy(asc(plans.sortOrder), asc(plans.id)),
       this.db.select().from(platformSettings),
@@ -41,8 +58,7 @@ export class PlatformConfig {
         (policies as Record<string, unknown>)[field] = value;
       }
     }
-    this.cache = { at: Date.now(), plans: planRows, policies };
-    return this.cache;
+    return { plans: planRows, policies };
   }
 
   async plans(): Promise<PlanRow[]> {

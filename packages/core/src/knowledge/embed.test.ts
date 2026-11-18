@@ -24,9 +24,9 @@ import {
   QueryEmbedder,
 } from "@traiblazer/llm";
 import { and, eq, isNull } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type ChatStreamEvent, runChat } from "../chat/engine.js";
-import { retrievePassages, retrievePhotos } from "../chat/retrieval.js";
+import { retrievePassages, retrievePhotos, searchBotKnowledge } from "../chat/retrieval.js";
 import { JOB_TYPES } from "../jobs.js";
 import { botsNeedingVectors, embedChunks, enqueueEmbedding, warmQuestions } from "./embed.js";
 import { type IncomingDocument, indexDocuments, tsvectorSql } from "./index-documents.js";
@@ -240,6 +240,32 @@ describe("searching by meaning", () => {
   it("leaves out text that is far from the question", async () => {
     const found = await search("Do you sell bicycles?", true);
     expect(found).toEqual([]);
+  });
+
+  it("shares one database search for a burst and keeps tenant results separate", async () => {
+    const input = { botId, queries: ["parking"] };
+    const tx = vi.spyOn(app.db, "transaction");
+    try {
+      const burst = Array.from({ length: 50 }, () => searchBotKnowledge(app.db, tenantId, input, true));
+      const isolated = searchBotKnowledge(app.db, crypto.randomUUID(), input, true);
+      const results = await Promise.all(burst);
+      expect(results.every((result) => result.passages.some((p) => p.content.includes("parking")))).toBe(
+        true,
+      );
+      expect(await isolated).toEqual({ passages: [], photos: [] });
+      expect(tx).toHaveBeenCalledTimes(2);
+      // A later request must read the latest committed knowledge, even for the same words.
+      await searchBotKnowledge(app.db, tenantId, input, true);
+      expect(tx).toHaveBeenCalledTimes(3);
+
+      tx.mockRejectedValueOnce(new Error("database temporarily unavailable"));
+      await expect(searchBotKnowledge(app.db, tenantId, input, true)).rejects.toThrow(
+        "temporarily unavailable",
+      );
+      expect(await searchBotKnowledge(app.db, tenantId, input, true)).toEqual(results[0]);
+    } finally {
+      tx.mockRestore();
+    }
   });
 });
 

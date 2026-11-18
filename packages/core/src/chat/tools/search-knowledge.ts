@@ -1,8 +1,7 @@
-import { withTenant } from "@traiblazer/db";
 import { withDeadline } from "@traiblazer/llm";
 import { z } from "zod";
 import { formatSources } from "../prompt.js";
-import { retrievePassages } from "../retrieval.js";
+import { searchBotKnowledge } from "../retrieval.js";
 import { defineTool } from "./contract.js";
 
 /** Longest the search waits for the query's vector before searching by keyword alone. */
@@ -35,8 +34,11 @@ If a search finds nothing useful, tell the visitor you don't have that informati
       ? await withDeadline(ctx.embeddings.embed(query), TOOL_EMBEDDING_WAIT_MS)
       : null;
     ctx.onEmbedding?.(embedding);
-    const passages = await withTenant(ctx.db, ctx.tenantId, (tx) =>
-      retrievePassages(tx, { botId: ctx.botId, queries: [query], embedding, limit: 5 }),
+    const { passages } = await searchBotKnowledge(
+      ctx.db,
+      ctx.tenantId,
+      { botId: ctx.botId, queries: [query], embedding, limit: 5 },
+      false,
     );
     if (!passages.length) return { content: "No matching information found." };
     return { content: `<knowledge>\n${formatSources(passages)}\n</knowledge>`, passages };

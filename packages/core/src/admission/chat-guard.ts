@@ -126,7 +126,10 @@ export async function admitQuestion(
         set questions = usage_counters.questions + 1, updated_at = now()
         where usage_counters.questions < ${limit}
       returning questions`),
-  );
+  ).catch(async (error: unknown) => {
+    await release();
+    throw error;
+  });
   if (!counted.length) {
     await release();
     return refuse("quota");
