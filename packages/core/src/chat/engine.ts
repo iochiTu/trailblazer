@@ -57,7 +57,7 @@ import { guessLanguage, isEnOrFr } from "./language.js";
 import { MarkerFilter } from "./markers.js";
 import { revealsInstructions, WITHHELD_TEXT } from "./output-check.js";
 import { buildSearchQueryPrompt, buildSystemBlocks, parseSearchQueries, photoPromptId } from "./prompt.js";
-import { type Passage, type PhotoPassage, retrievePassages, retrievePhotos } from "./retrieval.js";
+import { type Passage, type PhotoPassage, searchBotKnowledge } from "./retrieval.js";
 import { chatTools, MAX_TOOL_ROUNDS, runToolCalls, toToolDefinition } from "./tools/index.js";
 import { higherUrgency, keywordTriage, parseTriage, type Urgency } from "./triage.js";
 
@@ -719,15 +719,16 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
       // 3. Retrieve business information.
       const embedding =
         vector !== undefined ? vector : vectorRequest && queries.length ? await waitForVector() : null;
-      const [passages, photos] = queries.length
-        ? await withTenant(deps.db, input.tenantId, async (tx) => [
-            await retrievePassages(tx, { botId: bot.id, queries, embedding }),
-            // A text message can't show a photo.
-            input.channel === "sms" ? [] : await retrievePhotos(tx, { botId: bot.id, queries, embedding }),
-          ])
-        : [[], []];
-      offeredPhotos = photos as PhotoPassage[];
-      citations = citationsFrom(passages as Passage[]);
+      const { passages, photos } = queries.length
+        ? await searchBotKnowledge(
+            deps.db,
+            input.tenantId,
+            { botId: bot.id, queries, embedding },
+            input.channel !== "sms",
+          )
+        : { passages: [], photos: [] };
+      offeredPhotos = photos;
+      citations = citationsFrom(passages);
 
       // 4. Stream the answer. Photo markers are taken out of the text; only photos offered in
       // this prompt can be shown. The model may stop to call tools (e.g. search again with other
@@ -765,7 +766,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         system: buildSystemBlocks({
           bot,
           profile,
-          passages: passages as Passage[],
+          passages,
           photos: offeredPhotos,
           catalog,
           notices: setup.notices,
@@ -787,7 +788,7 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
         signal: input.signal,
       };
       const turn: ChatMessage[] = [...modelHistory, { role: "user", content: current }];
-      let found = passages as Passage[];
+      let found = passages;
       const write = (text: string): ChatStreamEvent => {
         answer += text;
         return emit(text);

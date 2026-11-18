@@ -42,6 +42,20 @@ const envSchema = z.object({
    * chat messages per IP per minute, and questions per conversation.
    */
   CHAT_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().optional(),
+  /** Per-minute public chat limits for known shared IPv4 egress addresses. */
+  CHAT_SHARED_IPV4_LIMITS: z
+    .string()
+    .transform((raw, ctx) => {
+      try {
+        return JSON.parse(raw) as unknown;
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Expected a JSON object mapping IPv4 addresses to limits" });
+        return z.NEVER;
+      }
+    })
+    .pipe(z.record(z.ipv4(), z.number().int().positive()))
+    .transform((entries) => new Map(Object.entries(entries)))
+    .optional(),
   CONVERSATION_MAX_QUESTIONS: z.coerce.number().int().positive().optional(),
   /** How long plans and policies are cached per API server. */
   PLATFORM_CACHE_SECONDS: z.coerce.number().int().min(0).default(30),

@@ -54,7 +54,7 @@ import {
   publicChatSchema,
   RESERVED_PAGE_SLUGS,
 } from "@traiblazer/shared";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
 import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guard.js";
@@ -492,8 +492,11 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     {
       config: {
         rateLimit: {
-          // Operator policy (operator console), unless overridden by CHAT_RATE_LIMIT_PER_MIN.
-          max: async () => config.CHAT_RATE_LIMIT_PER_MIN ?? (await ctx.platform!.policies()).chatIpPerMinute,
+          // Fastify normalizes the client address using the configured trusted proxies.
+          max: async (_request, ip) =>
+            config.CHAT_SHARED_IPV4_LIMITS?.get(ip) ??
+            config.CHAT_RATE_LIMIT_PER_MIN ??
+            (await ctx.platform!.policies()).chatIpPerMinute,
           timeWindow: "1 minute",
         },
       },
@@ -522,8 +525,18 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         });
       }
 
-      const found = await loadBot(input.publicKey);
-      if (!found || found.bot.status === "paused") throw notFound("Assistant");
+      // Chat needs only eligibility here. The engine loads the profile and add-ons for the answer.
+      const found = KEY_RE.test(input.publicKey) ? await resolveBotKey(db, input.publicKey) : null;
+      if (!found) throw notFound("Assistant");
+      const [available] = await withTenant(db, found.tenantId, (tx) =>
+        tx
+          .select({ id: bots.id })
+          .from(bots)
+          .innerJoin(tenants, eq(tenants.id, bots.tenantId))
+          .where(and(eq(bots.id, found.botId), eq(tenants.status, "active"), ne(bots.status, "paused")))
+          .limit(1),
+      );
+      if (!available) throw notFound("Assistant");
 
       if (
         images.length &&
@@ -561,19 +574,19 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       }
 
       const controller = new AbortController();
-      reply.hijack();
       const res = reply.raw;
-      res.writeHead(200, {
-        "content-type": "text/event-stream; charset=utf-8",
-        "cache-control": "no-cache, no-transform",
-        "x-accel-buffering": "no",
-        connection: "keep-alive",
-      });
-      res.on("close", () => {
-        if (!res.writableEnded) controller.abort();
-      });
-
       try {
+        reply.hijack();
+        if (res.destroyed) return;
+        res.once("close", () => {
+          if (!res.writableEnded) controller.abort();
+        });
+        res.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache, no-transform",
+          "x-accel-buffering": "no",
+          connection: "keep-alive",
+        });
         for await (const event of runChat(
           {
             db,
@@ -609,14 +622,17 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
         }
       } catch (error) {
         request.log.error(error, "chat stream failed");
-        if (!res.writableEnded) {
+        if (res.headersSent && !res.destroyed && !res.writableEnded) {
           res.write(
             `data: ${JSON.stringify({ type: "error", code: "failed", message: "Something went wrong" })}\n\n`,
           );
         }
       } finally {
-        res.end();
-        await admission.release();
+        try {
+          if (!res.destroyed) res.end();
+        } finally {
+          await admission.release();
+        }
       }
     },
   );
