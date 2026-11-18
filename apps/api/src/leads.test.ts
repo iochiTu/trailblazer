@@ -2,6 +2,7 @@ import {
   auditLogs,
   createDb,
   type DbHandle,
+  jobs,
   leads,
   runMigrations,
   tenants,
@@ -9,9 +10,9 @@ import {
   withTenant,
 } from "@traiblazer/db";
 import { createGatewayFromEnv } from "@traiblazer/llm";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { newTenant, newUser } from "./test-helpers.js";
@@ -25,6 +26,7 @@ let ownerDb: DbHandle;
 let cookie: string;
 let tenantId: string;
 let botId: string;
+const gateway = createGatewayFromEnv({}).gateway;
 const emails: string[] = [];
 const tenantIds: string[] = [];
 
@@ -43,8 +45,12 @@ async function createBot(sessionCookie: string, tenant: string, name: string) {
 }
 
 const leadsUrl = (suffix = "", bot = botId) => `/v1/tenants/${tenantId}/bots/${bot}/leads${suffix}`;
-const call = (method: "GET" | "PATCH" | "DELETE", url: string, payload?: unknown, headers = { cookie }) =>
-  app.inject({ method, url, headers, payload: payload as object | undefined });
+const call = (
+  method: "GET" | "PATCH" | "DELETE" | "PUT" | "POST",
+  url: string,
+  payload?: unknown,
+  headers = { cookie },
+) => app.inject({ method, url, headers, payload: payload as object | undefined });
 
 /** What the assistant's tool saves; the API only reads and updates these. */
 const addLead = async (name: string, extra: Partial<typeof leads.$inferInsert> = {}) =>
@@ -77,7 +83,7 @@ beforeAll(async () => {
     PUBLIC_URL: "http://chat.test.local",
     ADMIN_ORIGIN: "http://admin.test.local",
   } as NodeJS.ProcessEnv);
-  app = await buildApp({ db: appDb.db, config, gateway: createGatewayFromEnv({}).gateway });
+  app = await buildApp({ db: appDb.db, config, gateway });
 
   cookie = await signup("leads-owner");
   tenantId = await createTenant(cookie, "Maple Bakery");
@@ -134,6 +140,66 @@ describe("visitor requests", () => {
     expect((await call("DELETE", leadsUrl(`/${lead.id}`))).statusCode).toBe(404);
     const names = (await call("GET", leadsUrl())).json().leads.map((l: { name: string }) => l.name);
     expect(names).not.toContain("Forget me");
+  });
+
+  it("keeps suggestions advisory and schedules only the business's saved reminder", async () => {
+    const lead = await addLead("Follow-up");
+    const url = leadsUrl(`/${lead.id}`);
+    const review = async () =>
+      (await call("GET", `/v1/tenants/${tenantId}/inbox?status=review`))
+        .json()
+        .leads.some((item: { id: string }) => item.id === lead.id);
+    expect(await review()).toBe(true);
+    const suggestion = "Check which photograph the customer can provide.";
+    const routes = vi.spyOn(gateway, "routes").mockReturnValue([{ provider: "pilot", model: "test" }]);
+    const complete = vi.spyOn(gateway, "complete").mockResolvedValue({
+      provider: "pilot",
+      model: "test",
+      text: suggestion,
+      stopReason: "end",
+      costMicros: 0,
+      usage: { inputTokens: 10, outputTokens: 8, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    });
+    try {
+      expect((await call("POST", `${url}/next-action/suggestion`)).json()).toEqual({ suggestion });
+      expect(complete.mock.calls[0]?.[1].tools).toBeUndefined();
+    } finally {
+      routes.mockRestore();
+      complete.mockRestore();
+    }
+    expect((await call("GET", url)).json().lead).toMatchObject({ nextAction: null, actionVersion: 0 });
+    const action = {
+      text: "Wait for the photo",
+      waitingOn: "customer",
+      dueAt: new Date(Date.now() + 3600000).toISOString(),
+    };
+    const set = (version: number) => call("PUT", `${url}/next-action`, { version, action });
+    const concurrent = await Promise.all([set(0), set(0)]);
+    expect(concurrent.map((res) => res.statusCode).sort()).toEqual([200, 409]);
+    expect(await review()).toBe(false);
+    expect((await call("GET", url)).json().lead).toMatchObject({ nextAction: action });
+    const queued = await ownerDb.db.select().from(jobs).where(eq(jobs.tenantId, tenantId));
+    expect(queued.filter((job) => job.payload.leadId === lead.id)).toEqual([
+      expect.objectContaining({
+        type: "push.notify",
+        runAt: new Date(action.dueAt),
+        payload: { event: "request.reminder", leadId: lead.id, botId, actionVersion: 1 },
+      }),
+    ]);
+    expect((await call("PUT", `${url}/next-action`, { version: 1, action: null })).statusCode).toBe(200);
+    expect(await review()).toBe(true);
+    await set(2);
+    await call("PATCH", url, { status: "done" });
+    expect((await set(3)).statusCode).toBe(409);
+    expect(await review()).toBe(false);
+    await call("PATCH", url, { status: "new" });
+    expect(await review()).toBe(true);
+    const [entry] = await ownerDb.db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.targetId, lead.id), eq(auditLogs.action, "lead.next_action")));
+    expect(entry?.actorUserId).toBeTruthy();
+    expect(JSON.stringify(entry)).not.toContain(action.text);
   });
 
   it("keeps requests within their assistant and their business", async () => {

@@ -559,6 +559,16 @@ export type UpdateAddonInput = z.infer<typeof updateAddonSchema>;
 /** Requests visitors left for the business: staff move them through these statuses. */
 export const LEAD_STATUSES = ["new", "in_progress", "done"] as const;
 export const updateLeadSchema = z.object({ status: z.enum(LEAD_STATUSES) });
+export const setNextActionSchema = z.object({
+  version: z.number().int().nonnegative(),
+  action: z
+    .object({
+      text: z.string().trim().min(1).max(300),
+      waitingOn: z.enum(["business", "customer"]),
+      dueAt: z.iso.datetime().nullable(),
+    })
+    .nullable(),
+});
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 
 /** A note staff add to a request (PLAN §20). */
@@ -610,7 +620,13 @@ export const registerDeviceSchema = z.discriminatedUnion("platform", [
 ]);
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
 
-export const NOTIFICATION_EVENTS = ["request.urgent", "request.new", "request.comment"] as const;
+export const NOTIFICATION_EVENTS = [
+  "request.urgent",
+  "request.new",
+  "request.comment",
+  "request.reminder",
+  "request.reply",
+] as const;
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM");
 /** A user's notification choices (PLAN §20.4). Quiet hours: both times, or neither. */
 export const notificationPrefsSchema = z

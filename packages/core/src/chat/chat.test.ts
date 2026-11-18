@@ -1181,7 +1181,13 @@ describe("requests for the business to follow up", () => {
     // The business isn't notified a second time.
     expect(await queued()).toHaveLength(1);
 
-    // A short addition is put after what the business already has.
+    // The team is waiting for a detail. Its arrival updates the same open request and
+    // notifies the team without deciding whether their next step is complete.
+    const waiting = { text: "Wait for their budget", waitingOn: "customer" as const, dueAt: null };
+    await owner.db
+      .update(leads)
+      .set({ status: "in_progress", nextAction: waiting, actionVersion: 1 })
+      .where(eq(leads.conversationId, conversationId));
     input = { kind: "quote", name: "Pat Roy", phone: "8075550155", request: "Budget is $900." };
     await chat(provider, "My budget is $900. Pat, 807-555-0155", {
       visitorId: "lead-update",
@@ -1190,6 +1196,16 @@ describe("requests for the business to follow up", () => {
     expect((await mine())[0]!.message).toBe(
       "Wants a quote for catering for 40 on June 3, vegetarian options, delivered to the curling club. Budget is $900.",
     );
+    expect(await mine()).toHaveLength(1);
+    expect((await mine())[0]!.nextAction).toEqual(waiting);
+    const pushes = await owner.db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.tenantId, tenantId), eq(jobs.type, "push.notify")));
+    expect(pushes.filter((job) => job.payload.event === "request.reply")).toHaveLength(1);
+    const reminders = pushes.filter((job) => job.payload.unreviewed === true);
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]?.runAt.getTime()).toBe((await mine())[0]!.createdAt.getTime() + 60 * 60_000);
 
     // Another kind of request, or one the business has started on, is a request of its own.
     input = {

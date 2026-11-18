@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app/AppShell";
+import { RequestNextAction } from "@/components/app/RequestNextAction";
 import { useTimeAgo } from "@/components/app/time";
 import { useMe } from "@/components/app/useMe";
 import {
@@ -249,6 +250,16 @@ export default function RequestPage() {
           role && <p className="muted text-sm">{t("request.viewOnly")}</p>
         )}
       </section>
+
+      {lead.status !== "done" && (
+        <RequestNextAction
+          key={`${lead.id}-${lead.actionVersion}`}
+          lead={lead}
+          url={`${base}/leads/${lead.id}/next-action`}
+          canEdit={canEdit}
+          reload={load}
+        />
+      )}
 
       <section className="card flex flex-col gap-3 p-5" aria-labelledby="notes-title">
         <div className="flex flex-col gap-1">

@@ -1,5 +1,6 @@
 import type { AddonEvent } from "@traiblazer/addons";
 import {
+  jobs,
   leadKinds,
   leads,
   type MessageFlags,
@@ -12,6 +13,7 @@ import type { LeadField } from "@traiblazer/industry-packs";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { contactFor } from "../../contacts/contacts.js";
+import { JOB_TYPES, newJob } from "../../jobs.js";
 import { countItemEvent, itemStatSurface } from "../../stats/item-stats.js";
 import { clean, digits, emailSchema, typedByVisitor } from "./contact.js";
 import { defineTool, type ToolContext } from "./contract.js";
@@ -201,15 +203,21 @@ After it succeeds, tell the visitor their request was passed on and the business
 
         // The visitor adding or correcting details after their request was passed on: the request
         // the business already has is updated, so they don't get the same request twice. Only while
-        // nobody has started on it, and only for the same kind of follow-up (a complaint after a
+        // nobody has started on it or the team is waiting for the customer, and only for the same kind of follow-up (a complaint after a
         // quote request is its own request).
         const [latest] = await tx
           .select()
           .from(leads)
           .where(eq(leads.conversationId, ctx.conversationId))
           .orderBy(desc(leads.createdAt))
-          .limit(1);
-        if (latest?.status === "new" && sameFollowUp(latest.kind, input.kind)) {
+          .limit(1)
+          .for("update");
+        const waitingForCustomer = latest?.status !== "done" && latest?.nextAction?.waitingOn === "customer";
+        if (
+          latest &&
+          (latest.status === "new" || waitingForCustomer) &&
+          sameFollowUp(latest.kind, input.kind)
+        ) {
           const becameUrgent = urgent && !latest.urgent;
           const [updated] = await tx
             .update(leads)
@@ -237,11 +245,37 @@ After it succeeds, tell the visitor their request was passed on and the business
             .returning();
           // The request now names a service it didn't before: counted for that service.
           if (item && !latest.catalogItemId) await countRequested(tx, ctx, item.id);
+          // Keep the team's chosen step. A partial answer need not resolve what they asked for.
+          if (
+            waitingForCustomer &&
+            !becameUrgent &&
+            ctx.channel !== "playground" &&
+            updated &&
+            (updated.message !== latest.message ||
+              updated.attachmentIds.length !== latest.attachmentIds.length ||
+              updated.bestTime !== latest.bestTime ||
+              updated.email !== latest.email ||
+              updated.phone !== latest.phone ||
+              Object.entries(details).some(([key, value]) => latest.details[key] !== value))
+          ) {
+            await tx.insert(jobs).values(
+              newJob({
+                tenantId: ctx.tenantId,
+                type: JOB_TYPES.pushNotify,
+                payload: {
+                  event: "request.reply",
+                  botId: ctx.botId,
+                  leadId: latest.id,
+                  actionVersion: latest.actionVersion,
+                },
+              }),
+            );
+          }
           return {
             content: becameUrgent
               ? "Added to the request already passed on, which is now marked urgent. The business is being alerted now. Still tell the visitor to call the business's phone number if they haven't."
               : "Added to the request already passed on: the business has the new details with it. Tell the visitor the details were added to their request; don't mention how many requests there are.",
-            // Told again only when it became urgent: the alert must go out.
+            // Only an escalation repeats the urgent request effects.
             events: becameUrgent ? [requestEvent(updated!, fields, ctx.conversationId)] : [],
           };
         }
@@ -282,6 +316,17 @@ After it succeeds, tell the visitor their request was passed on and the business
           .returning();
 
         if (item) await countRequested(tx, ctx, item.id);
+        // One team reminder for an untouched request. A booked calendar visit uses its own tool.
+        if (ctx.channel !== "playground") {
+          await tx.insert(jobs).values(
+            newJob({
+              tenantId: ctx.tenantId,
+              type: JOB_TYPES.pushNotify,
+              runAt: new Date(lead!.createdAt.getTime() + 60 * 60_000),
+              payload: { event: "request.reminder", botId: ctx.botId, leadId: lead!.id, unreviewed: true },
+            }),
+          );
+        }
         return {
           content: urgent
             ? "Saved and marked urgent. The business is being alerted now. Still tell the visitor to call the business's phone number if they haven't."
