@@ -292,10 +292,17 @@ describe("urgent requests", () => {
       .select()
       .from(jobs)
       .where(and(eq(jobs.tenantId, tenantId), eq(jobs.type, JOB_TYPES.pushNotify)));
-    expect(pushes).toHaveLength(1);
-    expect(pushes[0]).toMatchObject({
+    expect(pushes.map((job) => job.payload.event).sort()).toEqual(["request.reminder", "request.urgent"]);
+    expect(pushes.find((job) => job.payload.event === "request.urgent")).toMatchObject({
       priority: JOB_PRIORITY.urgent,
       payload: { event: "request.urgent", botId, leadId: lead!.id },
+    });
+    // Like any new request, it also gets the one-hour reminder if nobody has reviewed it by then:
+    // an ordinary push, not a second urgent alert.
+    expect(pushes.find((job) => job.payload.event === "request.reminder")).toMatchObject({
+      priority: JOB_PRIORITY.normal,
+      runAt: new Date(lead!.createdAt.getTime() + 60 * 60_000),
+      payload: { event: "request.reminder", botId, leadId: lead!.id, unreviewed: true },
     });
   });
 
