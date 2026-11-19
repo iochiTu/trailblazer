@@ -1,3 +1,4 @@
+import type { Limiter, PlatformConfig } from "@traiblazer/core";
 import type { Db } from "@traiblazer/db";
 import type { IntegrationsConfig } from "@traiblazer/integrations";
 import type { LLMGateway, QueryEmbedder } from "@traiblazer/llm";
@@ -5,8 +6,6 @@ import type { TelephonyProvider } from "@traiblazer/telephony";
 import type { Redis } from "ioredis";
 import type { BillingProvider } from "./billing/provider.js";
 import type { AppConfig } from "./config.js";
-import type { Limiter } from "./lib/limiter.js";
-import type { PlatformConfig } from "./lib/platform.js";
 
 export interface AppContext {
   db: Db;

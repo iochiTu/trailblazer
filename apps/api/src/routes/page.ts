@@ -168,9 +168,11 @@ export async function pageRoutes(app: FastifyInstance, { db, config }: AppContex
         ) {
           throw badRequest("Send every service and product of this assistant, once each");
         }
-        for (const [position, id] of ids.entries()) {
-          await tx.update(catalogItems).set({ position }).where(eq(catalogItems.id, id));
-        }
+        // Every position in one statement: the list's order, from 0.
+        await tx.execute(sql`
+          update ${catalogItems} set position = v.ord - 1
+            from jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb) with ordinality as v(id, ord)
+           where ${catalogItems.id} = v.id::uuid`);
         return tx
           .select()
           .from(catalogItems)

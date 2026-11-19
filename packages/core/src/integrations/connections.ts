@@ -32,7 +32,8 @@ export interface ConnectionRef {
   provider: string;
 }
 
-const clip = (text: string, max = 500) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+/** Text cut to `max` characters (with an ellipsis), for error messages stored in the database. */
+export const clip = (text: string, max = 500) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 type Opened =
   | { state: "ready"; credentials: Credentials }

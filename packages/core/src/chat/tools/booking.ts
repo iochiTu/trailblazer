@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { bookings, leads, messageAttachments, messages, tenants, withTenant } from "@traiblazer/db";
+import { bookings, leads, messageAttachments, tenants, withTenant } from "@traiblazer/db";
 import { enOrFr } from "@traiblazer/i18n";
 import type { LeadField } from "@traiblazer/industry-packs";
 import { ConnectorError } from "@traiblazer/integrations";
@@ -18,7 +18,7 @@ import {
   searchWindow,
 } from "../../booking/slots.js";
 import type { CalendarAccess } from "../../integrations/calendar.js";
-import { clean, digits, emailSchema, typedByVisitor } from "./contact.js";
+import { clean, readContact, untypedContact } from "./contact.js";
 import { type AnyChatTool, defineTool } from "./contract.js";
 import {
   countRequested,
@@ -207,32 +207,12 @@ export const bookAppointmentTool = (
 
     async run(input, ctx) {
       // The visitor's contact details, checked as for any request (see request_follow_up).
-      const rawEmail = clean(input.email);
-      const email = rawEmail?.includes("@") ? rawEmail.toLowerCase() : null;
-      const rawPhone = clean(input.phone);
-      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : (ctx.visitorPhone ?? null);
-      const ownNumber = Boolean(
-        phone && ctx.visitorPhone && digits(ctx.visitorPhone).endsWith(digits(phone).slice(-10)),
-      );
-      if (!email && !phone) {
-        return {
-          isError: true,
-          content:
-            "A way to reach the visitor is missing. Ask for their phone number or email address first.",
-        };
-      }
-      if (email && !emailSchema.safeParse(email).success) {
-        return {
-          isError: true,
-          content: `"${email}" isn't a complete email address. Ask the visitor to check it.`,
-        };
-      }
-      if (phone && digits(phone).length < 7) {
-        return {
-          isError: true,
-          content: `"${phone}" isn't a complete phone number. Ask the visitor to check it.`,
-        };
-      }
+      const contact = readContact(input, ctx.visitorPhone, {
+        missing: "A way to reach the visitor is missing. Ask for their phone number or email address first.",
+        retry: "",
+      });
+      if ("error" in contact) return { isError: true, content: contact.error };
+      const { email, phone } = contact;
 
       const when = parseLocalTime(input.start);
       if (!when) {
@@ -243,18 +223,8 @@ export const bookAppointmentTool = (
       }
 
       const checked = await withTenant(ctx.db, ctx.tenantId, async (tx) => {
-        const visitorText = (
-          await tx
-            .select({ content: messages.content })
-            .from(messages)
-            .where(and(eq(messages.conversationId, ctx.conversationId), eq(messages.role, "user")))
-        ).map((m) => m.content);
-        for (const detail of [email && { email }, phone && !ownNumber && { phone }]) {
-          if (detail && !typedByVisitor(detail, visitorText)) {
-            const value = "email" in detail ? detail.email : detail.phone;
-            return `The visitor didn't type "${value}" in this conversation. Ask them for their ${"email" in detail ? "email address" : "phone number"} and use exactly what they write.`;
-          }
-        }
+        const untyped = await untypedContact(tx, ctx.conversationId, contact);
+        if (untyped) return untyped;
         const [earlier] = await tx
           .select({ startsAt: bookings.startsAt })
           .from(bookings)

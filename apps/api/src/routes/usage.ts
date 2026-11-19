@@ -1,10 +1,10 @@
+import { currentUsage } from "@traiblazer/core";
 import { tenants, withTenant } from "@traiblazer/db";
 import { effectiveMonthlyLimit, REPORTING_TIME_ZONE, updateLimitsSchema } from "@traiblazer/shared";
 import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { audit } from "../lib/audit.js";
-import { currentUsage } from "../lib/chat-guard.js";
 import { badRequest, notFound } from "../lib/errors.js";
 import { hasRole, requireTenantRole } from "../plugins/auth.js";
 

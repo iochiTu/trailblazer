@@ -5,7 +5,7 @@ import {
   onboardingQuestionProblem,
   updateOnboardingQuestionSchema,
 } from "@traiblazer/shared";
-import { count, eq, max } from "drizzle-orm";
+import { count, eq, max, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../context.js";
@@ -169,14 +169,11 @@ export async function onboardingQuestionRoutes(app: FastifyInstance, { db }: App
     ) {
       throw badRequest("List every question of the set once");
     }
-    await db.transaction(async (tx) => {
-      for (const [i, id] of ids.entries()) {
-        await tx
-          .update(onboardingQuestions)
-          .set({ sortOrder: (i + 1) * 10 })
-          .where(eq(onboardingQuestions.id, id));
-      }
-    });
+    // One statement, so the new order applies all at once: 10, 20, 30… in the list's order.
+    await db.execute(sql`
+      update ${onboardingQuestions} set sort_order = v.ord * 10
+        from jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb) with ordinality as v(id, ord)
+       where ${onboardingQuestions.id} = v.id::uuid`);
     const keys = new Map(rows.map((r) => [r.id, r.key]));
     await log(request, "onboarding_question.reordered", "set", { order: ids.map((id) => keys.get(id)) });
     return { questions: (await questionSet(db)).map(present) };

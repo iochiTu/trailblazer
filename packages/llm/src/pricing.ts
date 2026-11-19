@@ -19,10 +19,6 @@ const PRICES: Record<string, Price> = {
   "anthropic:claude-fable-5-1": { input: 10, output: 50, cacheRead: 0.25 },
 };
 
-export function registerPrice(route: ModelRoute, price: Price): void {
-  PRICES[`${route.provider}:${route.model}`] = price;
-}
-
 /** Cost in micro-USD (1e-6 USD); 0 when the price is unknown (e.g. offline provider). */
 export function costMicros(route: ModelRoute, usage: Usage): number {
   const price = PRICES[`${route.provider}:${route.model}`];

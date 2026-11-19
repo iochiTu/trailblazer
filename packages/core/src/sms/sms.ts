@@ -29,7 +29,7 @@ import { type ChatDeps, type ChatImage, runChat } from "../chat/engine.js";
 import { guessLanguage } from "../chat/language.js";
 import { touchContactByPhone } from "../contacts/contacts.js";
 import { errorMessage } from "../errors.js";
-import { countItemEvent } from "../stats/item-stats.js";
+import { countItemEvents } from "../stats/item-stats.js";
 import { noteCapReached, phoneBudget } from "./alerts.js";
 import { optedOut, queueText } from "./queue.js";
 import { smsLanguage, smsText } from "./strings.js";
@@ -237,7 +237,7 @@ export async function handleInboundText(
           .where(and(eq(catalogItems.id, item.id), eq(catalogItems.botId, number.botId)))
           .limit(1);
         if (exists) {
-          await countItemEvent(tx, { ...scope, itemId: item.id, surface: "sms", event: "tapped" });
+          await countItemEvents(tx, { ...scope, itemIds: [item.id], surface: "sms", event: "tapped" });
         }
       }
     }

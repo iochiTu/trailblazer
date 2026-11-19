@@ -23,7 +23,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { businessNameOf } from "../business.js";
 import { publicFetch } from "../knowledge/safe-fetch.js";
-import { type ConnectionRef, openCredentials, recordOutcome } from "./connections.js";
+import { type ConnectionRef, clip, openCredentials, recordOutcome } from "./connections.js";
 
 export interface IntegrationDeps {
   db: Db;
@@ -35,8 +35,6 @@ export interface IntegrationDeps {
 }
 
 export type { ConnectionRef };
-
-const clip = (text: string, max = 500) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 /**
  * Checks credentials with the CRM (refreshing or completing them first when the connector needs

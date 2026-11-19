@@ -1,8 +1,9 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { ApiError, api, type BotDetail, type Workflow } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { Section } from "./Section";
 
 /** Match the API limits (WORKFLOW_LIMITS in @traiblazer/industry-packs). */
 const LIMITS = {
@@ -14,18 +15,6 @@ const LIMITS = {
   finishLength: 300,
   guidelinesLength: 4000,
 };
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h3 className="text-lg font-semibold">{title}</h3>
-        {hint && <p className="muted text-sm">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 type LibraryFilter = "all" | "industry" | "common";
 

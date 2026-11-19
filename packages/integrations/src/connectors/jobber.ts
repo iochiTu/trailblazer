@@ -1,5 +1,6 @@
 import { requestJson } from "../http.js";
 import { leadNotes, leadTitle, phoneDigits, splitName } from "../lead-text.js";
+import { oauthTokens } from "../oauth.js";
 import {
   type ConnectorContext,
   ConnectorError,
@@ -29,8 +30,6 @@ const TOKEN_URL = "https://api.getjobber.com/api/oauth/token";
 const GRAPHQL_URL = "https://api.getjobber.com/api/graphql";
 /** Jobber supports each API version for at least 12 months; bump this when the changelog says so. */
 export const JOBBER_API_VERSION = "2026-09-25";
-/** Refresh this long before the access token runs out. */
-const REFRESH_MARGIN_MS = 5 * 60_000;
 
 const keys = (platform: PlatformKeys) => {
   if (!platform.jobber) throw new ConnectorError("rejected", "Jobber is not set up on this platform yet");
@@ -52,6 +51,14 @@ function toCredentials(token: TokenResponse | null, now: Date, previous?: Creden
     expiresAt: String(now.getTime() + (token.expires_in ?? 3600) * 1000),
   };
 }
+
+const tokens = oauthTokens<TokenResponse>({
+  service: "Jobber",
+  connection: "Jobber",
+  tokenUrl: TOKEN_URL,
+  keys,
+  toCredentials,
+});
 
 interface GraphqlResponse<T> {
   data?: T;
@@ -152,51 +159,10 @@ export const jobber: CrmConnector = {
       }).toString();
       return url.toString();
     },
-    async exchangeCode({ platform, fetch, code, redirectUri, now }) {
-      const { clientId, clientSecret } = keys(platform);
-      const token = await requestJson<TokenResponse>(fetch, "Jobber", TOKEN_URL, {
-        form: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: redirectUri,
-        },
-      });
-      return toCredentials(token, now?.() ?? new Date());
-    },
+    exchangeCode: tokens.exchangeCode,
   },
 
-  async refresh(ctx) {
-    const now = ctx.now?.() ?? new Date();
-    if (Number(ctx.credentials.expiresAt ?? 0) - now.getTime() > REFRESH_MARGIN_MS) return null;
-    if (!ctx.credentials.refreshToken) {
-      throw new ConnectorError("auth", "The Jobber connection has expired. Please connect again.");
-    }
-    const { clientId, clientSecret } = keys(ctx.platform);
-    let token: TokenResponse | null;
-    try {
-      token = await requestJson<TokenResponse>(ctx.fetch, "Jobber", TOKEN_URL, {
-        form: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "refresh_token",
-          refresh_token: ctx.credentials.refreshToken,
-        },
-      });
-    } catch (error) {
-      // A refused refresh token (400 invalid_grant, 401) means the owner disconnected or must sign in again.
-      if (error instanceof ConnectorError && error.failure !== "temporary") {
-        throw new ConnectorError(
-          "auth",
-          "Jobber no longer accepts this connection. Please connect again.",
-          error.status,
-        );
-      }
-      throw error;
-    }
-    return toCredentials(token, now, ctx.credentials);
-  },
+  refresh: tokens.refresh,
 
   async verify(ctx) {
     const data = await graphql<{ account: { id: string; name: string } }>(

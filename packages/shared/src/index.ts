@@ -41,7 +41,6 @@ export const signupSchema = z.object({
   name: z.string().trim().min(1).max(120),
   uiLanguage: languageCode.optional(),
 });
-export type SignupInput = z.infer<typeof signupSchema>;
 
 export const loginSchema = z.object({
   email: z
@@ -50,19 +49,16 @@ export const loginSchema = z.object({
     .transform((e) => e.toLowerCase()),
   password: z.string().min(1).max(200),
 });
-export type LoginInput = z.infer<typeof loginSchema>;
 
 export const createTenantSchema = z.object({
   name: z.string().trim().min(1).max(120),
   ownerLanguage: languageCode.optional(),
 });
-export type CreateTenantInput = z.infer<typeof createTenantSchema>;
 
 /** A business an agency creates for a client (docs/AGENCY.md §3.2). */
 export const agencyClientSchema = createTenantSchema.extend({
   billingMode: z.enum(["client_pays", "agency_pays"]),
 });
-export type AgencyClientInput = z.infer<typeof agencyClientSchema>;
 
 const languagesList = z
   .array(languageCode)
@@ -85,7 +81,6 @@ export const createBotSchema = z
     message: "defaultLanguage must be one of languages",
     path: ["defaultLanguage"],
   });
-export type CreateBotInput = z.infer<typeof createBotSchema>;
 
 /** A business's workflow: a playbook the assistant follows when a visitor's request matches `when`. */
 export const workflowSchema = z.object({
@@ -99,7 +94,6 @@ export const workflowSchema = z.object({
   finish: z.string().trim().max(L.finishLength),
   template: z.string().max(64).optional(),
 });
-export type WorkflowInput = z.infer<typeof workflowSchema>;
 
 export const workflowsSchema = z
   .array(workflowSchema)
@@ -154,19 +148,6 @@ export const pageSlugSchema = z
   .refine((slug) => !slug.includes("--"), "Don't use two dashes in a row")
   .refine((slug) => !RESERVED_PAGE_SLUGS.has(slug), "This link is reserved; please choose another");
 
-/** A page link proposed from the business's name ("Smith & Sons Plumbing" → "smith-sons-plumbing"). */
-export function suggestPageSlug(name: string): string {
-  const slug = name
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60)
-    .replace(/-+$/, "");
-  return slug.length >= 3 && !RESERVED_PAGE_SLUGS.has(slug) ? slug : "";
-}
-
 export const updateBotSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -211,7 +192,6 @@ export const assetUploadSchema = z.object({
   kind: z.enum(["avatar"]),
   data: z.base64().max(Math.ceil((MAX_ASSET_BYTES * 4) / 3) + 4),
 });
-export type UpdateBotInput = z.infer<typeof updateBotSchema>;
 
 // ---- Knowledge -------------------------------------------------------------------------------
 
@@ -228,7 +208,6 @@ export const createSourceSchema = z.discriminatedUnion("type", [
     content: z.string().trim().min(1).max(50_000),
   }),
 ]);
-export type CreateSourceInput = z.infer<typeof createSourceSchema>;
 
 /**
  * A price list, menu or brochure uploaded as a source: a PDF, a Word document (.docx) or a photo
@@ -253,7 +232,6 @@ export const uploadSourceFileSchema = z.object({
 export const interviewAnswersSchema = z.object({
   answers: z.record(z.string().max(40), z.string().max(INTERVIEW_LIMITS.answerLength)),
 });
-export type InterviewAnswersInput = z.infer<typeof interviewAnswersSchema>;
 
 const localized = (max: number) =>
   z.object({ en: z.string().trim().max(max), fr: z.string().trim().max(max) });
@@ -281,11 +259,9 @@ export const createOnboardingQuestionSchema = z.object({
   options: onboardingQuestionFields.options.default([]),
   enabled: onboardingQuestionFields.enabled.default(true),
 });
-export type CreateOnboardingQuestionInput = z.infer<typeof createOnboardingQuestionSchema>;
 
 /** The key stays: businesses' answers are stored under it. */
 export const updateOnboardingQuestionSchema = z.object(onboardingQuestionFields).partial();
-export type UpdateOnboardingQuestionInput = z.infer<typeof updateOnboardingQuestionSchema>;
 
 /**
  * What's wrong with a question as it would be saved (null: nothing). Checked on the whole question,
@@ -346,14 +322,12 @@ export const updateTextSourceSchema = z
   })
   .partial()
   .refine((v) => v.title !== undefined || v.content !== undefined, { message: "Nothing to update" });
-export type UpdateTextSourceInput = z.infer<typeof updateTextSourceSchema>;
 
 export const qaPairSchema = z.object({
   question: z.string().trim().min(3).max(500),
   answer: z.string().trim().min(1).max(4000),
   language: languageCode.optional(),
 });
-export type QaPairInput = z.infer<typeof qaPairSchema>;
 
 // ---- Public chat -----------------------------------------------------------------------------
 
@@ -393,7 +367,6 @@ export type PageAction = (typeof PAGE_ACTIONS)[number];
  * in the same browser tab isn't sent again), or a tap on a contact button.
  */
 export const PAGE_EVENTS = ["view", ...PAGE_ACTIONS] as const;
-export type PageEvent = (typeof PAGE_EVENTS)[number];
 
 export const pageEventSchema = z.object({
   publicKey: z.string().regex(/^pk_(live|test)_[A-Za-z0-9_-]{10,64}$/),
@@ -424,7 +397,6 @@ export const publicChatSchema = z
     path: ["message"],
     message: "Write a message or attach an image",
   });
-export type PublicChatInput = z.infer<typeof publicChatSchema>;
 
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24h)");
 const dayHours = z.array(z.object({ open: timeOfDay, close: timeOfDay })).max(4);
@@ -480,7 +452,6 @@ export const businessProfileSchema = z
       .transform((list) => [...new Set(list)]),
   })
   .partial();
-export type BusinessProfileInput = z.infer<typeof businessProfileSchema>;
 
 // ---- Business page ---------------------------------------------------------------------------
 
@@ -513,7 +484,6 @@ export const createCatalogItemSchema = z.object({
   enabled: catalogItemFields.enabled.default(true),
 });
 export const updateCatalogItemSchema = z.object(catalogItemFields).partial();
-export type CreateCatalogItemInput = z.infer<typeof createCatalogItemSchema>;
 export const reorderCatalogSchema = z.object({ ids: z.array(z.uuid()).max(CATALOG_LIMIT) });
 /** A service or product photo: base64 without a `data:` prefix, at most 2 MB decoded. */
 export const catalogPhotoSchema = z.object({
@@ -540,7 +510,6 @@ export const noticeSchema = z
     path: ["title"],
     message: "An offer needs a title",
   });
-export type NoticeInput = z.infer<typeof noticeSchema>;
 
 export const addAllowedOriginSchema = z.object({ origin: httpUrl });
 
@@ -554,7 +523,6 @@ export const updateAddonSchema = z.object({
   enabled: z.boolean().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
 });
-export type UpdateAddonInput = z.infer<typeof updateAddonSchema>;
 
 /** Requests visitors left for the business: staff move them through these statuses. */
 export const LEAD_STATUSES = ["new", "in_progress", "done"] as const;
@@ -569,22 +537,19 @@ export const setNextActionSchema = z.object({
     })
     .nullable(),
 });
-export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 
 /** A note staff add to a request (PLAN §20). */
 export const LEAD_COMMENT_MAX = 2000;
 export const leadCommentSchema = z.object({ body: z.string().trim().min(1).max(LEAD_COMMENT_MAX) });
-export type LeadCommentInput = z.infer<typeof leadCommentSchema>;
 
-/**
- * What a team member sends to a contact from Contacts: a text from the assistant's number, an
- * email, a record of a call they made, or a note for the team.
- */
-export const CONTACT_MESSAGE_CHANNELS = ["sms", "email", "call", "note"] as const;
 /** Four message parts in the plain alphabet. */
 export const CONTACT_TEXT_MAX = 640;
 export const CONTACT_EMAIL_MAX = 5000;
 export const CONTACT_SUBJECT_MAX = 150;
+/**
+ * What a team member sends to a contact from Contacts: a text from the assistant's number, an
+ * email, a record of a call they made, or a note for the team.
+ */
 export const contactMessageSchema = z.discriminatedUnion("channel", [
   z.object({ channel: z.literal("sms"), body: z.string().trim().min(1).max(CONTACT_TEXT_MAX) }),
   z.object({
@@ -596,7 +561,6 @@ export const contactMessageSchema = z.discriminatedUnion("channel", [
   z.object({ channel: z.literal("call"), body: z.string().trim().max(LEAD_COMMENT_MAX).default("") }),
   z.object({ channel: z.literal("note"), body: z.string().trim().min(1).max(LEAD_COMMENT_MAX) }),
 ]);
-export type ContactMessageInput = z.infer<typeof contactMessageSchema>;
 
 /**
  * A phone or browser registering for push notifications: the owner app's APNs or FCM token, or
@@ -618,7 +582,6 @@ export const registerDeviceSchema = z.discriminatedUnion("platform", [
     appVersion: z.string().max(40).optional(),
   }),
 ]);
-export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
 
 export const NOTIFICATION_EVENTS = [
   "request.urgent",
@@ -652,7 +615,6 @@ export const notificationPrefsSchema = z
     message: "Set both quiet-hours times, or neither",
     path: ["quietEnd"],
   });
-export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
 /** The one switch at the top of the owner app: all notifications off, or back on. */
 export const notificationPausedSchema = z.object({ paused: z.boolean() });
 /** The business's "answering" switch: the assistant answers calls and texts, or doesn't. */
@@ -660,7 +622,6 @@ export const answeringSchema = z.object({ on: z.boolean() });
 
 /** Questions the assistant couldn't answer: the business answers them (see `qaPairSchema`) or dismisses them. */
 export const updateGapSchema = z.object({ status: z.enum(["open", "dismissed"]) });
-export type UpdateGapInput = z.infer<typeof updateGapSchema>;
 
 /**
  * What the owner keeps from the setup assistant's suggestion, after editing it. Each part is
@@ -715,7 +676,6 @@ export const createDemoSchema = z
     path: ["websiteUrl"],
     message: "Add the business's website, or paste text from its Google listing or Facebook page",
   });
-export type CreateDemoInput = z.infer<typeof createDemoSchema>;
 
 /** Changes the plan a demo business is on (an active plan). */
 export const updateDemoSchema = z.object({ plan: z.string().trim().min(1).max(40) });

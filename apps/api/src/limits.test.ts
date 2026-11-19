@@ -1,6 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { type Limiter, MemoryLimiter, PlatformConfig, periodKey, RedisLimiter } from "@traiblazer/core";
 import { createDb, type DbHandle, runMigrations, tenants, users } from "@traiblazer/db";
 import { createGatewayFromEnv, LLMGateway, type LLMProvider } from "@traiblazer/llm";
 import { eq, inArray } from "drizzle-orm";
@@ -9,9 +10,6 @@ import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { periodKey } from "./lib/chat-guard.js";
-import { type Limiter, MemoryLimiter, RedisLimiter } from "./lib/limiter.js";
-import { PlatformConfig } from "./lib/platform.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;

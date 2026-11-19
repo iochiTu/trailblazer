@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { ConsoleShell } from "@/components/app/SideNav";
+import { StatTile } from "@/components/StatTile";
 import { SupportBanner } from "@/components/SupportBanner";
 import { DailyChart, type DailyPoint } from "@/components/usage/DailyChart";
 import { ApiError, api } from "@/lib/api";
@@ -41,16 +42,6 @@ interface UsageReport {
 }
 
 type Role = "owner" | "admin" | "editor" | "viewer";
-
-function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="card flex flex-col gap-1 p-4">
-      <span className="muted text-sm">{label}</span>
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
-      {note && <span className="muted text-xs">{note}</span>}
-    </div>
-  );
-}
 
 /** Monthly quota meter: thin rounded bar; status color only with an icon and a text label. */
 function QuotaMeter({ report }: { report: UsageReport }) {

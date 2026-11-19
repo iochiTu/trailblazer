@@ -1,4 +1,4 @@
-import { chunks, type Db, usageEvents, withTenant } from "@traiblazer/db";
+import { chunks, type Db, type Tx, usageEvents, withTenant } from "@traiblazer/db";
 import { type EmbeddingProvider, embeddingCostMicros, type QueryEmbedder } from "@traiblazer/llm";
 import { and, eq, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { JOB_TYPES } from "../jobs.js";
@@ -62,12 +62,7 @@ export async function embedChunks(
 
     const { vectors, tokens } = await deps.embeddings.embed(rows.map(searchableText), "document");
     await withTenant(deps.db, tenantId, async (tx) => {
-      for (const [i, row] of rows.entries()) {
-        await tx
-          .update(chunks)
-          .set({ embedding: vectors[i]!, embeddingModel: model })
-          .where(eq(chunks.id, row.id));
-      }
+      await writeVectors(tx, sql`chunks`, model, rows, vectors);
       await tx.insert(usageEvents).values(usage(tokens, "documents", rows.length));
     });
     embedded += rows.length;
@@ -90,20 +85,39 @@ export async function embedChunks(
         "document",
       );
       await withTenant(deps.db, tenantId, async (tx) => {
-        for (const [i, row] of rows.entries()) {
-          // The hash is of the text that was embedded: an edit made meanwhile shows as stale again.
-          await tx.execute(sql`
-            update ${written.table}
-               set embedding = ${`[${vectors[i]!.join(",")}]`}::halfvec,
-                   embedding_model = ${model}, embedding_hash = ${row.hash}
-             where id = ${row.id}`);
-        }
+        // The hash is of the text that was embedded: an edit made meanwhile shows as stale again.
+        await writeVectors(tx, written.table, model, rows, vectors);
         await tx.insert(usageEvents).values(usage(tokens, written.task, rows.length));
       });
       embedded += rows.length;
     }
   }
   return { embedded, more: batches >= MAX_BATCHES };
+}
+
+/**
+ * Stores a batch of vectors in one statement (one round trip, not one per row). Rows with a `hash`
+ * also record it as `embedding_hash` (tables of WRITTEN; chunks have none).
+ */
+async function writeVectors(
+  tx: Tx,
+  table: SQL,
+  model: string,
+  rows: { id: string; hash?: string }[],
+  vectors: number[][],
+): Promise<void> {
+  const values = rows.map((row, i) => ({
+    id: row.id,
+    embedding: `[${vectors[i]!.join(",")}]`,
+    hash: row.hash,
+  }));
+  const hashed = rows.some((row) => row.hash !== undefined);
+  await tx.execute(sql`
+    update ${table} t
+       set embedding = v.embedding::halfvec, embedding_model = ${model}
+           ${hashed ? sql`, embedding_hash = v.hash` : sql``}
+      from jsonb_to_recordset(${JSON.stringify(values)}::jsonb) as v(id uuid, embedding text, hash text)
+     where t.id = v.id`);
 }
 
 /**

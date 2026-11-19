@@ -15,12 +15,15 @@ import {
   paletteFor,
 } from "@traiblazer/appearance";
 import {
+  admitImages,
+  admitQuestion,
   businessNameOf,
   type ChatImage,
-  countItemEvent,
+  countItemEvents,
   installedAddons,
   listedCatalogItems,
   noticeRunsAt,
+  type RefusalReason,
   runChat,
   runningNotices,
 } from "@traiblazer/core";
@@ -57,7 +60,6 @@ import {
 import { and, asc, eq, ne } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
-import { admitImages, admitQuestion, type RefusalReason } from "../lib/chat-guard.js";
 import { HttpError, notFound } from "../lib/errors.js";
 import { isUuid } from "../lib/ids.js";
 import { prepareChatImage } from "../lib/images.js";
@@ -663,10 +665,10 @@ export async function publicRoutes(app: FastifyInstance, ctx: AppContext) {
             )
             .limit(1);
           if (item) {
-            await countItemEvent(tx, {
+            await countItemEvents(tx, {
               tenantId: found.tenantId,
               botId: found.botId,
-              itemId,
+              itemIds: [itemId],
               surface,
               event: "tapped",
             });

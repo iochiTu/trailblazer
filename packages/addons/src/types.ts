@@ -124,7 +124,6 @@ export type AddonEvent =
       photoCount: number;
       at: Date;
     };
-export type AddonEventType = AddonEvent["type"];
 
 /** Work an add-on asks the platform to do. Run by the worker, with retries. */
 export type AddonEffect =
