@@ -51,7 +51,7 @@ import { queueInsights } from "../insights/analyze.js";
 import { calendarAccess } from "../integrations/calendar.js";
 import { JOB_PRIORITY, JOB_TYPES, newJob } from "../jobs.js";
 import { textOwnerAboutRequest } from "../sms/alerts.js";
-import { countItemEvent, itemStatSurface } from "../stats/item-stats.js";
+import { countItemEvents, itemStatSurface } from "../stats/item-stats.js";
 import { recordGap } from "./gaps.js";
 import { guessLanguage, isEnOrFr } from "./language.js";
 import { MarkerFilter } from "./markers.js";
@@ -1101,20 +1101,17 @@ export async function* runChat(deps: ChatDeps, input: ChatInput): AsyncGenerator
     await queueInsights(tx, { tenantId: input.tenantId, conversationId, channel: input.channel });
     // Statistics: a service's button or card went out under this answer (docs/SELL_AND_PROMOTE.md §3.3).
     const surface = itemStatSurface(input.channel);
-    const shownItemIds = new Set([
-      ...shownActions.flatMap((action) => (action.item ? [action.item.id] : [])),
-      ...shownItems.map((item) => item.id),
-    ]);
     if (surface) {
-      for (const itemId of shownItemIds) {
-        await countItemEvent(tx, {
-          tenantId: input.tenantId,
-          botId: bot.id,
-          itemId,
-          surface,
-          event: "shown",
-        });
-      }
+      await countItemEvents(tx, {
+        tenantId: input.tenantId,
+        botId: bot.id,
+        itemIds: [
+          ...shownActions.flatMap((action) => (action.item ? [action.item.id] : [])),
+          ...shownItems.map((item) => item.id),
+        ],
+        surface,
+        event: "shown",
+      });
     }
     // The owner's phone, when they asked for requests by text (docs/PHONE_AND_SMS.md §8).
     for (const event of events) {

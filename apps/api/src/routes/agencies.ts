@@ -1,3 +1,4 @@
+import { periodKey } from "@traiblazer/core";
 import {
   type AgencyRole,
   agencies,
@@ -22,7 +23,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
 import { hasAgencyRole, logAgency } from "../lib/agencies.js";
 import { audit } from "../lib/audit.js";
-import { periodKey } from "../lib/chat-guard.js";
 import { conflict, forbidden, HttpError, isUniqueViolation, notFound } from "../lib/errors.js";
 import { isUuid, slugify } from "../lib/ids.js";
 import { isSuperAdmin, requireUser } from "../plugins/auth.js";

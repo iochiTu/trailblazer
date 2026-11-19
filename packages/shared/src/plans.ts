@@ -61,12 +61,6 @@ export const PLANS = {
   },
 } as const satisfies Record<string, PlanLimits>;
 
-export type PlanId = keyof typeof PLANS;
-
-export function planLimits(plan: string): PlanLimits {
-  return (PLANS as Record<string, PlanLimits>)[plan] ?? PLANS.trial;
-}
-
 /**
  * Features a plan switches on or off (operators set them per plan). Every check goes through
  * `planAllows` in @traiblazer/core, so a new feature is one more key here and one more column.
@@ -185,7 +179,6 @@ export const updateLimitsSchema = z
     visitorDailyLimit: z.number().int().min(1).max(500).nullable(),
   })
   .partial();
-export type UpdateLimitsInput = z.infer<typeof updateLimitsSchema>;
 
 // ---- Billing (Stripe) ------------------------------------------------------------------------
 

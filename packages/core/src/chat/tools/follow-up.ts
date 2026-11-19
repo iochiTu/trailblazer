@@ -14,8 +14,8 @@ import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { contactFor } from "../../contacts/contacts.js";
 import { JOB_TYPES, newJob } from "../../jobs.js";
-import { countItemEvent, itemStatSurface } from "../../stats/item-stats.js";
-import { clean, digits, emailSchema, typedByVisitor } from "./contact.js";
+import { countItemEvents, itemStatSurface } from "../../stats/item-stats.js";
+import { clean, readContact, untypedContact } from "./contact.js";
 import { defineTool, type ToolContext } from "./contract.js";
 
 /** Most requests one conversation can leave (a visitor correcting a detail, not a flood). */
@@ -108,51 +108,17 @@ After it succeeds, tell the visitor their request was passed on and the business
     }),
 
     async run(input, ctx) {
-      // Without an "@" or a digit it isn't an attempt at an address or number: treat as not given.
-      const rawEmail = clean(input.email);
-      const email = rawEmail?.includes("@") ? rawEmail.toLowerCase() : null;
-      const rawPhone = clean(input.phone);
-      // By text message, the number the customer writes from stands in when they gave no other.
-      const phone = rawPhone && /\d/.test(rawPhone) ? rawPhone : (ctx.visitorPhone ?? null);
-      const ownNumber = Boolean(
-        phone && ctx.visitorPhone && digits(ctx.visitorPhone).endsWith(digits(phone).slice(-10)),
-      );
-      if (!email && !phone) {
-        return {
-          isError: true,
-          content:
-            "A way to reach the visitor is missing. Ask for their email address or phone number, then call this again.",
-        };
-      }
-      if (email && !emailSchema.safeParse(email).success) {
-        return {
-          isError: true,
-          content: `"${email}" isn't a complete email address. Ask the visitor to check it, then call this again.`,
-        };
-      }
-      if (phone && digits(phone).length < 7) {
-        return {
-          isError: true,
-          content: `"${phone}" isn't a complete phone number. Ask the visitor to check it, then call this again.`,
-        };
-      }
+      const contact = readContact(input, ctx.visitorPhone, {
+        missing:
+          "A way to reach the visitor is missing. Ask for their email address or phone number, then call this again.",
+        retry: ", then call this again",
+      });
+      if ("error" in contact) return { isError: true, content: contact.error };
+      const { email, phone } = contact;
 
       return withTenant(ctx.db, ctx.tenantId, async (tx) => {
-        const visitorText = (
-          await tx
-            .select({ content: messages.content })
-            .from(messages)
-            .where(and(eq(messages.conversationId, ctx.conversationId), eq(messages.role, "user")))
-        ).map((m) => m.content);
-        for (const detail of [email && { email }, phone && !ownNumber && { phone }]) {
-          if (detail && !typedByVisitor(detail, visitorText)) {
-            const value = "email" in detail ? detail.email : detail.phone;
-            return {
-              isError: true,
-              content: `The visitor didn't type "${value}" in this conversation. Ask them for their ${"email" in detail ? "email address" : "phone number"} and use exactly what they write.`,
-            };
-          }
-        }
+        const untyped = await untypedContact(tx, ctx.conversationId, contact);
+        if (untyped) return { isError: true, content: untyped };
 
         // Urgent when the assistant says so, or when a message in this conversation was triaged so.
         const triaged =
@@ -351,10 +317,10 @@ export async function requestContact(
 export async function countRequested(tx: Tx, ctx: ToolContext, itemId: string) {
   const surface = itemStatSurface(ctx.channel);
   if (surface) {
-    await countItemEvent(tx, {
+    await countItemEvents(tx, {
       tenantId: ctx.tenantId,
       botId: ctx.botId,
-      itemId,
+      itemIds: [itemId],
       surface,
       event: "requested",
     });
@@ -401,6 +367,3 @@ export function requestEvent(
     at: lead.createdAt,
   };
 }
-
-/** The request tool without industry fields (generic businesses, tests). */
-export const requestFollowUp = requestFollowUpTool([]);

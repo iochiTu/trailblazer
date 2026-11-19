@@ -291,10 +291,16 @@ export async function runPushNotify(
     const message = messageFor(member.uiLanguage);
     let reached = 0;
     const errors: string[] = [];
-    for (const device of mine) {
-      const outcome = await deps.push
-        .send({ platform: device.platform, token: device.token, keys: device.keys }, message)
-        .catch((error: unknown): PushOutcome => ({ status: "failed", error: String(error) }));
+    // A member's phones and browsers are reached at the same time, not one after another.
+    const outcomes = await Promise.all(
+      mine.map((device) =>
+        deps.push
+          .send({ platform: device.platform, token: device.token, keys: device.keys }, message)
+          .catch((error: unknown): PushOutcome => ({ status: "failed", error: String(error) })),
+      ),
+    );
+    for (const [i, outcome] of outcomes.entries()) {
+      const device = mine[i]!;
       if (outcome.status === "sent") reached++;
       else if (outcome.status === "gone") gone.push(device.id);
       else if (outcome.status === "failed") errors.push(outcome.error);

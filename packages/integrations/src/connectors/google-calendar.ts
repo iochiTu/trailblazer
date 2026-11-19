@@ -1,4 +1,5 @@
 import { requestJson } from "../http.js";
+import { oauthTokens } from "../oauth.js";
 import {
   type BusyTime,
   type CalendarConnector,
@@ -34,9 +35,6 @@ export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
 ];
 
-/** Refresh this long before the access token runs out. */
-const REFRESH_MARGIN_MS = 5 * 60_000;
-
 const keys = (platform: PlatformKeys) => {
   if (!platform.google) throw new ConnectorError("rejected", "Google is not set up on this platform yet");
   return platform.google;
@@ -58,8 +56,9 @@ function toCredentials(token: TokenResponse | null, now: Date, previous?: Creden
       "Google did not give lasting access to the calendar. Please connect again.",
     );
   }
-  // The owner can untick a permission on Google's consent screen: both are needed to book.
-  if (token.scope) {
+  // The owner can untick a permission on Google's consent screen: both are needed to book. (A
+  // refresh answer has no scope check to make: it carries what was granted at sign-in.)
+  if (token.scope && !previous) {
     const granted = new Set(token.scope.split(/\s+/));
     if (!GOOGLE_CALENDAR_SCOPES.slice(2).every((s) => granted.has(s))) {
       throw new ConnectorError(
@@ -74,6 +73,14 @@ function toCredentials(token: TokenResponse | null, now: Date, previous?: Creden
     expiresAt: String(now.getTime() + (token.expires_in ?? 3600) * 1000),
   };
 }
+
+const tokens = oauthTokens<TokenResponse>({
+  service: "Google",
+  connection: "Google Calendar",
+  tokenUrl: TOKEN_URL,
+  keys,
+  toCredentials,
+});
 
 const auth = (ctx: ConnectorContext) => ({ authorization: `Bearer ${ctx.credentials.accessToken ?? ""}` });
 
@@ -113,52 +120,10 @@ export const googleCalendar: CalendarConnector = {
       }).toString();
       return url.toString();
     },
-    async exchangeCode({ platform, fetch, code, redirectUri, now }) {
-      const { clientId, clientSecret } = keys(platform);
-      const token = await requestJson<TokenResponse>(fetch, "Google", TOKEN_URL, {
-        form: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: redirectUri,
-        },
-      });
-      return toCredentials(token, now?.() ?? new Date());
-    },
+    exchangeCode: tokens.exchangeCode,
   },
 
-  async refresh(ctx) {
-    const now = ctx.now?.() ?? new Date();
-    if (Number(ctx.credentials.expiresAt ?? 0) - now.getTime() > REFRESH_MARGIN_MS) return null;
-    if (!ctx.credentials.refreshToken) {
-      throw new ConnectorError("auth", "The Google Calendar connection has expired. Please connect again.");
-    }
-    const { clientId, clientSecret } = keys(ctx.platform);
-    let token: TokenResponse | null;
-    try {
-      token = await requestJson<TokenResponse>(ctx.fetch, "Google", TOKEN_URL, {
-        form: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: "refresh_token",
-          refresh_token: ctx.credentials.refreshToken,
-        },
-      });
-    } catch (error) {
-      // 400 invalid_grant: the owner removed access, changed their password, or the token expired.
-      if (error instanceof ConnectorError && error.failure !== "temporary") {
-        throw new ConnectorError(
-          "auth",
-          "Google no longer accepts this connection. Please connect again.",
-          error.status,
-        );
-      }
-      throw error;
-    }
-    // A refresh answer has no scope check to make: it carries what was granted at sign-in.
-    return toCredentials({ ...token, scope: undefined }, now, ctx.credentials);
-  },
+  refresh: tokens.refresh,
 
   async verify(ctx) {
     const me = await requestJson<{ email?: string }>(ctx.fetch, "Google", USERINFO_URL, {

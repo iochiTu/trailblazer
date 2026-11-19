@@ -2,22 +2,13 @@
 
 import type { MessageKey } from "@traiblazer/i18n";
 import { useEffect, useState } from "react";
+import { StatTile } from "@/components/StatTile";
 import { DailyBars } from "@/components/usage/DailyChart";
 import { api, type PageAction, type PageStats } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 const PERIODS = [7, 30, 90] as const;
 const ACTIONS: PageAction[] = ["call", "book", "email", "directions", "website", "link"];
-
-function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="card flex flex-col gap-1 p-4">
-      <span className="muted text-sm">{label}</span>
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
-      {note && <span className="muted text-xs">{note}</span>}
-    </div>
-  );
-}
 
 /**
  * How the business page is doing: views, taps on its contact buttons, questions visitors asked the

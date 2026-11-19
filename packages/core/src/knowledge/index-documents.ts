@@ -70,15 +70,20 @@ export async function indexDocuments(
   let chunkCount = 0;
   let unembedded = 0;
 
+  // The source's documents already stored, by address: one query for the whole sync.
+  const urls = [...new Set(input.docs.flatMap((doc) => (doc.url ? [doc.url] : [])))];
+  const known = new Map<string, { id: string; contentHash: string }>();
+  if (urls.length) {
+    const rows = await tx
+      .select({ id: documents.id, url: documents.url, contentHash: documents.contentHash })
+      .from(documents)
+      .where(and(eq(documents.sourceId, input.sourceId), inArray(documents.url, urls)));
+    for (const row of rows) known.set(row.url!, row);
+  }
+
   for (const doc of input.docs) {
     const contentHash = sha256(doc.text);
-    const [existing] = doc.url
-      ? await tx
-          .select({ id: documents.id, contentHash: documents.contentHash })
-          .from(documents)
-          .where(and(eq(documents.sourceId, input.sourceId), eq(documents.url, doc.url)))
-          .limit(1)
-      : [];
+    const existing = doc.url ? known.get(doc.url) : undefined;
 
     if (existing && existing.contentHash === contentHash) {
       keepIds.push(existing.id);
@@ -114,6 +119,8 @@ export async function indexDocuments(
       documentId = created!.id;
     }
     keepIds.push(documentId);
+    // The same address again later in this sync updates this document instead of adding another.
+    if (doc.url) known.set(doc.url, { id: documentId, contentHash });
     changed++;
 
     const pieces = chunkSections(doc.sections, { title: doc.title });
@@ -166,22 +173,18 @@ export async function indexDocuments(
  * replaces it like any vector of an old model.
  */
 async function reuseVectors(tx: Tx, botId: string, ids: string[]): Promise<number> {
-  await tx.execute(sql`
-    update chunks n
-       set embedding = o.embedding, embedding_model = o.embedding_model
-      from (select distinct on (content_hash) content_hash, embedding, embedding_model
-              from chunks
-             where bot_id = ${botId} and embedding is not null
-               and content_hash in (select content_hash from chunks where id in ${ids})
-             order by content_hash, created_at desc) o
-     where n.id in ${ids} and n.embedding is null and n.content_hash = o.content_hash`);
-  const [row] = await tx.execute<{ n: number }>(
-    sql`select count(*)::int as n from chunks where id in ${ids} and embedding is null`,
-  );
-  return Number(row?.n ?? 0);
-}
-
-/** Deletes every document (and chunk) of a source. */
-export async function clearSource(tx: Tx, sourceId: string): Promise<void> {
-  await tx.delete(documents).where(inArray(documents.sourceId, [sourceId]));
+  // New chunks have no vector yet, so the ones still without are those this didn't update.
+  const [row] = await tx.execute<{ n: number }>(sql`
+    with reused as (
+      update chunks n
+         set embedding = o.embedding, embedding_model = o.embedding_model
+        from (select distinct on (content_hash) content_hash, embedding, embedding_model
+                from chunks
+               where bot_id = ${botId} and embedding is not null
+                 and content_hash in (select content_hash from chunks where id in ${ids})
+               order by content_hash, created_at desc) o
+       where n.id in ${ids} and n.embedding is null and n.content_hash = o.content_hash
+      returning 1)
+    select count(*)::int as n from reused`);
+  return ids.length - Number(row?.n ?? 0);
 }

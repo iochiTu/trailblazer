@@ -120,12 +120,6 @@ export const AVATAR_ICON_IDS = Object.keys(AVATAR_ICONS) as AvatarIcon[];
 export const iconSvg = (icon: AvatarIcon, size = 24) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AVATAR_ICONS[icon]}</svg>`;
 
-/** Avatar as stored in bot settings. */
-export type AvatarSetting =
-  | { kind: "initials" }
-  | { kind: "icon"; icon: AvatarIcon }
-  | { kind: "image"; assetId: string };
-
 /** Avatar as sent to visitors (image resolved to a URL). */
 export type PublicAvatar =
   | { kind: "initials"; initials: string }

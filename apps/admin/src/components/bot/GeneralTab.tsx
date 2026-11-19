@@ -1,26 +1,15 @@
 "use client";
 
 import { enOrFr, getLanguage } from "@traiblazer/i18n";
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ApiError, api, type BotDetail, type Language } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { BusinessDetails } from "./BusinessDetails";
+import { Section } from "./Section";
 
 /** Matches the API limit (shared schema): up to 6 suggested questions per language. */
 const MAX_QUICK_REPLIES = 6;
 const TIERS = [1, 2, 3] as const;
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h3 className="text-lg font-semibold">{title}</h3>
-        {hint && <p className="muted text-sm">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /**
  * General settings: the business's details, names, languages and the texts visitors see

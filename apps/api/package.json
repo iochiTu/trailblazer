@@ -16,7 +16,6 @@
     "@fastify/cookie": "11.1.5",
     "@fastify/helmet": "13.2.0",
     "@fastify/rate-limit": "11.2.2",
-    "@modelcontextprotocol/node": "2.1.2",
     "@modelcontextprotocol/server": "2.4.0",
     "@traiblazer/addons": "workspace:*",
     "@traiblazer/appearance": "workspace:*",

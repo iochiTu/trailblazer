@@ -1,3 +1,4 @@
+import type { PlanRow } from "@traiblazer/core";
 import { agencies, billingAccounts, billingEvents, plans, tenants } from "@traiblazer/db";
 import { enOrFr } from "@traiblazer/i18n";
 import { billingPlanSchema } from "@traiblazer/shared";
@@ -8,7 +9,6 @@ import type { BillingPlan, BillingProvider } from "../billing/provider.js";
 import { applySubscription, isPaying } from "../billing/sync.js";
 import type { AppContext } from "../context.js";
 import { HttpError, notFound } from "../lib/errors.js";
-import type { PlanRow } from "../lib/platform.js";
 import { requireTenantRole } from "../plugins/auth.js";
 
 type TenantParams = { Params: { tenantId: string } };

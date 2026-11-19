@@ -1,7 +1,6 @@
+import { admitImages, MemoryLimiter } from "@traiblazer/core";
 import { describe, expect, it } from "vitest";
-import { admitImages } from "./lib/chat-guard.js";
 import { prepareChatImage, stripImageMetadata } from "./lib/images.js";
-import { MemoryLimiter } from "./lib/limiter.js";
 
 const PNG_1X1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",

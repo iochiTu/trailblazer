@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { claimNextJob, completeJob, syncSource } from "@traiblazer/core";
+import { claimNextJob, completeJob, PlatformConfig, syncSource } from "@traiblazer/core";
 import {
   createDb,
   type DbHandle,
@@ -19,7 +19,6 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { PlatformConfig } from "./lib/platform.js";
 
 const ownerUrl = process.env.TEST_DATABASE_URL as string;
 const appUrl = process.env.TEST_DATABASE_APP_URL as string;

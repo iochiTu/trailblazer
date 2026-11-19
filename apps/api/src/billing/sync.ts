@@ -1,8 +1,8 @@
+import type { PlatformConfig } from "@traiblazer/core";
 import { billingAccounts, type Db, tenants, withTenant } from "@traiblazer/db";
 import { PAYING_STATUSES } from "@traiblazer/shared";
 import { eq } from "drizzle-orm";
 import { audit } from "../lib/audit.js";
-import type { PlatformConfig } from "../lib/platform.js";
 import type { SubscriptionSnapshot } from "./provider.js";
 
 export const isPaying = (status: string | null | undefined) =>

@@ -26,7 +26,6 @@ export {
   MAX_REQUEST_PHOTOS,
   MAX_REQUESTS_PER_CONVERSATION,
   MAX_TOOL_ROUNDS,
-  requestFollowUp,
   requestFollowUpTool,
   runToolCalls,
   type ServiceArea,
@@ -88,7 +87,7 @@ export { crawlSite } from "./knowledge/crawl.js";
 export { botsNeedingVectors, embedChunks, enqueueEmbedding, warmQuestions } from "./knowledge/embed.js";
 export { extractPage } from "./knowledge/extract.js";
 export { FILE_LIMITS, FileReadError, fileSections, readSourceFile } from "./knowledge/files.js";
-export { clearSource, indexDocuments, searchableText, tsvectorSql } from "./knowledge/index-documents.js";
+export { indexDocuments, searchableText, tsvectorSql } from "./knowledge/index-documents.js";
 export { assertPublicUrl, publicFetch, UnsafeUrlError } from "./knowledge/safe-fetch.js";
 export { DEFAULT_MAX_PAGES, syncSource } from "./knowledge/sync.js";
 export { planAllows, planFeatures } from "./plan-features.js";
@@ -131,4 +130,4 @@ export {
   type SmsNumber,
   sendQueuedText,
 } from "./sms/sms.js";
-export { countItemEvent, type ItemStatEvent, itemStatSurface } from "./stats/item-stats.js";
+export { countItemEvents, type ItemStatEvent, itemStatSurface } from "./stats/item-stats.js";

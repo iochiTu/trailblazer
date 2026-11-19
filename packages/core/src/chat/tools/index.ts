@@ -9,12 +9,7 @@ import { checkServiceAreaTool } from "./service-area.js";
 
 export { bookAppointmentTool, bookedLabel, bookingTools, findOpenTimesTool } from "./booking.js";
 export * from "./contract.js";
-export {
-  MAX_REQUEST_PHOTOS,
-  MAX_REQUESTS_PER_CONVERSATION,
-  requestFollowUp,
-  requestFollowUpTool,
-} from "./follow-up.js";
+export { MAX_REQUEST_PHOTOS, MAX_REQUESTS_PER_CONVERSATION, requestFollowUpTool } from "./follow-up.js";
 export { searchKnowledge } from "./search-knowledge.js";
 export { type AreaCheck, checkServiceArea, checkServiceAreaTool, type ServiceArea } from "./service-area.js";
 

@@ -29,7 +29,6 @@ export const agencyApplicationSchema = z.object({
   currency: currencyCode.default("cad"),
   note: z.string().trim().max(2000).optional(),
 });
-export type AgencyApplicationInput = z.infer<typeof agencyApplicationSchema>;
 
 export const agencyBrandingSchema = z
   .object({
@@ -43,7 +42,6 @@ export const agencyBrandingSchema = z
     poweredBy: z.enum(["none", "agency"]),
   })
   .partial();
-export type AgencyBrandingInput = z.infer<typeof agencyBrandingSchema>;
 
 export const agencyClientUpdateSchema = z.object({ status: z.enum(["active", "suspended"]) }).partial();
 
@@ -76,4 +74,3 @@ export const operatorAgencyUpdateSchema = z
     payoutsHeld: z.boolean(),
   })
   .partial();
-export type OperatorAgencyUpdateInput = z.infer<typeof operatorAgencyUpdateSchema>;
