@@ -163,7 +163,9 @@ export async function contactRoutes(app: FastifyInstance, ctx: AppContext) {
               .from(messages)
               .innerJoin(conversations, eq(conversations.id, messages.conversationId))
               .where(and(eq(conversations.channel, "sms"), eq(conversations.visitorId, contact.phone)))
-              .orderBy(desc(messages.createdAt))
+              // A text and the automatic reply stored with it share one timestamp (one transaction):
+              // the reply is listed first here, so it ends up after the text once reversed below.
+              .orderBy(desc(messages.createdAt), sql`${messages.role} = 'user'`)
               .limit(200)
           : [];
 
@@ -187,9 +189,12 @@ export async function contactRoutes(app: FastifyInstance, ctx: AppContext) {
           .orderBy(desc(contactMessages.createdAt))
           .limit(200);
 
+        // Each list comes newest first (for its limit); merged oldest first, so the stable sort keeps
+        // the database's order for items in the same millisecond (a Date has no finer precision).
         const timeline: TimelineItem[] = [
-          ...asked.map((lead) => ({ type: "request" as const, ...lead })),
+          ...asked.toReversed().map((lead) => ({ type: "request" as const, ...lead })),
           ...texts
+            .toReversed()
             .filter((m) => !(m.flags as MessageFlags | null)?.staff)
             .map((m) => ({
               type: "text" as const,
@@ -198,7 +203,7 @@ export async function contactRoutes(app: FastifyInstance, ctx: AppContext) {
               from: m.role === "user" ? ("contact" as const) : ("assistant" as const),
               body: m.body,
             })),
-          ...written.map(({ textStatus, textError, ...m }) => ({
+          ...written.toReversed().map(({ textStatus, textError, ...m }) => ({
             type: "team" as const,
             ...m,
             status: m.channel === "sms" ? (textStatus ?? m.status) : m.status,

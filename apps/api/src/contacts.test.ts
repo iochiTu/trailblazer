@@ -17,7 +17,7 @@ import {
 } from "@traiblazer/db";
 import { createGatewayFromEnv } from "@traiblazer/llm";
 import { FakeTelephony } from "@traiblazer/telephony";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "./app.js";
@@ -166,6 +166,30 @@ describe("contacts", () => {
       "text:assistant",
     ]);
     expect(page.reach).toEqual({ sms: { ok: true, from: OURS }, email: { ok: false, reason: "no_email" } });
+
+    // The text and the automatic reply are stored together, with one timestamp. The text comes first
+    // whichever order the database finds them in (rewriting a row moves it to the end of the table).
+    const thread = await ownerDb.db.execute<{ id: string; role: string; at: string }>(sql`
+      select m.id, m.role, m.created_at::text as at
+        from messages m join conversations c on c.id = m.conversation_id
+       where m.tenant_id = ${tenantId} and c.channel = 'sms' and c.visitor_id = ${CUSTOMER}`);
+    expect(thread).toHaveLength(2);
+    for (const order of [
+      ["user", "assistant"],
+      ["assistant", "user"],
+    ]) {
+      for (const role of order) {
+        const row = thread.find((m) => m.role === role)!;
+        await ownerDb.db.execute(
+          sql`update messages set created_at = ${thread[0]!.at}::timestamptz where id = ${row.id}`,
+        );
+      }
+      const tied = await detail(contacts[0]!.id);
+      expect(tied.timeline.map((i: { type: string; from: string }) => `${i.type}:${i.from}`)).toEqual([
+        "text:contact",
+        "text:assistant",
+      ]);
+    }
   });
 
   it("finds the same person again by number, then by email, and keeps what it knew", async () => {
