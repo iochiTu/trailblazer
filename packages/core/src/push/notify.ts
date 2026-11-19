@@ -1,4 +1,5 @@
 import {
+  bookings,
   bots,
   businessProfiles,
   type Db,
@@ -23,6 +24,10 @@ export interface PushNotifyPayload {
   event: NotificationEvent;
   botId: string;
   leadId: string;
+  /** Only the reminder for the current business decision is deliverable. */
+  actionVersion?: number;
+  /** The one-hour reminder on a new request that still needs a business decision. */
+  unreviewed?: boolean;
   /** For request.comment: the comment, and the person who wrote it (not notified). */
   commentId?: string;
   actorUserId?: string;
@@ -42,6 +47,15 @@ const TEXT = {
     urgentTitle: (business: string) => `Urgent request · ${business}`,
     urgentBody: "A customer needs help now. Tap to call them back.",
     newTitle: (business: string) => `New request · ${business}`,
+    review: "Tap to respond to the customer.",
+    alreadyBooked: "A visit has been booked. Tap for the appointment details.",
+    respondTitle: (business: string) => `Respond to the customer · ${business}`,
+    unreviewedBody: "This request still needs review. Open it and reply if you haven't already.",
+    waitingBody: "Check for the customer's reply and follow up if needed.",
+    reminderTitle: (business: string) => `Request reminder · ${business}`,
+    reminderBody: "Open your team's next step and follow up with the customer.",
+    replyTitle: (business: string) => `Customer update · ${business}`,
+    replyBody: "A customer added details. Tap to review them and respond.",
     newBody: {
       callback: "Someone asked you to call them back.",
       quote: "Someone asked for a quote.",
@@ -58,6 +72,15 @@ const TEXT = {
     urgentTitle: (business: string) => `Demande urgente · ${business}`,
     urgentBody: "Un client a besoin d'aide maintenant. Touchez pour le rappeler.",
     newTitle: (business: string) => `Nouvelle demande · ${business}`,
+    review: "Touchez pour répondre au client.",
+    alreadyBooked: "Un rendez-vous a été réservé. Touchez pour voir les détails.",
+    respondTitle: (business: string) => `Répondez au client · ${business}`,
+    unreviewedBody: "Cette demande reste à examiner. Ouvrez-la et répondez si ce n’est pas déjà fait.",
+    waitingBody: "Vérifiez si le client a répondu et relancez-le au besoin.",
+    reminderTitle: (business: string) => `Rappel de suivi · ${business}`,
+    reminderBody: "Ouvrez la prochaine étape prévue et faites un suivi auprès du client.",
+    replyTitle: (business: string) => `Nouvelles du client · ${business}`,
+    replyBody: "Un client a ajouté des précisions. Touchez pour les examiner et lui répondre.",
     newBody: {
       callback: "Quelqu'un vous demande de le rappeler.",
       quote: "Quelqu'un demande une soumission.",
@@ -122,12 +145,45 @@ export async function runPushNotify(
   const now = deps.now?.() ?? new Date();
   const found = await withTenant(deps.db, tenantId, async (tx) => {
     const [lead] = await tx
-      .select({ id: leads.id, kind: leads.kind, channel: leads.channel, urgent: leads.urgent })
+      .select({
+        id: leads.id,
+        kind: leads.kind,
+        channel: leads.channel,
+        status: leads.status,
+        nextAction: leads.nextAction,
+        actionVersion: leads.actionVersion,
+      })
       .from(leads)
       .where(and(eq(leads.id, payload.leadId), eq(leads.botId, payload.botId)))
       .limit(1);
     // The owner's own test chat never notifies.
     if (!lead || lead.channel === "playground") return null;
+    if (
+      payload.event === "request.reply" &&
+      (lead.status === "done" ||
+        lead.actionVersion !== payload.actionVersion ||
+        lead.nextAction?.waitingOn !== "customer")
+    )
+      return null;
+    if (payload.event === "request.reminder") {
+      if (payload.unreviewed) {
+        if (lead.status !== "new" || lead.actionVersion !== 0 || lead.nextAction) return null;
+      } else if (
+        lead.status === "done" ||
+        lead.actionVersion !== payload.actionVersion ||
+        !lead.nextAction?.dueAt ||
+        new Date(lead.nextAction.dueAt) > now
+      )
+        return null;
+    }
+    const [appointment] =
+      payload.event === "request.new" && lead.kind === "booking"
+        ? await tx
+            .select({ id: bookings.id })
+            .from(bookings)
+            .where(and(eq(bookings.leadId, lead.id), eq(bookings.status, "booked")))
+            .limit(1)
+        : [];
     if (payload.event === "request.comment") {
       const [comment] = payload.commentId
         ? await tx
@@ -149,7 +205,7 @@ export async function runPushNotify(
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
       .where(eq(memberships.tenantId, tenantId));
-    return { lead, bot, profile, members };
+    return { lead, bot, profile, members, appointment };
   });
   if (!found?.bot) return "skipped";
   const { lead, bot, profile, members } = found;
@@ -178,12 +234,23 @@ export async function runPushNotify(
   const messageFor = (language: string): PushMessage => {
     const t = TEXT[enOrFr(language)];
     const authorName = author?.name.split(/\s+/)[0] || t.someone;
-    const [title, body] =
-      payload.event === "request.urgent"
-        ? [t.urgentTitle(business), t.urgentBody]
-        : payload.event === "request.new"
-          ? [t.newTitle(business), t.newBody[lead.kind] ?? t.newBody.other]
-          : [t.commentTitle(business), t.commentBody(authorName)];
+    const [title, body] = (
+      {
+        "request.urgent": [t.urgentTitle(business), t.urgentBody],
+        "request.new": [
+          t.newTitle(business),
+          found.appointment ? t.alreadyBooked : `${t.newBody[lead.kind] ?? t.newBody.other} ${t.review}`,
+        ],
+        "request.reply": [t.replyTitle(business), t.replyBody],
+        "request.reminder": payload.unreviewed
+          ? [t.respondTitle(business), t.unreviewedBody]
+          : [
+              t.reminderTitle(business),
+              lead.nextAction?.waitingOn === "customer" ? t.waitingBody : t.reminderBody,
+            ],
+        "request.comment": [t.commentTitle(business), t.commentBody(authorName)],
+      } as const
+    )[payload.event];
     return { title, body, url, tag: `request-${lead.id}`, urgent };
   };
 

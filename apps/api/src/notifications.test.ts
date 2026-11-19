@@ -341,5 +341,9 @@ describe("inbox and request notes", () => {
     const url = `/v1/tenants/${tenantId}/bots/${botA}/leads/${lead.id}`;
     expect((await call("GET", url, undefined, viewer)).statusCode).toBe(200);
     expect((await call("POST", `${url}/comments`, { body: "hi" }, viewer)).statusCode).toBe(403);
+    expect((await call("PUT", `${url}/next-action`, { version: 0, action: null }, viewer)).statusCode).toBe(
+      403,
+    );
+    expect((await call("POST", `${url}/next-action/suggestion`, undefined, viewer)).statusCode).toBe(403);
   });
 });

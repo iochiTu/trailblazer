@@ -1,7 +1,10 @@
 "use client";
 
 import { enOrFr } from "@traiblazer/i18n";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { NextActionSummary } from "@/components/app/RequestNextAction";
 import { ApiError, api, type BotDetail, type Lead, type LeadStatus } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
@@ -28,6 +31,7 @@ export function RequestsTab({
   onOpenConversation: (conversationId: string) => void;
 }) {
   const { t, language } = useI18n();
+  const { tenantId } = useParams<{ tenantId: string }>();
   const [list, setList] = useState<Lead[] | null>(null);
   const [filter, setFilter] = useState<Filter>("open");
   const [error, setError] = useState<string | null>(null);
@@ -243,6 +247,18 @@ export function RequestsTab({
                     </span>
                   )}
                 </div>
+
+                {lead.status !== "done" && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <NextActionSummary action={lead.nextAction} />
+                    <Link
+                      className="btn-text text-sm"
+                      href={`/t/${tenantId}/inbox/${detail.bot.id}/${lead.id}`}
+                    >
+                      {t("request.reviewAction")}
+                    </Link>
+                  </div>
+                )}
 
                 {lead.syncs?.length > 0 && (
                   <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

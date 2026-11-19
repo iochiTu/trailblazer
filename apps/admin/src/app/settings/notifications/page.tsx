@@ -9,7 +9,13 @@ import { lastTenant, useMe } from "@/components/app/useMe";
 import { ApiError, api, type NotificationEvent, type NotificationPrefs } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
-const EVENTS: NotificationEvent[] = ["request.urgent", "request.new", "request.comment"];
+const EVENTS: NotificationEvent[] = [
+  "request.urgent",
+  "request.new",
+  "request.comment",
+  "request.reminder",
+  "request.reply",
+];
 const DEFAULT_QUIET = { start: "22:00", end: "07:00" };
 
 /**

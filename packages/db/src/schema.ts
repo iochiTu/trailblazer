@@ -459,7 +459,13 @@ export const pushDevices = pgTable(
 );
 
 /** What a user can be notified about on their phone (PLAN §20.4). */
-export const notificationEvents = ["request.urgent", "request.new", "request.comment"] as const;
+export const notificationEvents = [
+  "request.urgent",
+  "request.new",
+  "request.comment",
+  "request.reminder",
+  "request.reply",
+] as const;
 export type NotificationEvent = (typeof notificationEvents)[number];
 
 /**
@@ -1334,6 +1340,13 @@ export const leads = pgTable(
     channel: text("channel").$type<Channel>().notNull(),
     kind: text("kind").$type<LeadKind>().notNull(),
     status: text("status").$type<LeadStatus>().notNull().default("new"),
+    /** Null on an open request means the business still needs to choose its next step. */
+    nextAction: jsonb("next_action").$type<{
+      text: string;
+      waitingOn: "business" | "customer";
+      dueAt: string | null;
+    }>(),
+    actionVersion: integer("action_version").notNull().default(0),
     name: text("name").notNull(),
     email: text("email"),
     phone: text("phone"),

@@ -381,6 +381,16 @@ are new. With the **Email notifications** add-on the owner also gets an email fo
   and the photos they sent in the conversation (`leads.attachment_ids`, up to 6), shown on the
   Requests tab and counted in the email.
 
+**Next actions.** New and previously open requests appear under **Inbox → Needs review** until
+an owner, admin or editor saves a next step. The new-request push prompts staff to respond
+and opens the request directly. A new customer inquiry still awaiting review after an hour
+gets one further team reminder. Confirmed calendar visits get an appointment notification.
+Staff can write a step or ask for an AI suggestion, edit the draft, choose whether the team or
+the customer acts next, and set an optional team reminder. Saving a step records an internal
+plan. Finishing the step returns the open request to review. Closing the request clears the
+step. The worker checks the current decision before delivering a reminder and respects each
+member's notification settings.
+
 ## Urgent problems (triage) and buttons in answers
 
 Every visitor message is sorted before the answer (`packages/core/src/chat/triage.ts`):
@@ -417,9 +427,10 @@ owner's own tests aren't counted.
 
 **One request, not two.** When a visitor adds or corrects something after their request was passed on
 (a time, a detail, another way to reach them), the request the business already has is updated: same
-conversation, still marked new, and the same kind of follow-up (a callback, quote and booking count as
-one; a complaint after a quote is its own request). The business is notified again only if the
-addition makes the request urgent.
+conversation, still new or explicitly waiting on the customer, and the same kind of follow-up
+(a callback, quote and booking count as one; a complaint after a quote is its own request).
+An urgent escalation alerts the business. When the team is waiting on the customer, new details
+or photos trigger a team push so staff can review them and decide whether the step is complete.
 
 **Buttons in answers:** the model writes `[[action:call]]` or `[[action:book]]`; the engine removes the
 marker and sends a button whose link comes from the business profile (phone number, booking link),

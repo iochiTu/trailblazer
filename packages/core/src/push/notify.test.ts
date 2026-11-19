@@ -123,6 +123,78 @@ afterAll(async () => {
 });
 
 describe("push notifications to the team", () => {
+  it("reminds iOS and Android users to respond and opens the matching request", async () => {
+    await addDevice(userIds.sam, "sam-iphone", "ios");
+    await addDevice(userIds.jo, "jo-android", "android");
+    const [lead] = await owner.db
+      .insert(leads)
+      .values({
+        tenantId,
+        botId,
+        kind: "question",
+        channel: "sms",
+        name: "Private name",
+        message: "Private question",
+      })
+      .returning();
+    const push = new FakePush();
+    const payload = { event: "request.reminder" as const, unreviewed: true, botId, leadId: lead!.id };
+    const send = () => runPushNotify({ db: app.db, push }, tenantId, payload);
+    await runPushNotify({ db: app.db, push }, tenantId, { event: "request.new", botId, leadId: lead!.id });
+    expect(push.sent.find((p) => p.target.platform === "ios")?.message.body).toContain(
+      "respond to the customer",
+    );
+    expect(push.sent.find((p) => p.target.platform === "android")?.message.body).toContain(
+      "répondre au client",
+    );
+    push.sent.length = 0;
+    expect(await send()).toMatchObject({ sent: 2 });
+    expect(push.sent.find((p) => p.target.platform === "ios")?.message.title).toMatch(
+      /^Respond to the customer/,
+    );
+    expect(push.sent.find((p) => p.target.platform === "android")?.message.title).toMatch(
+      /^Répondez au client/,
+    );
+    expect(push.sent.every((p) => p.message.url === `/t/${tenantId}/inbox/${botId}/${lead!.id}`)).toBe(true);
+    expect(JSON.stringify(push.sent)).not.toContain("Private");
+    await owner.db.update(leads).set({ status: "in_progress" }).where(eq(leads.id, lead!.id));
+    expect(await send()).toBe("skipped");
+    await owner.db.update(leads).set({ status: "new", actionVersion: 1 }).where(eq(leads.id, lead!.id));
+    expect(await send()).toBe("skipped");
+  });
+  it("sends due reminders to the team and skips superseded or closed actions", async () => {
+    const now = new Date();
+    await addDevice(userIds.sam, "apns-reminder", "ios");
+    const [lead] = await owner.db
+      .insert(leads)
+      .values({
+        tenantId,
+        botId,
+        kind: "quote",
+        channel: "sms",
+        name: "Alex",
+        message: "Call back",
+        actionVersion: 1,
+        nextAction: { text: "Call Alex", waitingOn: "business", dueAt: now.toISOString() },
+      })
+      .returning();
+    const push = new FakePush();
+    const remind = (version: number, at = now) =>
+      runPushNotify({ db: app.db, push, now: () => at }, tenantId, {
+        event: "request.reminder",
+        botId,
+        leadId: lead!.id,
+        actionVersion: version,
+      });
+    expect(await remind(0)).toBe("skipped");
+    expect(await remind(1, new Date(now.getTime() - 1000))).toBe("skipped");
+    expect(await remind(1)).toMatchObject({ sent: 1 });
+    await owner.db.update(leads).set({ status: "done" }).where(eq(leads.id, lead!.id));
+    expect(await remind(1)).toBe("skipped");
+    expect(push.sent).toHaveLength(1);
+    expect(push.sent[0]?.message.url).toBe(`/t/${tenantId}/inbox/${botId}/${lead!.id}`);
+    expect(push.sent[0]?.message.body).not.toContain("Alex");
+  });
   it("tells everyone with a phone, in their language, without the customer's details", async () => {
     await addDevice(userIds.sam, "apns-sam", "ios");
     await addDevice(userIds.sam, "web-sam", "web");

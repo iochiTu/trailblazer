@@ -509,6 +509,8 @@ export interface Lead {
   channel: string;
   kind: "callback" | "quote" | "booking" | "question" | "complaint" | "other";
   status: LeadStatus;
+  nextAction: { text: string; waitingOn: "business" | "customer"; dueAt: string | null } | null;
+  actionVersion: number;
   name: string;
   email: string | null;
   phone: string | null;
@@ -556,6 +558,8 @@ export interface InboxLead
     | "channel"
     | "kind"
     | "status"
+    | "nextAction"
+    | "actionVersion"
     | "name"
     | "email"
     | "phone"
@@ -644,7 +648,12 @@ export interface LeadComment {
   createdAt: string;
 }
 
-export type NotificationEvent = "request.urgent" | "request.new" | "request.comment";
+export type NotificationEvent =
+  | "request.urgent"
+  | "request.new"
+  | "request.comment"
+  | "request.reminder"
+  | "request.reply";
 
 /** A user's notification choices (the same on all their devices). */
 export interface NotificationPrefs {

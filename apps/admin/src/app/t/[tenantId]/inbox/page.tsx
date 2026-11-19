@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app/AppShell";
+import { NextActionSummary } from "@/components/app/RequestNextAction";
 import { useTimeAgo } from "@/components/app/time";
 import { rememberTenant, useMe } from "@/components/app/useMe";
 import { ApiError, api, type InboxLead } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
-type Filter = "open" | "done" | "all";
-const FILTERS: Filter[] = ["open", "done", "all"];
+type Filter = "open" | "review" | "done" | "all";
+const FILTERS: Filter[] = ["open", "review", "done", "all"];
 /** How often an open inbox looks for new requests. */
 const REFRESH_MS = 30_000;
 
@@ -171,6 +172,11 @@ export default function InboxPage() {
                   <span className="line-clamp-2 text-sm" dir="auto">
                     {lead.message}
                   </span>
+                  {lead.status !== "done" && (
+                    <div>
+                      <NextActionSummary action={lead.nextAction} />
+                    </div>
+                  )}
                   <span className="muted flex flex-wrap gap-x-3 gap-y-1 text-xs">
                     {manyAssistants && <span dir="auto">{lead.businessName ?? lead.botName}</span>}
                     {lead.attachmentIds.length > 0 && (

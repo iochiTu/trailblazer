@@ -400,6 +400,13 @@
       "when": 1794951624569,
       "tag": "0056_delivery_and_checkout",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795041979157,
+      "tag": "0057_request_next_action",
+      "breakpoints": true
     }
   ]
 }
